@@ -228,7 +228,7 @@ Removing a member rotates the space key, so the member cannot read new changes; 
 
 ## A change, signed and encrypted, through the relay
 
-A write is one change in one space. The member encrypts it with the space's content key, signs it with its member key, and folds it into its own view at once: the write resolves before the relay has it. The relay checks the signature and that the author may write, appends the change to the space's log and hands it out from a cursor. Every other member checks the signature and that the author was a member, decrypts the change and folds it. A member that is offline gets the change when it reconnects.
+A write is one change in one space; a write above the relay's limit of 16 MiB becomes several, split between objects, which other members may receive one by one. The member encrypts it with the space's content key, signs it with its member key, and folds it into its own view at once: the write resolves before the relay has it. The relay checks the signature and that the author may write, appends the change to the space's log and hands it out from a cursor. Every other member checks the signature and that the author was a member, decrypts the change and folds it. A member that is offline gets the change when it reconnects.
 
 The relay holds no keys and cannot read content. It does see metadata: which key is in which space, when and how much each key writes, and who reads which space from where.
 

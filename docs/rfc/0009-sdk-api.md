@@ -56,7 +56,7 @@ db.sync.current(); // { connection: "connected", unconfirmed: 0, ... }
 
 - **One database per member.** `nc.open` opens this member's copy of all its spaces from the app's `model.lock.json`, and checks the lock on the device, as RFC 0005 requires.
 - **Objects live in a space.** Reads and writes of single objects go through a space handle. Queries go through `db`, because an index spans every space of the member, unless the index is declared per space. An object id is unique only in its space, every write is one change in one space, and every right is per space, so the space is the natural receiver; queries span spaces because RFC 0006 keeps one database per member for exactly that. Everything on `db`, with an object reference `{ space, id }`, was not taken.
-- **One write, one change.** `space.write` collects creates, updates and deletes and turns them into one signed, encrypted change. It resolves when the change is in the local log and folded into the view; the relay comes later.
+- **One write, one change.** `space.write` collects creates, updates and deletes and turns them into one signed, encrypted change; a write above the relay's change limit of 16 MiB becomes several, split between objects. It resolves when the change is in the local log and folded into the view; the relay comes later.
 - **Plain values, details on demand.** A read returns a plain object, typed by `nc.Infer`. Conflicts, lost removals and link statuses are flagged on it and read in full with `space.inspect`.
 - **Reports, not exceptions, for what syncing finds.** Parked, rejected and refused changes, gaps, exposure and the relay connection are reports an app reads or follows. Errors are thrown only for what the app asked and the SDK refuses.
 - **The same API in Rust**, in snake case, as [The Rust SDK](#the-rust-sdk) shows.
@@ -132,7 +132,11 @@ The calls on `tx`, and the operations they become ([RFC 0004, "Operation numbers
 
 `project.create(collection, values)`, `project.update(collection, id, values)`, `project.delete(collection, id)` and `project.restore(collection, id)` are shorthands for a `write` with one call; each is one change.
 
-One call maps to one change, so the app sees exactly what is atomic. The forms not taken:
+One call maps to one change, so the app sees exactly what is atomic, up to the relay's change limit.
+
+**A write above the change limit is split** (Carsten, 2026-11-23, NOC-431). The relay accepts no change above 16 MiB ([RFC 0007, "Large changes"](0007-relay.md#large-changes)). When the change of a write would exceed it, the SDK splits the write into several changes, each within the limit, and only between objects: every operation of one object stays in one change. Each part depends on the part before it, and the member folds every part in one transaction, so on the writing device the write stays atomic, and `write` resolves once all parts are folded. `result.change` is then the last part's id, which depends on every other part. **On other devices a split write is not atomic.** The parts arrive and fold one by one, so another member can see part of the write before the rest arrives, and a part the relay refuses, for example because the author lost write access between two parts, leaves the others standing. Convergence holds: every member folds the same changes to the same state. A write of a few hundred objects, as [the bulk-import guide](../bulk-import.md) recommends, stays far below the limit and is always one change. One operation, or the operations of one object together, that do not fit into one change are refused with `tooLarge`, before anything is written; the error names the object, the size and the limit. Large values belong in types that split them into chunks, which later RFCs bring. Not taken: refusing every write above the limit, which would make a bulk import fail on a size the app cannot see; keeping such a change on the writing device, where it never reached another member.
+
+The forms not taken:
 
 | Rejected | Why |
 | --- | --- |
@@ -562,6 +566,7 @@ The SDK throws one error class, `nc.Error`, with a string `code`, the ids it con
 | `notFound` | `space.update`, `delete`, `restore`, `db.spaces.get`, writes, queries | The copy holds no such object or space, or a call names a collection, field or index the lock does not have. TypeScript catches the latter when it compiles; Rust, which names them by text, cannot. |
 | `personKeyNotHeld` | writes | A personal field's person has a person key this device does not hold yet; the app retries once sync has fetched it (Carsten, 2026-11-12, NOC-255; [Personal fields](#personal-fields)). |
 | `invalidValue`, `deprecated`, `noPerson` | writes, queries; `invalidValue` also `nc.open` in Node.js and `Db::open` | See [Field operations per field type](#field-operations-per-field-type) and [Personal fields](#personal-fields). A query is `invalidValue` when it fixes another number of equality values than its index declares, asks for a page size of 0 or above the maximum, or uses an index of the other scope: `space.find` on an index without `scope: "space"`, or `db.find` on one with it. Opening is `invalidValue` when it names neither a path nor memory to keep the database in ([Open and close](#open-and-close)). |
+| `tooLarge` | writes | One operation of the write, or the operations of one object together, do not fit into one change under the relay's change limit of 16 MiB; names the object, the size and the limit. A larger write of many objects is split instead ([One write, one change](#one-write-one-change); Carsten, 2026-11-23, NOC-431). |
 | `unknownType` | writes | The field's plugin type is not registered in this member's core under the rule the lock names, as in every TypeScript member in v1; names the type id and the rule (Carsten, 2026-11-12, NOC-232; [RFC 0011, "A type that is not registered"](0011-plugin-field-types.md#a-type-that-is-not-registered)). |
 | `notAllowed`, `notMember`, `lastAdmin` | writes, membership calls | The member's role does not allow it, it is no longer a member, or it is the last admin. |
 | `unknownAccount` | `members.add` | The invitation's account is new to this device and no person confirmed its fingerprint; carries the fingerprint. |
@@ -726,6 +731,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 | `keyStoreUnavailable` | Error of opening: no platform keystore and no key file | [RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) |
 | `storageUnavailable` | Error of opening in a browser window without OPFS | [RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports) |
 | `invalidValue`, `deprecated`, `noPerson`, `personKeyNotHeld` | Errors of a write | [RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model) |
+| `tooLarge` | Error of a write whose one object does not fit into one change | [RFC 0007, "Large changes"](0007-relay.md#large-changes) |
 | `unknownType` | Error of a write to a plugin field whose type is not registered | [RFC 0011, "A type that is not registered"](0011-plugin-field-types.md#a-type-that-is-not-registered) |
 | `notAllowed`, `notMember`, `lastAdmin`, `unknownAccount`, `invalidCertificate`, `alreadyMember` | Errors of rights and membership | [RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights) |
 | `unknown_error` | The sync report's `error` for a relay code RFC 0007 does not list | [RFC 0007, "The errors"](0007-relay.md#the-errors) |
@@ -831,6 +837,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - **2026-11-21 · The TypeScript SDK erases a person with the Rust calls in camel case.** (Carsten, 2026-11-21, NOC-428; [decision](../../factory/decisions/2026-11-21-NOC-428-the-typescript-sdk-erases-a-person-with-the-rust-calls-in-camel-case.md))
 - **2026-11-21 · TypeScript reads and writes a day as a `"YYYY-MM-DD"` string and a point in time as a `Date`.** (Carsten, 2026-11-21, NOC-434, answer 4a; [decision](../../factory/decisions/2026-11-21-NOC-412-typescript-reads-a-day-as-a-string-and-a-point-in-time-as-a-date.md))
 - **2026-11-21 · The Rust SDK has its own `Date` and `Timestamp` types, and a `SystemTime` rounds down to the millisecond.** (Carsten, 2026-11-21, NOC-434, answer 5a; [decision](../../factory/decisions/2026-11-21-NOC-412-the-rust-sdk-has-its-own-date-and-timestamp-types.md))
+- **2026-11-23 · A write above the relay's change limit is split between objects into several changes, not atomic on other devices; one operation or object above the limit is refused with `tooLarge`.** (Carsten, 2026-11-23, NOC-431; [decision](../../factory/decisions/2026-11-23-NOC-421-a-write-above-the-relay-change-limit-is-split-between-objects.md))
 
 ## History
 
@@ -881,3 +888,4 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - 2026-11-20 · The erasure audit gains the state `waiting`, in both SDKs (NOC-401)
 - 2026-11-21 · The TypeScript SDK erases a person: `db.erasureRequest`, `db.account.signOff`, `db.erase` and `space.erasures.takeBack` (NOC-406)
 - 2026-11-21 · Days and points in time in both SDKs: `Date` and `Timestamp` in Rust, a `"YYYY-MM-DD"` string and a `Date` in TypeScript (NOC-412, NOC-434, #430)
+- 2026-11-23 · A write above the relay's change limit is split between objects; one object above it is refused with `tooLarge` (NOC-421)

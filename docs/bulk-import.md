@@ -87,11 +87,15 @@ What the numbers say:
 - **Memory grows with the size of a change.** The writer, the relay and every device that receives a change hold it while they encode, check or fold it. Each MB more in the largest change raised the writer's peak memory by about 13 MB, the new device's by about 5 MB and the relay's by about 8 MB. At 40,000 operations a change, 15.5 MB, the writer peaked at 345 MB; before NOC-422 it peaked at 1.4 GB, the new device at 716 MB and the relay at 165 MB. [A change near the limit](#a-change-near-the-limit) says what one such change costs on its own, in a browser tab too.
 - **A change above 22 KiB goes through an upload.** The relay's messages are at most 23 KiB, so a larger change goes up through an upload URL, and other devices download it ([RFC 0007, "Large changes"](rfc/0007-relay.md#large-changes)). The SDK does that for you. In the measurement, uploads cost no time: 500 operations a change, each uploaded, was faster than 50, each inline.
 
-### A change above 16 MiB never leaves the device
+### A write above 16 MiB is split into several changes
 
-The relay accepts no change larger than 16 MiB ([RFC 0007, "Large changes"](rfc/0007-relay.md#large-changes)). The SDK does not check that limit when you write. A larger write succeeds and is folded on the device, but the relay refuses it with `too_large`, and it stays on that device only: no other device ever receives it. The only sign is `refused` in `db.sync().current()`, which the example above checks. At about 390 bytes an operation, the limit is about 43,000 operations in one change. In the measurement, 60,000 operations in one write made a change of 23 MB, which the relay refused. Whether the SDK should refuse such a write itself is open (NOC-421).
+The relay accepts no change larger than 16 MiB ([RFC 0007, "Large changes"](rfc/0007-relay.md#large-changes)). At about 390 bytes an operation, that is about 43,000 operations in one change. When the change of a write would be larger, the SDK splits the write into several changes, each within the limit, and only between objects: every operation of one object stays in one change (NOC-421). On your device the write stays atomic: it resolves once every part is folded, and a read sees all of it or none of it.
 
-So never write a whole burst in one change. Keep the batch size well below the limit, and check `refused` afterwards.
+**On other devices a split write is not atomic.** The parts reach them one by one, so another member can see part of the write before the rest arrives. A part the relay refuses, for example because your device lost write access between two parts, leaves the others standing. Every member still ends with the same state.
+
+One operation, or the operations of one object, that alone would exceed the limit are refused with the error `tooLarge` before anything is written.
+
+So keep a burst in batches well below the limit, such as 500 operations a change: each batch is then one change and atomic everywhere, and it takes far less memory than a change near the limit.
 
 ### A change near the limit
 
