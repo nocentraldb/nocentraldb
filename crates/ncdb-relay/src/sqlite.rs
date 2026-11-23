@@ -12,7 +12,9 @@
 //!
 //! Several handles, also in several processes, may open one database: each
 //! write transaction takes SQLite's write lock first (`BEGIN IMMEDIATE`) and
-//! waits for it, so two appends never read the same head.
+//! waits for it, so two appends never read the same head. A clone of a
+//! handle shares its connection, and with it the database in memory of
+//! [`SqliteStore::in_memory`], for a relay in a test.
 //!
 //! **What this does not do.** SQLite blocks the thread that polls the
 //! future. A server that runs these futures on an asynchronous runtime
@@ -20,7 +22,7 @@
 
 use std::collections::BTreeSet;
 use std::path::Path;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -44,10 +46,11 @@ use schema::SCHEMA;
 /// How long a write waits for another handle's write lock.
 const BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// A handle on a relay's SQLite database. Its `Debug` output shows nothing
-/// of the database.
+/// A handle on a relay's SQLite database. A clone is another handle on the
+/// same connection. Its `Debug` output shows nothing of the database.
+#[derive(Clone)]
 pub struct SqliteStore {
-    connection: Mutex<Connection>,
+    connection: Arc<Mutex<Connection>>,
 }
 
 impl std::fmt::Debug for SqliteStore {
@@ -60,11 +63,24 @@ impl SqliteStore {
     /// Opens the database at `path`, creating it with its tables and a
     /// first relay epoch if needed.
     pub fn open(path: &Path) -> Result<SqliteStore, StoreError> {
-        let mut connection = Connection::open(path).map_err(failed("open"))?;
+        let connection = Connection::open(path).map_err(failed("open"))?;
         connection
             .busy_timeout(BUSY_TIMEOUT)
             .map_err(failed("busy timeout"))?;
         wal(&connection)?;
+        SqliteStore::with_schema(connection)
+    }
+
+    /// A new database in memory, with its tables and a first relay epoch,
+    /// for a relay in a test. Only this handle and its clones reach it, and
+    /// it is gone with the last of them.
+    pub fn in_memory() -> Result<SqliteStore, StoreError> {
+        SqliteStore::with_schema(Connection::open_in_memory().map_err(failed("open"))?)
+    }
+
+    /// A handle on `connection`, its tables and first epoch created if
+    /// needed.
+    fn with_schema(mut connection: Connection) -> Result<SqliteStore, StoreError> {
         let tx = immediate(&mut connection)?;
         tx.execute_batch(SCHEMA).map_err(failed("schema"))?;
         tx.execute(
@@ -74,7 +90,7 @@ impl SqliteStore {
         .map_err(failed("first epoch"))?;
         tx.commit().map_err(failed("schema"))?;
         Ok(SqliteStore {
-            connection: Mutex::new(connection),
+            connection: Arc::new(Mutex::new(connection)),
         })
     }
 
