@@ -6,6 +6,7 @@ use ncdb_core::cbor::{self, Key, Value};
 use super::Bridge;
 
 mod account;
+mod account_identity;
 mod ad_hoc;
 mod dates;
 mod erase;
