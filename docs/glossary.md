@@ -111,7 +111,7 @@ How to read it:
 | browser | Where the TypeScript SDK runs in 0.1. Name engines as Chromium, Firefox and Safari; the tests run in Playwright's Chromium, Firefox and WebKit, and WebKit is not Safari. | web (as a noun), Chrome (unless the branded browser is meant) |
 | database | What `nc.open` opens: one member's copy and keys, under a name, in this origin's private file system (OPFS). | store, DB (in prose), storage (the browser's storage is where the database lives) |
 | tab | A browser tab of the app. In 0.1 several tabs share one database: one tab owns it and the others reach it through that tab. In Safari, a tab whose owner is frozen waits (`waitingForTab`). | window (a private window is something else), page (a page is a query's answer) |
-| private window | A browser window that keeps no data. In Firefox and Safari it has no OPFS, and `nc.open` refuses with `storageUnavailable`; in Chromium the database is deleted when the window closes. | incognito (name it only for Chrome), private mode |
+| private window | A browser window that keeps no data. In Firefox and Safari it has no OPFS, and `nc.open` refuses with `storageUnavailable`; in Chromium the database is deleted when the window closes, and after about ten minutes with no database open, which the next `nc.open` reports with `storageLost`. | incognito (name it only for Chrome), private mode |
 | durability | What a browser copy could lose: `db.durability` reports `persistent` or `best-effort` storage, the unconfirmed changes and `waitingForTab`. | persistence (except the browser's "persistent storage"), safety |
 
 ## Words we do not use for NoCentralDB

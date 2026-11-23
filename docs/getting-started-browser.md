@@ -152,7 +152,24 @@ try {
 }
 ```
 
-Chromium has OPFS in a private window, so the database opens there; it is deleted when the window closes.
+Chromium has OPFS in a private window, so the database opens there; it is deleted when the window closes. Chromium also drops it after about ten minutes with no database of your app open, while the window stays open. The SDK notices on the next open: `nc.open` fails with `storageLost`, so that an empty copy does not replace the user's data in silence. Tell the user, then open with `ifStorageLost: "open-empty"`; the database starts empty under the same member key, and fetches again what the relay holds ([Browser apps and durability](browser-durability.md#storage-lost) has a text for it):
+
+```ts
+import { nc } from "@nocentraldb/sdk";
+import { model } from "../model.ts";
+
+const lock: unknown = await (await fetch("/model.lock.json")).json();
+const db = await nc.open({ model, lock, name: "tasks" }).catch(async (error) => {
+  if (!(error instanceof nc.Error) || error.code !== "storageLost") {
+    throw error;
+  }
+  window.alert(
+    "This browser deleted what Tasks kept here. Changes not yet sent are lost.",
+  );
+  return nc.open({ model, lock, name: "tasks", ifStorageLost: "open-empty" });
+});
+console.log(`spaces: ${(await db.spaces.list()).length}`);
+```
 
 ## 4. Create a space and write
 
