@@ -6,8 +6,9 @@
 // base needs; it passes the PR's base and head and the label-derived --skip
 // to check-fragments; superseded runs are cancelled and the job is bounded.
 // Breaking-change detection (epic §14.2): cargo-semver-checks against the
-// merge base of the PR's base and head (NOC-503), allowed to fail so the fragment step still runs, and the
-// TypeScript API report against the base; either one's finding turns into
+// merge base of the PR's base and head (NOC-503), allowed to fail so the
+// fragment step still runs, and the TypeScript API report against the same
+// merge base; either one's finding turns into
 // --require-breaking for check-fragments, which --skip never waives.
 // cargo-semver-checks checks only the publishable crates the base also has
 // (scripts/release/semver-packages.mjs), and does not run when there are
@@ -86,7 +87,7 @@ const SEMVER_NOTICE = {
   run: 'echo "::warning title=cargo-semver-checks failed::Its log above shows which item broke. If it shows no failed lint, the tool itself failed (a download or build error): re-run the job instead of adding a breaking fragment."',
 };
 const API_RUN = `set +e
-node scripts/release/api-report.mjs --base "$BASE"
+node scripts/release/api-report.mjs --base "$(git merge-base "$BASE" "$HEAD")"
 code=$?
 set -e
 echo "breaking=$([ "$code" = 3 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
@@ -265,6 +266,7 @@ const checks = [
       const report = all[api];
       assert.deepEqual(report.env, {
         BASE: gh("github.event.pull_request.base.sha"),
+        HEAD: gh("github.event.pull_request.head.sha"),
       });
       assert.equal(report.run, API_RUN);
       assert.equal(report["continue-on-error"], undefined);
@@ -339,6 +341,14 @@ const checks = [
         ),
       "the baseline step has no HEAD": (ctx) =>
         ctx.doc.deleteIn([...STEPS, baselineStep(ctx), "env", "HEAD"]),
+      "the API report diffs against the base tip, not the merge base": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, apiStep(ctx), "run"],
+          API_RUN.replace(
+            '--base "$(git merge-base "$BASE" "$HEAD")"',
+            '--base "$BASE"',
+          ),
+        ),
       "the baseline step comes after semver": (ctx) => {
         const list = ctx.doc.getIn(STEPS);
         const step = list.items.splice(baselineStep(ctx), 1)[0];
