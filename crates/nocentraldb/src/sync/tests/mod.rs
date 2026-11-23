@@ -43,6 +43,7 @@ mod push;
 mod push_again;
 mod reconnect;
 mod refusals;
+mod relay_token;
 mod relay_url;
 mod remove_member;
 mod removed;
