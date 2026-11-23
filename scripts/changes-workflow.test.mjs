@@ -6,7 +6,7 @@
 // base needs; it passes the PR's base and head and the label-derived --skip
 // to check-fragments; superseded runs are cancelled and the job is bounded.
 // Breaking-change detection (epic §14.2): cargo-semver-checks against the
-// PR's base, allowed to fail so the fragment step still runs, and the
+// merge base of the PR's base and head (NOC-503), allowed to fail so the fragment step still runs, and the
 // TypeScript API report against the base; either one's finding turns into
 // --require-breaking for check-fragments, which --skip never waives.
 // cargo-semver-checks checks only the publishable crates the base also has
@@ -74,8 +74,10 @@ const FRAGMENTS_ENV = {
 const FRAGMENTS_RUN =
   'node scripts/release/check-fragments.mjs --base "$BASE" --head "$HEAD" $SKIP $BREAKING';
 const SEMVER_ACTION = "obi1kenobi/cargo-semver-checks-action@";
+// The merge base, not the base tip: a pull request behind main must not be
+// compared with API that main changed after it forked (NOC-503).
 const BASELINE_RUN =
-  'git worktree add --detach "$RUNNER_TEMP/baseline" "$BASE"';
+  'git worktree add --detach "$RUNNER_TEMP/baseline" "$(git merge-base "$BASE" "$HEAD")"';
 const PACKAGES_RUN =
   'node scripts/release/semver-packages.mjs --baseline "$RUNNER_TEMP/baseline" >> "$GITHUB_OUTPUT"';
 const SEMVER_IF = "steps.packages.outputs.any == 'true'";
@@ -246,6 +248,7 @@ const checks = [
 
       assert.deepEqual(all[baseline].env, {
         BASE: gh("github.event.pull_request.base.sha"),
+        HEAD: gh("github.event.pull_request.head.sha"),
       });
       assert.equal(all[baseline].run, BASELINE_RUN);
 
@@ -329,6 +332,13 @@ const checks = [
           [...STEPS, baselineStep(ctx), "env", "BASE"],
           gh("github.sha"),
         ),
+      "the baseline is the base tip, not the merge base": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, baselineStep(ctx), "run"],
+          'git worktree add --detach "$RUNNER_TEMP/baseline" "$BASE"',
+        ),
+      "the baseline step has no HEAD": (ctx) =>
+        ctx.doc.deleteIn([...STEPS, baselineStep(ctx), "env", "HEAD"]),
       "the baseline step comes after semver": (ctx) => {
         const list = ctx.doc.getIn(STEPS);
         const step = list.items.splice(baselineStep(ctx), 1)[0];
