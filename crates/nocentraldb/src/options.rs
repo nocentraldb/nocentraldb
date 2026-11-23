@@ -226,6 +226,8 @@ impl OpenOptions {
     /// refuses any other URL with `InvalidValue`. In a browser, the relay
     /// URL is `wss://`, except for localhost while developing: a page
     /// served over `https://` cannot open `ws://` (RFC 0009, NOC-245).
+    /// A token for the relay belongs in the query string, never in the
+    /// path, since the SDK shows a relay URL with its path (NOC-495).
     pub fn relay(mut self, url: &str) -> OpenOptions {
         self.relay = Some(url.to_owned());
         self

@@ -338,7 +338,7 @@ interface OpenOptions {
   model: Record<string, any>;
   /** `model.lock.json`: the rules the core folds by. */
   lock: unknown;
-  /** The relay's URL; without it, the database stays local. */
+  /** The relay's URL; without it, the database stays local. A token for the relay belongs in the query string, never in the path, since the sync status shows the path (NOC-495). */
   relay?: string;
   /** Which database: 1 to 64 of a–z, 0–9, `-` and `_`; `"default"` when left out. */
   name?: string;
