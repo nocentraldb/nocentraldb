@@ -956,4 +956,4 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - 2026-11-23 · Both SDKs gain the `admission` option and the account's identity, as RFC 0015 decides (NOC-469)
 - 2026-11-23 · Inline attributions keep the date and the ticket and name nobody who decided; the decision log records it (NOC-481, #475)
 - 2026-11-23 · nc.open takes ifStorageLost and refuses a browser database whose files the browser dropped with storageLost (NOC-445)
-- 2026-11-23 · Confirming the recovery code takes two of its words back: RecoveryCode gains challenge(), and confirm takes the answers (NOC-502)
+- 2026-11-23 · Confirming the recovery code takes two of its words back: RecoveryCode gains challenge(), and confirm takes the answers (NOC-502, #484)

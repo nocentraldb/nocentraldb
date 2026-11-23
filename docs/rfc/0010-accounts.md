@@ -307,7 +307,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - 2026-11-22 · The account space says when a device creates it, which one is the account's, how its records' ids and indexes work, and what the table `joined` keeps (NOC-379, NOC-266, NOC-310, NOC-311, #449)
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
 - 2026-11-23 · Inline attributions keep the date and the ticket and name nobody who decided; the decision log records it (NOC-481, #475)
-- 2026-11-23 · Confirming the recovery code asks for two of its words back (NOC-502)
+- 2026-11-23 · Confirming the recovery code asks for two of its words back (NOC-502, #484)
 
 ## How this RFC is tested
 
