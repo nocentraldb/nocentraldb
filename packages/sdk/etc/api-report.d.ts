@@ -192,7 +192,7 @@ export interface Db {
 interface OpenOptions {
     model: Record<string, any>;
     lock: unknown;
-    relay?: string;
+    relay?: string | (() => Promise<string>);
     name?: string;
     persistentStorage?: "on-open" | "on-request";
     pairing?: "request";
