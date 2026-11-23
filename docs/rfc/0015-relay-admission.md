@@ -238,3 +238,4 @@ It changes who may create a space in [RFC 0007](0007-relay.md#what-the-relay-che
 ## History
 
 - 2026-11-22 · First published (NOC-413, #423)
+- 2026-11-23 · Its status line names nobody who decided; the decision log records it (NOC-454, #449)

@@ -467,3 +467,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 - 2026-11-19 · The table `ad_hoc_copies`, what a rebuild keeps, and RFC 0012's verdict on `OPFSCoopSyncVFS` (NOC-362, #389)
 - 2026-11-20 · A plain introduction to the ideas behind it, and its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-21 · A day and a point in time sort as numbers, in time order (NOC-412, #430)
+- 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)

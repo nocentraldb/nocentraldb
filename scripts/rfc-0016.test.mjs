@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { historyLines } from "./lib/rfc-record.mjs";
+import { assertRecord, historyLines } from "./lib/rfc-record.mjs";
 import { headings, read, root, section } from "./lib/rfc-text.mjs";
 
 const file = () => {
@@ -55,9 +55,10 @@ test("RFC 0016 states its design directly, with no list of decisions", () => {
   assert.ok(!label, `an option label the reader must decode: ${label?.[0]}`);
 });
 
-test("RFC 0016's History is its one publication line", () => {
+test("RFC 0016's History starts with its publication and keeps the record form", () => {
   const lines = historyLines(text());
-  assert.deepEqual(lines, ["- 2026-11-22 · First published (NOC-447)"]);
+  assert.equal(lines[0], "- 2026-11-22 · First published (NOC-447)");
+  assertRecord(text(), "2026-11-22 · First published (NOC-447)");
 });
 
 // Each open choice has its own section, which states what the design does

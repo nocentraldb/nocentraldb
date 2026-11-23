@@ -888,3 +888,4 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - 2026-11-21 · Days and points in time in both SDKs: `Date` and `Timestamp` in Rust, a `"YYYY-MM-DD"` string and a `Date` in TypeScript (NOC-412, NOC-434, #430)
 - 2026-11-22 · The error table names the codes of removing oneself or a non-member, the last admin lowering its role, a lost owning tab's write, another tab's lock, creating a space while waiting to be paired, and recovering onto an existing database (NOC-379, NOC-169, NOC-177, NOC-267, #449)
 - 2026-11-23 · Any member may lower its own role with `members.setRole`, as RFC 0008 says (NOC-453, #449)
+- 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)

@@ -209,6 +209,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which lets developers add field ty
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · `ncdb-harness` is published after 0.1, as the owner answered (NOC-362, #396)
 - 2026-11-22 · An ad-hoc copy leaves a plugin field unset and counts it (NOC-379, NOC-318, #449)
+- 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
 
 ## How this RFC is tested
 

@@ -499,3 +499,4 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 
 - 2026-11-22 · First published (NOC-411, #422)
 - 2026-11-22 · The binding's example rebuilds from `onContentError`; a composition holds the write and a rebuild; one UndoManager outlives rebuilds; the guard reloads once, as the owner decided after the browser spike (NOC-455, NOC-467, #454)
+- 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
