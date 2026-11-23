@@ -31,6 +31,7 @@ const NEW = {
   waitingForKey: false,
   badPersonKeyRecords: [],
   provisionalErasures: [],
+  onlyMember: true,
 };
 
 const fake = (status: Record<string, unknown> = NEW) => {
@@ -85,6 +86,7 @@ test("a space comes with its status, read with space.status.current()", async ()
     waitingForKey: false,
     badPersonKeyRecords: [],
     provisionalErasures: [],
+    onlyMember: true,
   });
   expect(calls.map(({ call }) => call)).toEqual([
     "open",

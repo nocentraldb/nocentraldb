@@ -51,6 +51,7 @@ export const spaceStatusOf = (raw: unknown): SpaceStatus => {
     provisionalErasures: list<SpaceStatus["provisionalErasures"][number]>(
       given.provisionalErasures,
     ).map((erasure) => ({ ...erasure, age: Number(erasure.age) })),
+    onlyMember: given.onlyMember === true,
   };
 };
 

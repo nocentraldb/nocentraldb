@@ -421,6 +421,7 @@ export interface SpaceStatus {
     readonly waitingForKey: boolean;
     readonly badPersonKeyRecords: readonly string[];
     readonly provisionalErasures: readonly ProvisionalErasure[];
+    readonly onlyMember: boolean;
 }
 interface ProvisionalErasure {
     readonly change: string;
