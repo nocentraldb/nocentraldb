@@ -416,6 +416,7 @@ impl Db {
         };
         let mut inner = inner;
         crate::account::reconcile(&mut inner)?;
+        crate::moving::resume(&mut inner)?;
         let inner = Arc::new(Mutex::new(inner));
         // A rebuild of the view runs in the background (RFC 0009, step 4),
         // in a thread, which wasm32 does not start yet.

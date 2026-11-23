@@ -103,16 +103,23 @@ impl Space {
             create.moved_from(object.collection(), object.id().0, old.0);
             conflicts.extend(conflicted(&inner, old.0, object)?);
         }
-        let mut leave = Transaction::new(&model);
-        for object in &sources {
-            leave.move_to(object.collection(), object.id().0, new.0)?;
+        let pending: Vec<(String, CoreObjectId)> = sources
+            .iter()
+            .map(|object| (object.collection().to_owned(), object.id().0))
+            .collect();
+        // The record comes first: a stop at any point after it leaves a
+        // record the next open finishes or drops (`resume`).
+        inner
+            .view
+            .record_pending_moves(old.0, new.0, &pending)
+            .map_err(storage)?;
+        let by = writer(&inner);
+        write_change(&mut inner, new.0, create, by, |_| Ok(()))?;
+        #[cfg(test)]
+        if STOP_AFTER_NEW_SPACE.with(std::cell::Cell::get) {
+            return Err(Error::new(ErrorCode::StorageFailed, "stopped by the test"));
         }
-        let writer = WriterModel {
-            id: inner.model.id,
-            version: inner.model.version,
-        };
-        write_change(&mut inner, new.0, create, writer, |_| Ok(()))?;
-        write_change(&mut inner, old.0, leave, writer, |_| Ok(()))?;
+        finish(&mut inner, old.0, new.0, &pending)?;
         Ok(Moved {
             notice: Notice::OBJECT_MOVED,
             ids: sources.iter().map(Object::id).collect(),
@@ -120,6 +127,87 @@ impl Space {
             conflicts,
         })
     }
+}
+
+/// The writer of a change by this database's lock (RFC 0002, "The
+/// writer's model").
+fn writer(inner: &Inner) -> WriterModel {
+    WriterModel {
+        id: inner.model.id,
+        version: inner.model.version,
+    }
+}
+
+/// Writes the old space's move of `objects` to `new`, then forgets their
+/// pending record.
+fn finish(
+    inner: &mut Inner,
+    old: CoreSpaceId,
+    new: CoreSpaceId,
+    objects: &[(String, CoreObjectId)],
+) -> Result<(), Error> {
+    let model = inner.model.clone();
+    let mut leave = Transaction::new(&model);
+    for (collection, id) in objects {
+        leave.move_to(collection, *id, new)?;
+    }
+    let by = writer(inner);
+    write_change(inner, old, leave, by, |_| Ok(()))?;
+    let ids: Vec<CoreObjectId> = objects.iter().map(|(_, id)| *id).collect();
+    inner.view.clear_pending_moves(old, &ids).map_err(storage)
+}
+
+/// Finishes the moves a stop cut off, when the database opens (RFC 0016,
+/// "The new space first"): an object the new space holds and the old one
+/// holds live gets its move; any other pending record is dropped, since
+/// either the move was written, or the new space never got the object and
+/// nothing moved. A move this member may no longer write stays pending,
+/// for a later open, and the open goes on.
+pub(crate) fn resume(inner: &mut Inner) -> Result<(), Error> {
+    let pending = inner.view.pending_moves().map_err(storage)?;
+    let mut finish_now: std::collections::BTreeMap<
+        (CoreSpaceId, CoreSpaceId),
+        Vec<(String, CoreObjectId)>,
+    > = Default::default();
+    for record in pending {
+        let (old, new, object) = (record.old_space, record.new_space, record.object);
+        let held =
+            |space: ncdb_core::ids::SpaceId| Object::read(inner, space, &record.collection, object);
+        let arrived = held(new)?.is_some();
+        let live = held(old)?.is_some_and(|o| o.moved_to().is_none());
+        if arrived && live {
+            finish_now
+                .entry((old, new))
+                .or_default()
+                .push((record.collection.clone(), object));
+        } else {
+            inner
+                .view
+                .clear_pending_moves(old, &[object])
+                .map_err(storage)?;
+        }
+    }
+    for ((old, new), objects) in finish_now {
+        let allowed = writable(inner, crate::id::SpaceId(old))
+            .and_then(|()| not_stopped(inner, crate::id::SpaceId(old)));
+        if allowed.is_ok() {
+            finish(inner, old, new, &objects)?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Stops a move after its new space's change, as a device that stops
+    /// in between (`crate::moving_tests`).
+    static STOP_AFTER_NEW_SPACE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Makes the moves of this thread stop after the new space's change.
+#[cfg(test)]
+pub(crate) fn stop_after_new_space(stop: bool) {
+    STOP_AFTER_NEW_SPACE.with(|cell| cell.set(stop));
 }
 
 /// Each object of `objects`, read again from the view of `space`: refused
