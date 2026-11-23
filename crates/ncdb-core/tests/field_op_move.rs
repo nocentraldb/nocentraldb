@@ -15,7 +15,7 @@ use ncdb_core::cbor::{Key, Value};
 use ncdb_core::change::Operation;
 use ncdb_core::field_op::{self, MOVE};
 use ncdb_core::log::OperationParkReason::{self, MalformedArguments, UnknownArgument};
-use ncdb_core::object::ObjectOperation;
+use ncdb_core::object::{MOVED_FROM, ObjectOperation};
 
 use examples::*;
 
@@ -110,5 +110,38 @@ fn a_destination_of_the_wrong_kind_is_read_not_parked() {
     assert_eq!(
         field_op::decode_object(&op(Some(moved)), origin()),
         Ok(ObjectOperation::Move(write(Value::Text("x".into()), &[])))
+    );
+}
+
+/// The old space's id.
+const OLD: [u8; 16] = [0x0d; 16];
+
+/// `{1: old space id}`, the value of `$movedFrom`.
+fn from_old() -> Value {
+    args(&[(1, Value::Bytes(OLD.to_vec()))])
+}
+
+#[test]
+fn moved_from_is_a_set_on_the_hidden_field_and_folds_into_the_object() {
+    // RFC 0016, "Formats": `$movedFrom` is a hidden field set in the new
+    // space's change, `{1: old space id}`, merged as a basic value.
+    assert_eq!(MOVED_FROM, "$movedFrom");
+    let set = write(from_old(), &[]);
+    let operation = field_op::moved_from(T1, "tasks", &set);
+    assert_eq!(operation.field.as_deref(), Some(MOVED_FROM));
+    assert_eq!(operation.op, field_op::SET);
+    assert_eq!(
+        field_op::decode_moved_from(&Operation::decode(&operation.encode()).unwrap(), origin()),
+        Ok(ObjectOperation::MovedFrom(set))
+    );
+}
+
+#[test]
+fn moved_from_takes_only_a_set() {
+    let mut operation = field_op::moved_from(T1, "tasks", &write(from_old(), &[]));
+    operation.op = field_op::ADD;
+    assert_eq!(
+        field_op::decode_moved_from(&operation, origin()),
+        Err(OperationParkReason::UnknownOperation)
     );
 }

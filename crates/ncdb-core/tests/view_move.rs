@@ -27,6 +27,7 @@ use ncdb_core::change::{Change, Operation, Payload};
 use ncdb_core::clock::Hlc;
 use ncdb_core::field_op;
 use ncdb_core::ids::{ChangeId, ObjectId, OperationId, SpaceId};
+use ncdb_core::log::State;
 use ncdb_core::view::View;
 
 use member::*;
@@ -340,4 +341,33 @@ mod convergence {
         let result = convergence::check::<ViewCopy, _>(&config, &independent(changes));
         assert!(result.is_ok(), "{}", result.unwrap_err());
     }
+}
+
+#[test]
+fn the_new_space_reads_where_the_object_came_from() {
+    // RFC 0016, "Formats": `$movedFrom` is hidden, so no model declares it,
+    // and the view keeps it with the object, not as a field.
+    let mut copy = Copy::new();
+    let old = Value::Map(
+        [(
+            ncdb_core::cbor::Key::Unsigned(1),
+            Value::Bytes(vec![0x0d; 16]),
+        )]
+        .into(),
+    );
+    let mut operations = task(1, "a", 1);
+    operations.push(field_op::moved_from(
+        object(1),
+        TASK,
+        &write(old, BTreeSet::new()),
+    ));
+    let first = copy.receive(operations);
+    let row = copy.row(1);
+    assert_eq!(row.object.moved_from(), Some(SpaceId([0x0d; 16])));
+    assert_eq!(row.fields.len(), 2);
+    assert_eq!(
+        copy.view.state(SPACE, first.change),
+        Some(State::Folded { parked: vec![] }),
+        "no operation parks"
+    );
 }

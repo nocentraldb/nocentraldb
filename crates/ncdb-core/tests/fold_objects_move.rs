@@ -116,6 +116,27 @@ fn a_destination_that_is_no_space_id_reads_as_not_moved() {
     assert_eq!(object.moved_to(), None);
 }
 
+#[test]
+fn moved_from_names_the_old_space() {
+    let mut object = Object::default();
+    assert_eq!(object.moved_from(), None);
+    let old = Value::Map(
+        [(
+            ncdb_core::cbor::Key::Unsigned(1),
+            Value::Bytes(U.0.to_vec()),
+        )]
+        .into(),
+    );
+    object.apply(&ObjectOperation::MovedFrom(write(1, 1, old, &[])));
+    assert_eq!(object.moved_from(), Some(U));
+    object.apply(&ObjectOperation::MovedFrom(write(2, 2, to(V), &[1])));
+    assert_eq!(
+        object.moved_from(),
+        None,
+        "a value that is no map reads unset"
+    );
+}
+
 /// One copy: a member whose control state lets every author write.
 #[derive(Clone, Debug)]
 struct Copy(Member);
