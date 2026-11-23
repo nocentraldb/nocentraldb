@@ -28,7 +28,7 @@ import {
 
 const RFC = "docs/rfc/0011-plugin-field-types.md";
 const INDEX = "docs/rfc/README.md";
-const BY_OWNER = "(Carsten, 2026-11-12, NOC-232)";
+const BY_OWNER = "(2026-11-12, NOC-232)";
 
 const rfc = () => read(RFC);
 
@@ -330,7 +330,7 @@ test("RFC 0009 takes ParkReason::UnknownType, unknownType and OpenOptions::plugi
   assert.match(names, /`unknownType`/);
   for (const text of [rust, section(sdk, "errors")]) {
     assert.ok(
-      text.includes("(Carsten, 2026-11-12, NOC-232"),
+      text.includes("(2026-11-12, NOC-232"),
       "RFC 0009 does not name the decision",
     );
   }

@@ -26,11 +26,11 @@ test("the control bodies table names entry types 7 and 8 with the rights their a
   const bodies = section(read(RFC_0008), "the-control-bodies");
   assert.match(
     bodies,
-    /^\| 7 \| Account key statement entry \| reader \(Carsten, 2026-11-11, NOC-187\) \|$/m,
+    /^\| 7 \| Account key statement entry \| reader \(2026-11-11, NOC-187\) \|$/m,
   );
   assert.match(
     bodies,
-    /^\| 8 \| Erasure decision \| admin, of the provisional shred's performer's account \(Carsten, 2026-11-11, NOC-230\) \|$/m,
+    /^\| 8 \| Erasure decision \| admin, of the provisional shred's performer's account \(2026-11-11, NOC-230\) \|$/m,
   );
 });
 
@@ -99,7 +99,7 @@ test("the fold supersedes an older account key, and a finalize wins over a take-
   );
   assert.match(
     fn,
-    /a finalize wins over every concurrent take-back \(Carsten, 2026-11-11, NOC-230\)/,
+    /a finalize wins over every concurrent take-back \(2026-11-11, NOC-230\)/,
   );
 });
 
@@ -139,10 +139,7 @@ test("RFC 0007 lists `too_early` and the relay's check of the 7 days", () => {
     text,
     /^\| `too_early` \| An erasure decision that finalizes a provisional shred/m,
   );
-  assert.match(
-    text,
-    /already keeps as "accepted at" \(Carsten, 2026-11-11, NOC-230\)/,
-  );
+  assert.match(text, /already keeps as "accepted at" \(2026-11-11, NOC-230\)/);
 });
 
 test("RFC 0009 names the provisional erasures and their notice", () => {
