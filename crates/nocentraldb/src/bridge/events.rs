@@ -33,8 +33,9 @@ pub struct Events {
     pub(super) durability: Arc<Mutex<Watch<Durability>>>,
     /// The view's report (NOC-315).
     pub(super) view: Arc<Mutex<Watch<ViewStatus>>>,
-    /// The sync's asks for an admission, for the SDK to answer (RFC 0015).
-    pub(super) asks: super::admission::Asks,
+    /// The sync's asks for an admission (RFC 0015) and for the relay URL
+    /// (NOC-496), for the SDK to answer.
+    pub(super) asks: super::asks::Asks,
 }
 
 /// The guarded value of `mutex`, poisoned or not.

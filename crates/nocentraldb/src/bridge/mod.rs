@@ -21,7 +21,7 @@
 //! The calls of slice 1:
 //!
 //! - `open` `{"lock": text, "inMemory": bool, "name": text?, "relay":
-//!   text?}`: opens the database, in memory or, in the browser, at a name
+//!   text | true?}`: opens the database, in memory or, in the browser, at a name
 //!   on OPFS. Answers `{"sync": status}`, the first sync status (below).
 //!   A second `open` fails with `invalidValue`.
 //! - `close` `{}`: drops the database; any later call but `open` fails
@@ -97,7 +97,13 @@
 //! `"admission": true`; the worker then sends `{"event": "admission",
 //! "request": n, "identity": hex}` when the sync needs an admission, and
 //! `admission.answer` `{"request": n, "admission": text | null}` answers
-//! it (`admission.rs`).
+//! it (`asks.rs`).
+//!
+//! For a relay URL the app's function gives (NOC-496), `open` takes
+//! `"relay": true`; the worker then sends `{"event": "relay", "request":
+//! n}` before each connect, and `relay.answer` `{"request": n, "relay":
+//! text | null}` answers it with the URL, or with null when the function
+//! failed (`asks.rs`).
 //!
 //! For RFC 0015's `db.account.identity` (NOC-469), `open` and
 //! `account.completePairing` also answer `"identity"`: the account's
@@ -131,7 +137,7 @@
 
 mod account;
 mod ad_hoc;
-mod admission;
+mod asks;
 mod erase;
 mod erasures;
 mod events;
@@ -291,7 +297,19 @@ impl Bridge {
             "account.completePairing" => account::complete_pairing(&db, args).await,
             "account.removeMember" => account::remove_member(&db, args).await,
             "admission.answer" => match &self.events {
-                Some(events) => events.asks.answer(args),
+                Some(events) => events.asks.answer(
+                    args,
+                    "admission",
+                    crate::texts::bridge::ADMISSION_ANSWER_TAKES_AREQUEST,
+                ),
+                None => Ok(Value::Null),
+            },
+            "relay.answer" => match &self.events {
+                Some(events) => events.asks.answer(
+                    args,
+                    "relay",
+                    crate::texts::bridge::RELAY_ANSWER_TAKES_AREQUEST,
+                ),
                 None => Ok(Value::Null),
             },
             "durability" => {
@@ -381,8 +399,13 @@ impl Bridge {
                 return Err(invalid(crate::texts::bridge::OPEN_TAKES_IN_MEMORY_OR_NAME));
             }
         }
-        if let Some(Value::Text(relay)) = get(args, "relay") {
-            options = options.relay(relay);
+        let asks = asks::Asks::default();
+        match get(args, "relay") {
+            Some(Value::Text(relay)) => options = options.relay(relay),
+            Some(Value::Bool(true)) => {
+                options.relay = Some(crate::relay::Relay::Given(asks.relay()));
+            }
+            _ => {}
         }
         if let Some(Value::Bool(true)) = get(args, "pairing") {
             options = options.pairing();
@@ -390,7 +413,6 @@ impl Bridge {
         if let Some(Value::Text(words)) = get(args, "recover") {
             options = options.recover(words);
         }
-        let asks = admission::Asks::default();
         if let Some(Value::Bool(true)) = get(args, "admission") {
             options.admission = Some(asks.fetch());
         }
