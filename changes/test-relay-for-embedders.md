@@ -12,8 +12,12 @@ Add `ncdb-relay-server` to your dev-dependencies and start a test relay on SQLit
 ```rust
 use ncdb_relay_server::local::{Options, TestRelay};
 
-let relay = TestRelay::start(Options::new().allow_identity(&identity))?;
-let db = Db::open(OpenOptions::new(LOCK).path(dir).key_file(keys).relay(&relay.url())).await?;
+let relay = TestRelay::start(Options::new().admit_any())?;
+let options = OpenOptions::new(LOCK)
+    .in_memory()
+    .relay(&relay.url())
+    .admission(relay.admissions());
+let db = Db::open(options).await?;
 ```
 
-`allow_identity` takes the identity `db.account().identity()` reports; without it, the relay refuses a new space with `not_allowed`. `admission_key` and `relay_id()` test admissions. `ncdb-relay` and `ncdb-relay-server` go to crates.io with the next beta.
+`admit_any` lets any account create spaces through admissions the test relay signs; `allow_identity` lists one account by the identity `db.account().identity()` reports instead. With neither, the relay refuses a new space with `not_allowed`. `admission_key` and `relay_id()` test admissions. `ncdb-relay` and `ncdb-relay-server` go to crates.io with the next beta.
