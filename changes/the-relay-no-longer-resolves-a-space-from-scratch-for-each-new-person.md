@@ -1,6 +1,6 @@
 ---
 type: fix
-tickets: [NOC-427, NOC-492]
+tickets: [NOC-427]
 introduced: cycle
 components: [relay]
 ---
