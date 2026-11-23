@@ -13,6 +13,8 @@
 //! `#[non_exhaustive]`, so a field added later breaks no app.
 
 mod reasons;
+#[cfg(test)]
+mod only_member_tests;
 
 use std::collections::BTreeMap;
 use std::time::Duration;
