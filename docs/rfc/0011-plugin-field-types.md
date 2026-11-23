@@ -51,7 +51,7 @@ It builds on RFC 0004 and RFC 0005, above, and on [RFC 0001](0001-nocentraldb.md
 
 ## The field type a plugin implements
 
-A plugin implements a typed trait, `FieldType`, and the core wraps it (Carsten, 2026-11-12, NOC-232). The author writes Rust types for the state, the operation and the read value, and the core keeps a boxed adapter that works on bytes, as `fs_<collection>` stores them. The trait holds:
+A plugin implements a typed trait, `FieldType`, and the core wraps it (2026-11-12, NOC-232). The author writes Rust types for the state, the operation and the read value, and the core keeps a boxed adapter that works on bytes, as `fs_<collection>` stores them. The trait holds:
 
 - **`configure(rule, config)`**, called once per field when the core opens the lock. It reads the field's `config` and returns the configured type, or refuses a `config` it cannot read, which refuses the field as an unknown type would ([A type that is not registered](#a-type-that-is-not-registered)).
 - **The initial state**, the state of a field nobody has written.
@@ -71,7 +71,7 @@ What a plugin's `read` returns and what its `write` takes cross the SDKs as one 
 
 ## A plugin and the registry
 
-**One crate is one namespace** (Carsten, 2026-11-12, NOC-232). A plugin's crate exports one function, `plugin()`, that returns a `Plugin`: its namespace, the types it implements by name, and for each type the rule versions it implements. The crate the lock names under `plugins` ([RFC 0005, "How a field type is referenced"](0005-schema-and-model-lock.md#how-a-field-type-is-referenced)) is the crate that exports it.
+**One crate is one namespace** (2026-11-12, NOC-232). A plugin's crate exports one function, `plugin()`, that returns a `Plugin`: its namespace, the types it implements by name, and for each type the rule versions it implements. The crate the lock names under `plugins` ([RFC 0005, "How a field type is referenced"](0005-schema-and-model-lock.md#how-a-field-type-is-referenced)) is the crate that exports it.
 
 ```rust
 pub fn plugin() -> ncdb_plugin::Plugin {
@@ -89,7 +89,7 @@ The core builds a **registry** from the plugins it is given. The registry maps a
 
 ## Handing plugins to the core
 
-A Rust app hands each plugin to the SDK when it opens the database, with **`OpenOptions::plugin`**, which it may call more than once (Carsten, 2026-11-12, NOC-232):
+A Rust app hands each plugin to the SDK when it opens the database, with **`OpenOptions::plugin`**, which it may call more than once (2026-11-12, NOC-232):
 
 ```rust
 let db = Db::open(OpenOptions::new(include_str!("../model.lock.json"))
@@ -104,7 +104,7 @@ The SDK builds the registry and passes it to the core, whose `View::open` and lo
 
 ## TypeScript
 
-**There are no plugins in the TypeScript SDK in v1** (Carsten, 2026-11-12, NOC-232). A TypeScript member, in the browser or in Node.js, treats every plugin type as not registered: it parks the field's operations as `UnknownType`, reads the field as unset, and refuses a write to it with `unknownType` ([A type that is not registered](#a-type-that-is-not-registered)). It keeps every change and forwards it, so nothing is lost, and the merge result does not fork: a member that runs the plugin folds the same changes to the same state. What forks is what is available: a space shared by a Rust agent and a TypeScript app shows a plugin field on the agent only. [Agreement with GENESIS.md and the decided RFCs](#agreement-with-genesismd-and-the-decided-rfcs) states that limit against principle 7.
+**There are no plugins in the TypeScript SDK in v1** (2026-11-12, NOC-232). A TypeScript member, in the browser or in Node.js, treats every plugin type as not registered: it parks the field's operations as `UnknownType`, reads the field as unset, and refuses a write to it with `unknownType` ([A type that is not registered](#a-type-that-is-not-registered)). It keeps every change and forwards it, so nothing is lost, and the merge result does not fork: a member that runs the plugin folds the same changes to the same state. What forks is what is available: a space shared by a Rust agent and a TypeScript app shows a plugin field on the agent only. [Agreement with GENESIS.md and the decided RFCs](#agreement-with-genesismd-and-the-decided-rfcs) states that limit against principle 7.
 
 **Next, in a ticket of its own after the Rust path: `ncdb core build`.** It reads `plugins[*].crate` from the lock, generates a crate that registers those plugins, and builds the app's own wasm core from it, which the app passes to `nc.open({ core })`. Node.js then uses that wasm core, RFC 0009's fallback, unless the app builds its own native addon. The cost is a Rust toolchain on the developer's build machine; the user's device needs none.
 
@@ -112,7 +112,7 @@ The SDK builds the registry and passes it to the core, whose `View::open` and lo
 
 ## A type that is not registered
 
-**The database opens anyway** (Carsten, 2026-11-12, NOC-232). When the lock names a plugin type whose type id and rule the registry does not hold:
+**The database opens anyway** (2026-11-12, NOC-232). When the lock names a plugin type whose type id and rule the registry does not hold:
 
 - The fold parks the field's operations with the reason **`UnknownType`**, the reason RFC 0004 and RFC 0005 already name, which RFC 0009's `ParkReason` now holds as `ParkReason::UnknownType`. `space.status` counts them, as it counts every parked operation ([RFC 0009, "The Rust SDK"](0009-sdk-api.md#the-rust-sdk)).
 - The field reads as unset.
@@ -129,7 +129,7 @@ This keeps what a member does not understand, as principle 3 asks and as an unkn
 
 ## Checking a plugin: ncdb-harness
 
-The convergence harness becomes a public crate, **`ncdb-harness`** (Carsten, 2026-11-12, NOC-232). It is taken out of `ncdb-core`'s test code, and the core's built-in types move onto it, so there is one harness for both. A plugin crate uses it as a dev-dependency, with its own generators and its broken fixtures as RFC 0004 requires them, and runs it natively and on wasm32 (C3) in its own CI. The harness checks C1 to C7 and that `decode_state` round-trips. It is published to crates.io after 0.1: for 0.1 it is not published, and its name is reserved there as a placeholder, since plugin authors do not need it before then (Carsten, 2026-11-20, NOC-362).
+The convergence harness becomes a public crate, **`ncdb-harness`** (2026-11-12, NOC-232). It is taken out of `ncdb-core`'s test code, and the core's built-in types move onto it, so there is one harness for both. A plugin crate uses it as a dev-dependency, with its own generators and its broken fixtures as RFC 0004 requires them, and runs it natively and on wasm32 (C3) in its own CI. The harness checks C1 to C7 and that `decode_state` round-trips. It is published to crates.io after 0.1: for 0.1 it is not published, and its name is reserved there as a placeholder, since plugin authors do not need it before then (2026-11-20, NOC-362).
 
 **The limit, stated plainly (principle 4).** The core cannot prove that a third party's plugin converges. It runs what the app registers. The contract is checked in the plugin's CI, by the plugin's author, not on the device; an app that registers a plugin trusts its author for convergence as it trusts any dependency for correctness.
 
@@ -137,7 +137,7 @@ The convergence harness becomes a public crate, **`ncdb-harness`** (Carsten, 202
 
 ## What a plugin depends on: ncdb-plugin
 
-A plugin depends on a small public crate, **`ncdb-plugin`**, which `ncdb-core` depends on in turn (Carsten, 2026-11-12, NOC-232). It holds what a plugin needs and nothing else:
+A plugin depends on a small public crate, **`ncdb-plugin`**, which `ncdb-core` depends on in turn (2026-11-12, NOC-232). It holds what a plugin needs and nothing else:
 
 - the trait `FieldType`;
 - `Data`;
