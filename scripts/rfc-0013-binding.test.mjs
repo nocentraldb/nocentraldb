@@ -28,7 +28,12 @@ test("History and Decisions record the change after publication", () => {
   const entries = decisionEntries(rfc).filter((e) => e.includes("NOC-467"));
   assert.equal(entries.length, 4, entries.join("\n"));
   for (const entry of entries) {
-    assert.match(entry, /Carsten, 2026-11-22/);
+    assert.match(entry, /^- \*\*2026-11-22 · /);
+    assert.doesNotMatch(
+      entry,
+      /\bCarsten\b/,
+      "the decision log says who decided",
+    );
     assert.match(entry, /factory\/decisions\/2026-11-22-NOC-467-/);
   }
 });

@@ -85,6 +85,21 @@ web-sys = { version = "=0.3.107", default-features = false, features = ["std", "
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 libsqlite3-sys = { version = "=0.39.1", default-features = false }
 
+# Rich text, `ncdb/richText` rule 1 (RFC 0013), is built only with the
+# compiler cfg `ncdb_rich_text`, which only the project's own CI sets
+# (RUSTFLAGS, crates/ncdb-core/moon.yml): the fold stays off in every
+# published build until its guard is complete (NOC-468). A cfg, not a
+# feature, so no embedder can turn it on through Cargo. Without it, a
+# rich-text field's operations park as "unknown type" and are kept. Yrs
+# applies a field's Yjs updates, pinned exactly, since rule 1 is Yjs's
+# integration as this version implements it (RFC 0013, "How rich text
+# meets the plugin contract").
+[target.'cfg(ncdb_rich_text)'.dependencies]
+yrs = "=0.28.2"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(ncdb_rich_text)"] }
+
 [dev-dependencies]
 # The test plugin, test/counter, which the view folds (RFC 0011).
 ncdb-test-counter.workspace = true
@@ -94,6 +109,9 @@ ncdb-harness.workspace = true
 # with proptest. Without default features it uses no threads, no fork and no
 # OS randomness, so the harness also runs on wasm32 (NOC-10).
 proptest = { version = "=1.12.0", default-features = false, features = ["alloc", "no_std"] }
+# The rich-text tests write real Yjs updates with Yrs, as a member's editor
+# would (RFC 0013). The version the core pins.
+yrs = "=0.28.2"
 
 # The test-wasm task (crates/ncdb-core/moon.yml) runs the tests on wasm32
 # with wasm-bindgen-test. The runner, wasm-bindgen-cli, must be the version of

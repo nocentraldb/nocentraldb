@@ -10,7 +10,7 @@
 //   node scripts/sdk-browser/measure-writes.mjs --objects 100000 --batch 1
 //
 // SDK_BROWSER_ENGINE names the engine, as for the e2e files. Not a test:
-// writeCost.e2e.test.mjs keeps the curve flat.
+// long/writeCost.e2e.test.mjs keeps the curve flat.
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { LOCK } from "./build.mjs";

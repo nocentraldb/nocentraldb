@@ -14,13 +14,14 @@
 // minutes, which no setting of Chromium's shortens.
 //
 // Not part of `pnpm gates`, which runs without browsers: the task
-// `repo:sdk-browser` and the workflow browser-view.yml run it.
+// `repo:sdk-browser-long` and the long job of browser-view.yml run it
+// (NOC-448).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
-import { build, LOCK, prebuilt } from "./build.mjs";
-import { engine, launchPrivate } from "./engine.mjs";
-import { startServer } from "./server.mjs";
+import { build, LOCK, prebuilt } from "../build.mjs";
+import { engine, launchPrivate } from "../engine.mjs";
+import { startServer } from "../server.mjs";
 
 /** Longer than the about ten minutes after which Chromium drops an idle off-the-record OPFS. */
 const IDLE_MS = 11 * 60 * 1000;
