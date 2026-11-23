@@ -39,6 +39,7 @@ pub struct Resolver {
     /// change written after all of them has.
     last: Option<Last>,
     judged: usize,
+    folded: usize,
 }
 
 /// The nodes of a call without a gap, and their fold (steps 2 to 5).
@@ -64,6 +65,7 @@ impl Resolver {
             judgements: BTreeMap::new(),
             last: None,
             judged: 0,
+            folded: 0,
         }
     }
 
@@ -73,6 +75,7 @@ impl Resolver {
         let input = Input::new(self.space, changes, &mut self.inputs);
         let mut judged = Judged::default();
         self.judged = 0;
+        self.folded = 0;
         // Smaller causal pasts first: a node's past holds only nodes with
         // smaller pasts, so every fold below finds their judgement.
         let mut nodes: Vec<&input::Node> = input.nodes.values().collect();
@@ -97,6 +100,7 @@ impl Resolver {
             let past = match &self.last {
                 Some(last) if !node.gap && *node.past == last.nodes => &last.folded,
                 _ => {
+                    self.folded += node.past.len();
                     folded = fold(&input, &judged, &node.past);
                     &folded
                 }
@@ -120,6 +124,7 @@ impl Resolver {
             }
         }
         let all: BTreeSet<ChangeId> = input.nodes.keys().copied().collect();
+        self.folded += all.len();
         let folded = fold(&input, &judged, &all);
         self.last = input.nodes.values().all(|node| !node.gap).then(|| Last {
             nodes: all,
@@ -133,5 +138,11 @@ impl Resolver {
     /// memory.
     pub fn judged(&self) -> usize {
         self.judged
+    }
+
+    /// How many nodes the last call walked in folds from scratch (steps 2
+    /// to 5), to judge a control change or to settle the set.
+    pub fn folded(&self) -> usize {
+        self.folded
     }
 }
