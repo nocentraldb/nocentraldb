@@ -1,7 +1,8 @@
 // The browser engine the TypeScript SDK's browser tests run in (NOC-344):
 // SDK_BROWSER_ENGINE names it, Chromium when it names none. The workflow
-// browser-view.yml runs every e2e file once per engine, one step each, so
-// a failing engine names itself in its step. Every test runs in all three;
+// browser-view.yml runs every e2e file once per engine, one step each in
+// its view job, and the long ones in long/ in a job per engine (NOC-448),
+// so a failing engine names itself. Every test runs in all three;
 // an engine that cannot run one would skip it with the reason in the test,
 // and docs/getting-started-browser.md would list the gap. Where an engine
 // has a documented limit, the test asserts the limit there instead, as

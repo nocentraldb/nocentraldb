@@ -10,7 +10,7 @@ It builds on [RFC 0006](0006-local-view.md), which puts the view on SQLite in a 
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0012 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Decided by the owner (Carsten, 2026-11-16): option B, every tab takes the database per transaction and no tab owns it, with the answers in [What changes for developers](#what-changes-for-developers). The outbox is deferred until telemetry gathered with the app's consent shows whether it is needed (NOC-364). Nothing is built yet. RFC 0006 and RFC 0009 still describe the owning tab; the [follow-up tickets](#follow-up-tickets) rewrite them and build the design.
+**Status.** Decided, 2026-11-16. Option B: every tab takes the database per transaction and no tab owns it, with the answers in [What changes for developers](#what-changes-for-developers). The outbox is deferred until telemetry gathered with the app's consent shows whether it is needed (NOC-364). Nothing is built yet. RFC 0006 and RFC 0009 still describe the owning tab; the [follow-up tickets](#follow-up-tickets) rewrite them and build the design.
 
 **At 0.1.** Not built. Release 0.1 keeps RFC 0006's owning tab ([RFC 0006, "The browser"](0006-local-view.md#the-browser)); this design is built after it.
 
@@ -291,3 +291,4 @@ It builds on [RFC 0006](0006-local-view.md), which puts the view on SQLite in a 
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-21 · The spike's `sahTx` pauses the pool in a `finally`, so a failed `COMMIT` no longer leaves the tab holding the handles, and the test plan adds a failed `COMMIT`; reported by u/Discordbothost on Reddit (NOC-409, #419)
+- 2026-11-23 · Its status line names nobody who decided; the decision log records it (NOC-454, #449)

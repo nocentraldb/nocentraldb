@@ -16,7 +16,7 @@ import { headings, root, section, slug } from "./rfc-text.mjs";
 export const LATER =
   /^- (\d{4}-\d{2}-\d{2}) · \S.*\((NOC-\d+)(, NOC-\d+)*(, #\d+)?\)$/;
 
-/** A Decisions entry: a bold dated title, who decided it and when, and its source. */
+/** A Decisions entry: a bold dated title that says what changed, then its source. */
 export const ENTRY = /^- \*\*(\d{4}-\d{2}-\d{2}) · \S.*\*\*/;
 
 /** The non-empty lines of a section, without its sub-headings. */
@@ -56,8 +56,9 @@ export const decisionEntries = (markdown) => {
 /**
  * Asserts the Decisions section's place and form. It exists only once History
  * has a line after the publication; it stands directly before History; each
- * entry is dated, names who decided it and when, and names its source: a
- * decision file of the log, which must exist, or the ticket.
+ * entry is dated and names its source: a decision file of the log, which must
+ * exist, or the ticket. An entry names nobody who decided: the decision log
+ * records that (Carsten, 2026-11-23, NOC-454 B).
  */
 export const assertDecisions = (markdown) => {
   const h2 = headings(markdown)
@@ -83,10 +84,10 @@ export const assertDecisions = (markdown) => {
       ENTRY,
       `an entry starts "- **YYYY-MM-DD · …**": ${title}`,
     );
-    assert.match(
+    assert.doesNotMatch(
       entry,
-      /\b(Carsten|pm), \d{4}-\d{2}-\d{2}\b/,
-      `an entry names who decided it and when: ${title}`,
+      /\b(Carsten|pm)\b/,
+      `an entry names who decided it; the decision log records that: ${title}`,
     );
     const files = [
       ...entry.matchAll(/\]\(\.\.\/\.\.\/factory\/decisions\/([^)#\s]+)\)/g),

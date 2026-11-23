@@ -8,7 +8,7 @@ It builds on the object model of [RFC 0002](0002-change-and-log-format.md) and [
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0016 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Decided. The design below is decided as it stands (Carsten, 2026-11-22). RFC 0002, RFC 0004, RFC 0005 and RFC 0009 do not describe the move yet; the [follow-up tickets](#follow-up-tickets) rewrite them and build it.
+**Status.** Decided, 2026-11-22. RFC 0002, RFC 0004, RFC 0005 and RFC 0009 do not describe the move yet; the [follow-up tickets](#follow-up-tickets) rewrite them and build it.
 
 **At 0.1.** Not built. Release 0.1 has no call that moves an object; an app copies and deletes.
 
@@ -271,3 +271,4 @@ It adds an operation to [RFC 0002](0002-change-and-log-format.md)'s format and [
 ## History
 
 - 2026-11-22 · First published (NOC-447)
+- 2026-11-23 · Its status line names nobody who decided; the decision log records it (NOC-454, #449)

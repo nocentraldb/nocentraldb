@@ -37,7 +37,7 @@ pub(super) fn apply(
     if operation.op < FIRST_PLUGIN_OPERATION {
         return Ok(Err(OperationParkReason::UnknownOperation));
     }
-    let Some(arguments) = arguments(operation.value.as_ref()) else {
+    let Some(arguments) = arguments(operation.value().as_ref()) else {
         return Ok(Err(OperationParkReason::MalformedArguments));
     };
     match field
