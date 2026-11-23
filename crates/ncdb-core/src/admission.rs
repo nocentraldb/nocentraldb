@@ -26,7 +26,8 @@ pub const PREFIX: &str = "ncdb-admit-1:";
 #[derive(Clone, PartialEq, Eq)]
 pub struct Admission {
     /// Key 1: the relay it admits to, so it is worth nothing on another.
-    pub relay_id: [u8; 16],
+    /// The RFCs fix no length for a relay id, so the core takes any bytes.
+    pub relay_id: Vec<u8>,
     /// Key 2: the identity it admits, the recovery key, or the account key
     /// of an account without one (RFC 0015, "The account's identity").
     pub identity: [u8; 32],
@@ -57,7 +58,7 @@ impl Admission {
     /// `spaces` spaces on the relay `relay_id` until `until`.
     pub fn sign(
         admission_key: &SigningKey,
-        relay_id: [u8; 16],
+        relay_id: Vec<u8>,
         identity: [u8; 32],
         until: u64,
         spaces: u64,
@@ -105,7 +106,7 @@ impl Admission {
     pub fn decode(bytes: &[u8]) -> Result<Admission, ChangeError> {
         let mut map = Fields::of(cbor::decode(bytes)?)?;
         let admission = Admission {
-            relay_id: fields::fixed(map.required(1)?)?,
+            relay_id: byte_string(map.required(1)?)?,
             identity: fields::fixed(map.required(2)?)?,
             until: fields::unsigned(map.required(3)?)?,
             spaces: fields::unsigned(map.required(4)?)?,
@@ -124,6 +125,14 @@ impl Admission {
             (3, Value::Unsigned(self.until)),
             (4, Value::Unsigned(self.spaces)),
         ]
+    }
+}
+
+/// Key 1's bytes, of any length.
+fn byte_string((key, value): (u64, Value)) -> Result<Vec<u8>, ChangeError> {
+    match value {
+        Value::Bytes(bytes) => Ok(bytes),
+        _ => Err(ChangeError::InvalidValue(key)),
     }
 }
 

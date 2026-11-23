@@ -43,8 +43,8 @@ fn admission_key() -> SigningKey {
     SigningKey::from_bytes(&[0x5a; 32])
 }
 
-fn relay_id() -> [u8; 16] {
-    std::array::from_fn(|i| i as u8)
+fn relay_id() -> Vec<u8> {
+    (0..16).collect()
 }
 
 fn recovery_key() -> [u8; 32] {
@@ -78,7 +78,7 @@ fn the_inputs_are_the_vectors() {
     assert_eq!(Admission::CONTEXT, b"nocentraldb/relay-admission");
     assert_eq!(PREFIX, "ncdb-admit-1:");
     assert_eq!(public().to_vec(), field("admission key"));
-    assert_eq!(relay_id().to_vec(), field("relay id"));
+    assert_eq!(relay_id(), field("relay id"));
     assert_eq!(recovery_key().to_vec(), field("recovery key"));
     assert_eq!(account_key().to_vec(), field("account key"));
 }
@@ -146,7 +146,7 @@ fn a_map_without_a_key_or_with_a_wrong_one_is_refused() {
         assert!(Admission::decode(&changed(key, None)).is_err(), "without key {key}");
     }
     for (key, value) in [
-        (1, Value::Bytes(vec![0; 32])),
+        (1, Value::Unsigned(1)),
         (2, Value::Bytes(vec![0; 16])),
         (3, Value::Bytes(vec![0; 8])),
         (4, Value::Bytes(vec![0; 8])),
