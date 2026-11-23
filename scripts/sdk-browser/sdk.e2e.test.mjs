@@ -589,9 +589,10 @@ test("the recovery code is shown until confirmed, survives a reopen, and recover
       const shown = await db.account.recoveryCode();
       const [first, second] = shown.challenge();
       const other = words[second - 1] === "zoo" ? "abandon" : "zoo";
-      const wrong = await shown
-        .confirm([words[first - 1], other])
-        .then(() => "confirmed", (error) => error.code);
+      const wrong = await shown.confirm([words[first - 1], other]).then(
+        () => "confirmed",
+        (error) => error.code,
+      );
       const keptAfterWrong = (await db.account.recoveryCode()) !== null;
       await shown.confirm([
         words[first - 1].toUpperCase(),
