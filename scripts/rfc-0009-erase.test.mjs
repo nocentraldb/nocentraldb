@@ -47,7 +47,7 @@ test("The Rust SDK has the erase calls, their texts and their results", () => {
     /`NoticeCode::Erased`/,
     /`space\.erasures\(\)\.take_back\(shred\)`/,
     /`NoticeCode::TakenBack`/,
-    /Carsten, 2026-11-15, NOC-326/,
+    /2026-11-15, NOC-326/,
   ]) {
     assert.match(bullet, pattern, `the bullet does not say ${pattern}`);
   }

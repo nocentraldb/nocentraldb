@@ -25,7 +25,7 @@ test("RFC 0003's member key gives the browser's layout of the key record", () =>
     /`"nocentraldb\/browser-key-record"`/,
     /28 bytes more than the record/,
     /no passkey/i,
-    /Carsten, 2026-11-11, NOC-210/,
+    /2026-11-11, NOC-210/,
   ]) {
     assert.match(
       member,

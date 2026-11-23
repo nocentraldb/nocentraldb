@@ -133,7 +133,7 @@ The merge is the same for every kind. The kind only constrains the value:
 
 ### Days and points in time
 
-Apps store dates: when a task was done, a person's birthday, when an event occurred. Stored as text, such as `"2026-11-21"`, a date sorts by its bytes, which is right for one format and wrong for the next, and nothing stops `"21.11.2026"` or `"2026-02-30"` in the same field. So two field types hold dates, and they answer two different questions (Carsten, 2026-11-21, NOC-412):
+Apps store dates: when a task was done, a person's birthday, when an event occurred. Stored as text, such as `"2026-11-21"`, a date sorts by its bytes, which is right for one format and wrong for the next, and nothing stops `"21.11.2026"` or `"2026-02-30"` in the same field. So two field types hold dates, and they answer two different questions (2026-11-21, NOC-412):
 
 | Type | Type id | Answers | Value | CBOR | Range |
 | --- | --- | --- | --- | --- | --- |
@@ -360,7 +360,7 @@ RFC 0002 confirms that causal delivery is not guaranteed, and this RFC does **no
 
 ## The plugin contract
 
-RFC 0001 lets developers add field types as plugins, and the core runs them next to the built-in ones. A field type that breaks convergence breaks every promise built on it, so every field type, built in or plugin, must meet this contract. The core cannot prove it of a plugin: it runs what the app registers, and the plugin's author checks the contract in the plugin's CI ([RFC 0011, "Checking a plugin: ncdb-harness"](0011-plugin-field-types.md#checking-a-plugin-ncdb-harness); Carsten, 2026-11-12, NOC-232). The types above are the first to meet it. A plugin is Rust compiled into the core, through the registry [RFC 0011](0011-plugin-field-types.md) defines (Carsten, 2026-11-12, NOC-232): plugins as code loaded at run time, in any language, were not taken, because every member must run the identical rule natively and in WebAssembly.
+RFC 0001 lets developers add field types as plugins, and the core runs them next to the built-in ones. A field type that breaks convergence breaks every promise built on it, so every field type, built in or plugin, must meet this contract. The core cannot prove it of a plugin: it runs what the app registers, and the plugin's author checks the contract in the plugin's CI ([RFC 0011, "Checking a plugin: ncdb-harness"](0011-plugin-field-types.md#checking-a-plugin-ncdb-harness); 2026-11-12, NOC-232). The types above are the first to meet it. A plugin is Rust compiled into the core, through the registry [RFC 0011](0011-plugin-field-types.md) defines (2026-11-12, NOC-232): plugins as code loaded at run time, in any language, were not taken, because every member must run the identical rule natively and in WebAssembly.
 
 ### What a field type defines
 
@@ -494,7 +494,7 @@ This form is plain CBOR with one encoding per operation, and its sort order is t
 
 **The value.** Any value of RFC 0002's profile, inside the depth limit below. Whether it fits the field's kind, such as a text in an integer field, an option the reader's schema does not list, or a link target that is not 16 bytes, is not a question of encoding. The operation is applied, and the field type decides how the read shows the value, as this RFC does for choices ("unknown option") and as NOC-16 does for a value of the wrong kind (kept on arrival). A link target that is not a 16-byte byte string names no object, so it resolves as **missing**.
 
-**A personal value.** A write to a personal field is a set whose argument 1 is the sealed personal value, `{1: person-key id, 2: sealed value}`, and whose argument 2 is `replaces`, as for any basic value, so the merge rule stays this RFC's and `replaces` stays readable to members, not to the relay (Carsten, 2026-11-12, NOC-244; [RFC 0003, "Personal value"](0003-keys-and-cryptography.md#personal-value)). Clearing the field writes a plain `null` as argument 1: it shows only that the field is empty, never what it held, and needs no person key. The sealed value directly in key 5, with `replaces` inside the ciphertext, was not taken: a member without the key could not merge; nor was a sealed `null`, which would hide that the field was cleared but needs the person key, so a person whose key is gone could not be cleared.
+**A personal value.** A write to a personal field is a set whose argument 1 is the sealed personal value, `{1: person-key id, 2: sealed value}`, and whose argument 2 is `replaces`, as for any basic value, so the merge rule stays this RFC's and `replaces` stays readable to members, not to the relay (2026-11-12, NOC-244; [RFC 0003, "Personal value"](0003-keys-and-cryptography.md#personal-value)). Clearing the field writes a plain `null` as argument 1: it shows only that the field is empty, never what it held, and needs no person key. The sealed value directly in key 5, with `replaces` inside the ciphertext, was not taken: a member without the key could not merge; nor was a sealed `null`, which would hide that the field was cleared but needs the person key, so a person whose key is gone could not be cleared.
 
 **An operation names only operations of other changes.** The change id is the hash of the signed header, which holds the encrypted payload, so it does not exist yet while the payload is written. An operation therefore cannot name an operation of its own change. The SDK writes the net effect of a `write` on each field instead: at most one set per field, and at most one add or one remove per element of a set field.
 
@@ -877,3 +877,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set 
 - 2026-11-21 · Days and points in time, two basic value types, as the owner answered (NOC-412, NOC-434, #430)
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
 - 2026-11-23 · Operation 5 is the rich-text update and 6 the move; a link to a moved object reads moved, and a reference follows the trace, as RFC 0016 decided (NOC-474, #474)
+- 2026-11-23 · Inline attributions keep the date and the ticket and name nobody who decided; the decision log records it (NOC-481, #475)

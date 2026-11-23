@@ -16,7 +16,7 @@ test("RFC 0003 says a member holds person keys in memory, fetched on every conne
   assert.match(person, /in memory only/);
   assert.match(person, /every connection/);
   assert.match(person, /NOC-222/);
-  assert.match(person, /Carsten, 2026-11-11/);
+  assert.match(person, /2026-11-11/);
 });
 
 test("RFC 0009's personal fields say where the SDK holds the person keys", () => {
