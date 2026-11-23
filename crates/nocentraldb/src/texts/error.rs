@@ -312,7 +312,7 @@ pub(crate) const NO_INDEXED_DB: &str =
 /// (space.moves.carryOver) when an edit given is not among the space's later
 /// edits now (RFC 0016, "Later edits").
 pub(crate) fn no_later_edit(position: impl std::fmt::Display, change: impl std::fmt::Display, id: impl std::fmt::Display) -> String {
-    format!("the edit {position} of the change {change} is no later edit of the object {id} in this space")
+    format!("the edit {position} of the change {change} is not a later edit of the object {id} in this space")
 }
 
 /// `noLongerMember` (notMember): A membership call or a write by a member that
