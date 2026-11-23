@@ -1,5 +1,5 @@
 ---
-type: feature
+type: breaking
 tickets: [NOC-496]
 components: [sdk-rust, sdk-ts]
 ---
@@ -20,3 +20,6 @@ const db = await nc.open({
 In Rust, `OpenOptions::new(lock).relay_with(|| async { Ok::<_, MyError>(fresh_url().await?) })`, beside `relay(url)`.
 
 While the function throws or gives no `ws://` or `wss://` URL, the sync status reports `relay_url_failed` and the SDK calls it again after a backoff. In the Rust SDK, a connection the relay refuses with HTTP 401 or 403 shows as `connect_refused`. A browser does not tell the SDK why a WebSocket failed, so in the TypeScript SDK a refused connection shows as offline, like an unreachable relay.
+
+## Migration
+`relay` in `nc.open`'s options is now `string | (() => Promise<string>)`. Apps that pass a string change nothing. Code that reads the option's type as `string`, such as a wrapper typed with `Parameters<typeof nc.open>[0]["relay"]`, must handle a function. The Rust SDK adds `relay_with` beside `relay` and changes nothing that exists.
