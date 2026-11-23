@@ -220,3 +220,14 @@ test("a change the PR makes outside the allowlist still needs its fragment", (t)
   );
   assert.doesNotMatch(found.fragments.stderr, /b\.ts/);
 });
+
+test("the baseline step fails when the checkout is not the PR's merge ref", (t) => {
+  const fixture = mergeRef(t, {
+    pr: { "changes/pr-adds-c.md": FEATURE },
+    main: MAIN_BREAKS,
+  });
+  // A checkout of main's tip: its first parent is main's previous commit.
+  fixture.repo.run("checkout", "-q", "--detach", fixture.mainTip);
+  const baseline = runStep(t, fixture.repo, baselineStep, expressions(fixture));
+  assert.notEqual(baseline.status, 0);
+});
