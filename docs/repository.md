@@ -181,6 +181,7 @@ moon run repo:version --force
 moon run repo:api-report --force
 moon run repo:site --force
 moon run repo:wasm-runner --force
+moon run repo:rust-toolchain --force
 ```
 
 Re-running one test in isolation, e.g. to check a suspected flake:

@@ -95,14 +95,14 @@ Commit `model.lock.json` with your code. Build it again after every change to th
 
 ### `ncdb` through npm
 
-Outside a clone of the repository, `@nocentraldb/sdk` brings `ncdb` with it, so your app needs no Rust toolchain. In the app's folder, after `npm install @nocentraldb/sdk@alpha`:
+Outside a clone of the repository, `@nocentraldb/sdk` brings `ncdb` with it, so your app needs no Rust toolchain. In the app's folder, with the SDK installed:
 
 ```sh
 npx ncdb model build
 npx ncdb model check
 ```
 
-`npx ncdb` runs the same code as the `ncdb` that `cargo install ncdb` installs, compiled to WebAssembly, so it reads the same options, writes the same lock and says the same. Like that `ncdb`, it runs the schema with Node.js 24 or later, here the Node.js that runs `npx`. The schema module must load as an ES module: give the app's `package.json` `"type": "module"`. The SDK's alphas carry the bin; its betas and releases carry it from the next beta on. `ncdb model check` fits a CI step: it fails when the lock is missing or out of date.
+`npx ncdb` runs the same code as the `ncdb` that `cargo install ncdb` installs, compiled to WebAssembly, so it reads the same options, writes the same lock and says the same. Like that `ncdb`, it runs the schema with Node.js 24 or later, here the Node.js that runs `npx`. The schema module must load as an ES module: give the app's `package.json` `"type": "module"`. The SDK's alphas (the npm dist-tag `alpha`) carry the bin; its betas and releases carry it from the next beta on. `ncdb model check` fits a CI step: it fails when the lock is missing or out of date.
 
 Each program below is a version of `apps/my-tasks/src/app.ts`. Build it and serve the page:
 
