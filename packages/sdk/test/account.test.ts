@@ -1,7 +1,7 @@
 // Accounts, slice 1 (NOC-316; RFC 0009, "Accounts and devices"; the shapes
 // the owner decided on NOC-321, Carsten, 2026-11-15): nc.open's `pairing`
-// and `recover`, the recovery code until the person confirmed it, and
-// `db.account.recovered()`. Against a fake core.
+// and `recover`, the recovery code until two of its words came back
+// (NOC-502), and `db.account.recovered()`. Against a fake core.
 
 /** What Node's inspect shows, through the hook it calls. */
 const INSPECT = Symbol.for("nodejs.util.inspect.custom");
@@ -36,6 +36,7 @@ const WORDS = [
   "thank",
   "yellow",
 ];
+const CHALLENGE = [4, 9];
 const RECOVERED = {
   code: "accountRecovered",
   text: "Your account is back with a new account key. Your spaces come back when one of their members adds this device.",
@@ -54,10 +55,24 @@ const fake = (code: string[] | null = WORDS, recovered: unknown = null) => {
       calls.push({ call, args });
       switch (call) {
         case "account.recoveryCode":
-          return encode({ id, ok: shown === null ? null : { words: shown } });
-        case "account.confirmRecoveryCode":
+          return encode({
+            id,
+            ok: shown === null ? null : { words: shown, challenge: CHALLENGE },
+          });
+        case "account.confirmRecoveryCode": {
+          const answers = args.answers as { position: number; word: string }[];
+          if (answers.some(({ position, word }) => word !== WORDS[position - 1])) {
+            return encode({
+              id,
+              error: {
+                code: "invalidValue",
+                message: "word 9 does not match the recovery code",
+              },
+            });
+          }
           shown = null;
           return encode({ id, ok: null });
+        }
         case "account.recovered":
           return encode({ id, ok: recovered });
         default:
@@ -79,13 +94,34 @@ test("nc.open passes pairing and recover to the core's open", async () => {
   expect(other.calls[0]?.args).toMatchObject({ recover: "legal winner thank" });
 });
 
-test("recoveryCode() gives the twelve words until confirm(), then null", async () => {
+test("recoveryCode() gives the twelve words until two of them come back, then null", async () => {
   const { core, calls } = fake();
   const db = await connect(core, { model, lock });
-  const code = await db.account.recoveryCode();
-  expect(code?.words()).toEqual(WORDS);
-  await code?.confirm();
-  expect(calls.at(-1)?.call).toBe("account.confirmRecoveryCode");
+  const code = (await db.account.recoveryCode()) as RecoveryCode;
+  expect(code.words()).toEqual(WORDS);
+  expect(code.challenge()).toEqual([4, 9]);
+  await code.confirm(["Wave ", "legal"]);
+  expect(calls.at(-1)).toEqual({
+    call: "account.confirmRecoveryCode",
+    args: {
+      answers: [
+        { position: 4, word: "Wave " },
+        { position: 9, word: "legal" },
+      ],
+    },
+  });
+  expect(await db.account.recoveryCode()).toBeNull();
+});
+
+test("a wrong word fails with invalidValue and the code stays", async () => {
+  const { core } = fake();
+  const db = await connect(core, { model, lock });
+  const code = (await db.account.recoveryCode()) as RecoveryCode;
+  await expect(code.confirm(["wave", "zoo"])).rejects.toMatchObject({
+    code: "invalidValue",
+  });
+  expect((await db.account.recoveryCode())?.words()).toEqual(WORDS);
+  await code.confirm(["wave", "legal"]);
   expect(await db.account.recoveryCode()).toBeNull();
 });
 
@@ -120,6 +156,12 @@ test("their types are what the owner decided", async () => {
   >();
   expectTypeOf<ReturnType<RecoveryCode["words"]>>().toEqualTypeOf<
     readonly string[]
+  >();
+  expectTypeOf<ReturnType<RecoveryCode["challenge"]>>().toEqualTypeOf<
+    readonly [number, number]
+  >();
+  expectTypeOf<Parameters<RecoveryCode["confirm"]>>().toEqualTypeOf<
+    [answers: readonly [string, string]]
   >();
   expectTypeOf<ReturnType<RecoveryCode["confirm"]>>().toEqualTypeOf<
     Promise<void>
