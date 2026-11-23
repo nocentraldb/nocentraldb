@@ -38,10 +38,10 @@ pub struct Model {
     pub collections: BTreeMap<String, BTreeMap<String, Field>>,
     /// The declared indexes.
     pub indexes: Vec<Index>,
-    /// The fields of each collection that the lock names with a plugin
-    /// type no code implements, each with that type id and rule: their
-    /// operations park as "unknown type" (RFC 0011, "A type that is not
-    /// registered").
+    /// The fields of each collection that the lock names with a type no
+    /// code implements, a plugin type or rich text, each with that type id
+    /// and rule: their operations park as "unknown type" (RFC 0011, "A type
+    /// that is not registered").
     pub unregistered: BTreeMap<String, BTreeMap<String, (String, u64)>>,
     /// The personal fields, by collection and field, each with whom it is
     /// about (RFC 0005, "Personal fields"). The fold keeps a personal
@@ -94,6 +94,10 @@ pub enum Field {
     /// A field of a plugin type, with the code registered for it (RFC
     /// 0011).
     Plugin(PluginField),
+    /// Rich text, `ncdb/richText` rule 1 (RFC 0013), with the compiler cfg
+    /// `ncdb_rich_text`.
+    #[cfg(ncdb_rich_text)]
+    RichText(crate::rich_text::RichText),
 }
 
 /// A field of a plugin type: its type id, rule and `config`, and the code
@@ -159,6 +163,9 @@ pub enum FieldState {
     Set(set::State),
     /// The state of a plugin field, as the plugin's code encodes it.
     Plugin(Vec<u8>),
+    /// The state of a rich-text field, with the compiler cfg `ncdb_rich_text`.
+    #[cfg(ncdb_rich_text)]
+    RichText(crate::rich_text::State),
 }
 
 /// A declared index (RFC 0006, "Declared indexes").
@@ -250,6 +257,8 @@ impl Field {
             }
             Field::Set(_) | Field::Links(_) => FieldState::Set(set::State::default()),
             Field::Plugin(plugin) => FieldState::Plugin(plugin.code.initial()),
+            #[cfg(ncdb_rich_text)]
+            Field::RichText(_) => FieldState::RichText(Default::default()),
         }
     }
 }
@@ -265,8 +274,8 @@ impl Model {
         self.collections.get(collection)?.get(field)
     }
 
-    /// Whether the lock names `field` of `collection` with a plugin type
-    /// no code implements.
+    /// Whether the lock names `field` of `collection` with a type no code
+    /// implements, a plugin type or rich text.
     pub fn unregistered(&self, collection: &str, field: &str) -> bool {
         self.unregistered_type(collection, field).is_some()
     }
@@ -382,6 +391,8 @@ impl Field {
                 Value::Unsigned(t.rule),
                 Value::Bytes(t.config.clone()),
             ]),
+            #[cfg(ncdb_rich_text)]
+            Field::RichText(_) => Value::Array(vec![Value::Unsigned(7)]),
         }
     }
 }

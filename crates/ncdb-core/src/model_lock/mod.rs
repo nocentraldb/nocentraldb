@@ -228,6 +228,9 @@ pub enum Kind {
     /// `ncdb/ref`, a reference into any space, with the collections a
     /// target may be in (RFC 0005, "References into another space").
     Ref(Vec<String>),
+    /// `ncdb/richText`, a shared document, without configuration (RFC 0013,
+    /// "The field in the schema and the lock").
+    RichText,
     /// A plugin's field type: its id `<namespace>/<name>` and its options.
     Plugin {
         /// The type id.
@@ -286,6 +289,7 @@ impl Kind {
             Kind::Link(_) => "ncdb/link",
             Kind::Links(_) => "ncdb/links",
             Kind::Ref(_) => "ncdb/ref",
+            Kind::RichText => "ncdb/richText",
             Kind::Plugin { type_id, .. } => type_id,
         }
     }

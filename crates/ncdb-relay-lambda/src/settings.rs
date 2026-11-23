@@ -3,9 +3,11 @@
 //!
 //! - `NCDB_RELAY_ID`: the relay's stable id, 32 hex digits (RFC 0007,
 //!   "Opening a connection"), drawn once per deployment;
-//! - `NCDB_ALLOWED_ACCOUNTS`: the account keys whose members may create
-//!   spaces, 64 hex digits each, separated by commas (RFC 0007, "Who may
-//!   create a space"); empty for none;
+//! - `NCDB_ALLOWED_ACCOUNTS`: the identities of the accounts whose members
+//!   may create spaces, 64 hex digits each, separated by commas: each
+//!   account's recovery key, or the account key of an account without one
+//!   (RFC 0007, "Who may create a space"; RFC 0015, "The account's
+//!   identity"); empty for none;
 //! - `NCDB_TABLE_PREFIX`: the prefix of the backend's tables, as
 //!   `ncdb_relay_aws::Names::with_prefix` names them, and of the
 //!   `connections` table;
@@ -26,7 +28,7 @@ use ncdb_relay_aws::Names;
 pub struct Settings {
     /// The relay's stable id.
     pub relay_id: [u8; 16],
-    /// The account keys whose members may create spaces.
+    /// The identities of the accounts whose members may create spaces.
     pub allowed_accounts: BTreeSet<[u8; 32]>,
     /// The backend's tables and bucket.
     pub names: Names,

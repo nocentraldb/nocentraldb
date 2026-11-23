@@ -131,6 +131,10 @@ impl<S: RelayStore> RelayStore for Counting<S> {
         self.inner.members_of(member).await
     }
 
+    async fn statement(&self, identity: [u8; 32]) -> Result<Option<u64>, StoreError> {
+        self.inner.statement(identity).await
+    }
+
     async fn person_keys(&self, space: SpaceId) -> Result<Vec<PersonKeyRecord>, StoreError> {
         let records = self.inner.person_keys(space).await?;
         self.records.fetch_add(records.len(), Ordering::SeqCst);
