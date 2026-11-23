@@ -122,3 +122,48 @@ test("a test moved to another file is not flagged", () => {
   );
   assert.equal(status, 0, out);
 });
+
+test("a new #[ignore] on a Rust test is flagged", () => {
+  for (const attrs of [
+    "#[test]\n#[ignore]",
+    '#[tokio::test]\n#[ignore = "slow"]',
+    '#[test]\n#[cfg_attr(not(feature = "aws"), ignore)]',
+  ]) {
+    const { status, out } = pr(
+      { [RS]: rust(rustTest("runs")) },
+      { [RS]: rust(rustTest("runs", undefined, attrs)) },
+    );
+    assert.equal(status, 1, `${attrs}\n${out}`);
+    assert.match(out, /crates\/a\/tests\/a\.rs: ignores the test `runs`/);
+  }
+});
+
+test("a new .skip, .only or skip option on a TypeScript test is flagged", () => {
+  for (const [head, marker] of [
+    [tsTest("runs", undefined, "it.skip"), "it.skip"],
+    [tsTest("runs", undefined, "test.only"), "test.only"],
+    [tsTest("runs", undefined, "it.skipIf(ci)"), "it.skipIf"],
+    [tsTest("runs", undefined, "it.todo"), "it.todo"],
+    [`describe.skip("all", () => {\n${tsTest("runs")}});\n`, "describe.skip"],
+    [`xit("runs", () => {\n  expect(1 + 1).toBe(2);\n});\n`, "xit"],
+    [`it("runs", { skip: true }, () => {\n  expect(1 + 1).toBe(2);\n});\n`, "skip:"],
+    [`it("runs", (t) => {\n  t.skip();\n  expect(1 + 1).toBe(2);\n});\n`, "t.skip"],
+  ]) {
+    const { status, out } = pr({ [TS]: ts(tsTest("runs")) }, { [TS]: ts(head) });
+    assert.equal(status, 1, `${marker}\n${out}`);
+    assert.ok(
+      out.includes(`packages/sdk/test/a.test.ts: adds \`${marker}\``),
+      `${marker}\n${out}`,
+    );
+  }
+});
+
+test("an ignored test or a skip marker that was there before is not flagged", () => {
+  const ignored = rust(rustTest("slow", undefined, '#[test]\n#[ignore = "slow"]'));
+  const skipped = ts(tsTest("later", undefined, "it.skip"));
+  const { status, out } = pr(
+    { [RS]: ignored, [TS]: skipped },
+    { [RS]: `${ignored}\n// touched\n`, [TS]: `${skipped}\n// touched\n` },
+  );
+  assert.equal(status, 0, out);
+});
