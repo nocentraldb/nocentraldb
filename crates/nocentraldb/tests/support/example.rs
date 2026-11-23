@@ -18,15 +18,44 @@ fn profile_flag() -> &'static [&'static str] {
     }
 }
 
-/// Builds `target` of `package` with the cargo that runs this test, into
-/// the same target directory and profile.
-fn build(package: &str, target: &[&str]) {
-    let built = Command::new(env!("CARGO"))
+/// The build of `target` of `package`, with the cargo that runs this test,
+/// into the same target directory and profile, without the variables cargo
+/// sets for this test's package: a build script that watches one of them
+/// would run again, and its crate would be rebuilt under the same file name
+/// (NOC-450).
+pub fn cargo_build(package: &str, target: &[&str]) -> Command {
+    let mut cargo = Command::new(env!("CARGO"));
+    cargo
         .args(["build", "--locked", "-q", "-p", package])
         .args(profile_flag())
-        .args(target)
-        .status()
-        .expect("cargo runs");
+        .args(target);
+    for (name, _) in std::env::vars_os() {
+        if name.to_str().is_some_and(set_for_the_package) {
+            cargo.env_remove(name);
+        }
+    }
+    cargo
+}
+
+/// Whether cargo sets the variable `name` for the package whose test runs
+/// (the Cargo Book, "Environment variables Cargo sets for crates"). CARGO
+/// itself, CARGO_HOME, CARGO_TARGET_DIR and cargo's own configuration stay.
+fn set_for_the_package(name: &str) -> bool {
+    ["CARGO_PKG_", "CARGO_MANIFEST_", "CARGO_BIN_"]
+        .iter()
+        .any(|prefix| name.starts_with(prefix))
+        || [
+            "CARGO_CRATE_NAME",
+            "CARGO_PRIMARY_PACKAGE",
+            "CARGO_TARGET_TMPDIR",
+            "OUT_DIR",
+        ]
+        .contains(&name)
+}
+
+/// Builds `target` of `package` (see `cargo_build`).
+fn build(package: &str, target: &[&str]) {
+    let built = cargo_build(package, target).status().expect("cargo runs");
     assert!(built.success(), "cargo build of {target:?} failed");
 }
 

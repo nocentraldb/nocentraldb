@@ -49,7 +49,11 @@ test("RFC 0007 records the budget under Decisions and in History", () => {
   const entry = decisionEntries(text).find((e) => e.includes(DECISION));
   assert.ok(entry, "a Decisions entry links the decision file");
   assert.match(entry, /^- \*\*2026-11-23 · /);
-  assert.match(entry, /\(Carsten, 2026-11-23, NOC-451, NOC-479/);
+  assert.doesNotMatch(
+    entry,
+    /\b(Carsten|pm)\b/,
+    "the decision log names who decided",
+  );
   assert.ok(
     historyLines(text).some(
       (l) => l.startsWith("- 2026-11-23 · ") && l.includes("NOC-479"),

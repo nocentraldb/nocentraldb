@@ -292,11 +292,33 @@ tasks:
     # (scripts/sdk-browser/), in Chromium or the engine SDK_BROWSER_ENGINE
     # names (NOC-344): it builds packages/sdk, its core in wasm
     # included, and opens it in a page as an app does; slice 4 syncs it
-    # with the local relay server, which it builds too. Not part of `gates`,
-    # for the reasons of browser-storage above; the workflow browser-view.yml
-    # runs it in CI. Never cached: its result depends on the installed
-    # browser.
+    # with the local relay server, which it builds too. The long tests in
+    # scripts/sdk-browser/long/ are the task sdk-browser-long (NOC-448). Not
+    # part of `gates`, for the reasons of browser-storage above; the workflow
+    # browser-view.yml runs it in CI. Never cached: its result depends on the
+    # installed browser.
     command: "node --test 'scripts/sdk-browser/*.test.mjs'"
+    deps: ["~:wasm-runner"]
+    inputs:
+      - "/scripts/sdk-browser/**/*"
+      - "/packages/sdk/**/*"
+      - "/crates/nocentraldb/**/*"
+      - "/crates/nocentraldb-wasm/**/*"
+      - "/crates/ncdb-relay/**/*"
+      - "/crates/ncdb-relay-server/**/*"
+      - "/Cargo.toml"
+      - "/Cargo.lock"
+      - "/package.json"
+      - "/pnpm-lock.yaml"
+    options:
+      cache: false
+  sdk-browser-long:
+    # NOC-448: the TypeScript SDK's long browser tests
+    # (scripts/sdk-browser/long/), which idle or write for minutes, in
+    # Chromium or the engine SDK_BROWSER_ENGINE names. The task sdk-browser
+    # leaves them out; the long job of browser-view.yml runs them in CI, one
+    # job per engine. Never cached, as sdk-browser.
+    command: "node --test 'scripts/sdk-browser/long/*.test.mjs'"
     deps: ["~:wasm-runner"]
     inputs:
       - "/scripts/sdk-browser/**/*"

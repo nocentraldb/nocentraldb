@@ -417,7 +417,7 @@ The PM is the nexus-flow persona that plans releases (see [How we plan the work]
 6. **Security advisories.** We publish them through GitHub Security Advisories, with a Security section in the notes.
 7. **Deprecation policy.** We mark anything we plan to remove as deprecated, and announce it in the notes, at least one release before we remove it.
 
-**Published packages.** On npm: `@nocentraldb/sdk`. On crates.io, from the 0.1 beta on (Carsten, 2026-11-19, NOC-372), the Rust SDK and the CLI, and the workspace crates they need at runtime, because a crate on crates.io can only depend on crates on crates.io. GitHub releases carry the CLI and relay binaries. All packages share one version. The publish steps skip a package that is not publishable (`private: true`, `publish = false`, or no package at all) and do not fail because of it.
+**Published packages.** On npm: `@nocentraldb/sdk`, which also carries the CLI as its `ncdb` bin, built from `ncdb-wasm` (Carsten, 2026-11-23, NOC-443). On crates.io, from the 0.1 beta on (Carsten, 2026-11-19, NOC-372), the Rust SDK and the CLI, and the workspace crates they need at runtime, because a crate on crates.io can only depend on crates on crates.io. GitHub releases carry the CLI and relay binaries. All packages share one version. The publish steps skip a package that is not publishable (`private: true`, `publish = false`, or no package at all) and do not fail because of it.
 
 | Crate | On crates.io | Why |
 | --- | --- | --- |
@@ -430,6 +430,7 @@ The PM is the nexus-flow persona that plans releases (see [How we plan the work]
 | `ncdb-relay`, `ncdb-relay-server` | no | The relay ships as a binary on GitHub releases. Only the SDK's tests use the crates. |
 | `ncdb-relay-aws`, `ncdb-relay-lambda` | no | Deployed to AWS from this repository (`docs/relay-deploy.md`). |
 | `nocentraldb-wasm` | no | `@nocentraldb/sdk` ships the module it builds (Carsten, 2026-11-12, NOC-274). |
+| `ncdb-wasm` | no | `@nocentraldb/sdk` ships the module it builds as the core of its `ncdb` bin (Carsten, 2026-11-23, NOC-443). |
 
 `check-version` holds this together. A published crate is pinned in `[workspace.dependencies]`, an unpublished one is not, and the gate fails when a published crate depends on an unpublished one at runtime (rules 4 and 8 in [Versioning](#versioning)). Each published crate inherits `readme` (the project's README) and `homepage` from `[workspace.package]`, carries its own `description`, `keywords` and `categories`, and has the two license texts as `LICENSE-MIT` and `LICENSE-APACHE`, symbolic links to the files at the root that cargo packages as files. To check a change to them, package all four in dependency order, as the publish does: `cargo publish --dry-run -p ncdb-plugin -p ncdb-core -p nocentraldb -p ncdb`. Cargo builds each one against the packaged versions of the others, and stops before the upload. Run it after `set-version 0.1.0-beta.1` too, which shows that the `=X.Y.Z-beta.N` pins resolve. Undo that with `git checkout -- Cargo.toml Cargo.lock packages apps` afterwards.
 

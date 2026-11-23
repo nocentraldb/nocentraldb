@@ -9,7 +9,7 @@
 #[path = "support/example.rs"]
 mod example;
 
-use example::measure;
+use example::{cargo_build, measure};
 
 #[test]
 fn a_small_import_reaches_the_relay_and_a_second_device_catches_up() {
@@ -33,4 +33,34 @@ fn a_burst_written_offline_reaches_a_device_that_was_offline_too() {
     assert_eq!(line("scenario:"), "both devices offline during the burst");
     assert_eq!(line("changes written:"), "40");
     assert_eq!(line("items it reads:"), "2000");
+}
+
+/// The build above runs inside `cargo test`, which hands this test the
+/// variables it sets for a package: CARGO_MANIFEST_DIR, CARGO_PKG_NAME and
+/// the rest. Build scripts watch some of them (ring's rerun-if-env-changed),
+/// so a nested cargo that saw them would build ring and rustls again under
+/// the same file names. Cargo deletes a library before it rebuilds it, and
+/// another cargo's doctests that link against it at that moment fail with
+/// "extern location for rustls does not exist" (NOC-450). So the example's
+/// build must find every dependency from a registry that the cargo running
+/// this test already built.
+#[test]
+fn the_examples_build_reuses_every_registry_dependency_the_test_run_built() {
+    let output = cargo_build("nocentraldb", &["--example", "bulk_import"])
+        .arg("--message-format=json")
+        .output()
+        .expect("cargo runs");
+    assert!(output.status.success(), "cargo build of the example failed");
+    let rebuilt: Vec<&str> = std::str::from_utf8(&output.stdout)
+        .expect("cargo's messages are UTF-8")
+        .lines()
+        .filter(|message| message.contains(r#""reason":"compiler-artifact""#))
+        .filter(|message| message.contains(r#""package_id":"registry+"#))
+        .filter(|message| message.contains(r#""fresh":false"#))
+        .filter_map(|message| message.split('#').nth(1)?.split('"').next())
+        .collect();
+    assert!(
+        rebuilt.is_empty(),
+        "the example's build rebuilt {rebuilt:?}"
+    );
 }

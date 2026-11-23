@@ -194,6 +194,14 @@ pub trait Fold {
     fn clear_field(&mut self, object: ObjectId, collection: &str, field: &str);
     /// Forgets the creates and deletes of an object, for the same reason.
     fn clear_object(&mut self, object: ObjectId);
+    /// The fields, each an object, a collection as changes name it and a
+    /// field, to fold again in stamp order since an operation folded into
+    /// them displaced others: a rich-text operation that is earlier than
+    /// operations the field holds that give its ids other content (RFC
+    /// 0013, "The same id twice"). Each is returned once.
+    fn take_refolds(&mut self) -> Vec<(ObjectId, String, String)> {
+        Vec::new()
+    }
 }
 
 /// Why a received frame was not appended.
@@ -271,6 +279,7 @@ impl Log {
                 self.check_rejected_again(checks, fold);
                 crate::unfold::unfold(self, checks, fold);
             }
+            crate::unfold::refold_displaced(self, checks, fold);
         }
         Ok(appended)
     }

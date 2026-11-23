@@ -1,2 +1,9 @@
 language: typescript
 layer: library
+
+# test/ncdb.test.ts builds the native ncdb with cargo and the core of the
+# `ncdb` bin with wasm-bindgen (build-ncdb.mjs), and compares both
+# (NOC-415), so the tests wait for the toolchain and the runner's install.
+tasks:
+  test:
+    deps: ["repo:rust-toolchain", "repo:wasm-runner"]
