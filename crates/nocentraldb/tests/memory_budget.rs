@@ -56,7 +56,7 @@ fn a_change_at_the_16_mib_limit_fits_in_256_mib_when_written_and_when_received()
         .and_then(|n| n.parse().ok())
         .expect("the largest frame in bytes");
     assert!(
-        largest <= LIMIT && largest >= LIMIT - LIMIT / 32,
+        (LIMIT - LIMIT / 32..=LIMIT).contains(&largest),
         "the change is not at the 16 MiB limit: {largest} bytes"
     );
     let writer = bytes(&line("first device's peak RSS:"));
