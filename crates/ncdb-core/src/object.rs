@@ -1,20 +1,27 @@
 //! What a copy knows of one object, as far as links need it to resolve
 //! (RFC 0004, "Links"): whether any create of its id has arrived, its
-//! collection, and whether it is deleted. Both are basic values, so two
-//! creates of one id and a deletion converge by the rule of basic values.
+//! collection, whether it is deleted, and where it moved. All three are
+//! basic values, so two creates of one id, a deletion and two moves at
+//! once converge by the rule of basic values.
 //!
 //! Whether an object is deleted is a boolean basic value (RFC 0004,
-//! "Creating and deleting an object"). Creates (operation 0) and deletes (operation 4) reach it as
-//! [`ObjectOperation`]s, which `field_op` decodes and the fold of
-//! `receive` applies (RFC 0004, "Creating and deleting an
-//! object"). Who may delete, and what a deleted object shows, belong to a
-//! later RFC.
+//! "Creating and deleting an object"); where it moved is a basic value of
+//! space ids, independent of the deletion (RFC 0016, "Formats"). Creates
+//! (operation 0), deletes (operation 4) and moves (operation 6) reach it
+//! as [`ObjectOperation`]s, which `field_op` decodes and the fold of
+//! `receive` applies. Who may delete, and what a deleted object shows,
+//! belong to a later RFC.
 
-use crate::basic::{self, BasicValue, Kind, Write};
-use crate::cbor::Value;
+use crate::basic::{self, BasicValue, Kind, Values, Write};
+use crate::cbor::{Key, Value};
 use crate::clock::Hlc;
 use crate::field::FieldType;
-use crate::ids::{MemberId, OperationId};
+use crate::ids::{MemberId, OperationId, SpaceId};
+
+/// The hidden field the new space's change of a move sets, `{1: old
+/// space id}` (RFC 0016, "Formats"). No model declares it: the core folds
+/// it into the object, beside its creates, deletes and moves.
+pub const MOVED_FROM: &str = "$movedFrom";
 
 /// A create of an object id (RFC 0002's operation 0), as far as RFC 0004
 /// gives it a meaning: it puts the object into a collection.
@@ -38,13 +45,21 @@ pub enum ObjectOperation {
     Create(Create),
     /// Operation 4: a write of whether the object is deleted.
     Delete(Write),
+    /// Operation 6: a write of the space the object moved to, or `null`
+    /// to take a move back (RFC 0016, "Formats").
+    Move(Write),
+    /// A set of the hidden field [`MOVED_FROM`]: the space the object came
+    /// from, as `{1: old space id}`.
+    MovedFrom(Write),
 }
 
-/// One object of a copy: its creates and its deletion.
+/// One object of a copy: its creates, its deletion and its move.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Object {
     creates: basic::State,
     deleted: basic::State,
+    moved: basic::State,
+    moved_from: basic::State,
 }
 
 /// The collection as a basic value: any name.
@@ -74,11 +89,19 @@ impl Object {
         DELETED.apply(&mut self.deleted, write);
     }
 
+    /// Merges one write of where the object moved: a space id moves it,
+    /// `null` takes the move back (RFC 0016, "Formats").
+    pub fn set_moved(&mut self, write: &Write) {
+        self.moved.insert(write);
+    }
+
     /// Merges one operation on the object.
     pub fn apply(&mut self, operation: &ObjectOperation) {
         match operation {
             ObjectOperation::Create(create) => self.create(create),
             ObjectOperation::Delete(write) => self.set_deleted(write),
+            ObjectOperation::Move(write) => self.set_moved(write),
+            ObjectOperation::MovedFrom(write) => self.moved_from.insert(write),
         }
     }
 
@@ -97,6 +120,38 @@ impl Object {
     /// member that deletes or restores the object replaces what it holds.
     pub fn deletion(&self) -> &basic::State {
         &self.deleted
+    }
+
+    /// The object's move, as a basic value of space ids: the winning
+    /// write is where it went, and a losing concurrent move stays a
+    /// conflict (RFC 0016, "Two moves at once").
+    pub fn moving(&self) -> basic::Read {
+        Values::ObjectIds.read(&self.moved)
+    }
+
+    /// The space the object moved to: the winning write of its move, when
+    /// that names a 16-byte space id. `null`, a take-back, and a value of
+    /// any other kind read as not moved.
+    pub fn moved_to(&self) -> Option<SpaceId> {
+        match self.moving().value?.value {
+            Value::Bytes(bytes) => bytes.try_into().ok().map(SpaceId),
+            _ => None,
+        }
+    }
+
+    /// The space the object came from: the winning write of
+    /// [`MOVED_FROM`], when it is `{1: a 16-byte space id}`. Anything else
+    /// reads as unset.
+    pub fn moved_from(&self) -> Option<SpaceId> {
+        let Value::Map(map) = Values::ObjectIds.read(&self.moved_from).value?.value else {
+            return None;
+        };
+        match map.get(&Key::Unsigned(1)) {
+            Some(Value::Bytes(bytes)) if map.len() == 1 => {
+                bytes.clone().try_into().ok().map(SpaceId)
+            }
+            _ => None,
+        }
     }
 
     /// Whether the object is deleted: the winning write of its deletion is
