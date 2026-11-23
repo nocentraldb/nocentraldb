@@ -67,6 +67,19 @@ impl Space {
         objects: &[Object],
         destination: &Space,
     ) -> Result<Moved, Error> {
+        self.move_objects_in_steps(objects, destination, true)
+    }
+
+    /// [`Space::move_objects`], stopping after the new space's change
+    /// when `finish` is false, as a device that stops between the two
+    /// changes (`crate::moving_tests`). Only a test asks for that; every
+    /// other caller finishes the move.
+    fn move_objects_in_steps(
+        &self,
+        objects: &[Object],
+        destination: &Space,
+        finish_now: bool,
+    ) -> Result<Moved, Error> {
         let (old, new) = (self.id(), destination.id());
         if old == new {
             return Err(Error::new(
@@ -115,11 +128,9 @@ impl Space {
             .map_err(storage)?;
         let by = writer(&inner);
         write_change(&mut inner, new.0, create, by, |_| Ok(()))?;
-        #[cfg(test)]
-        if STOP_AFTER_NEW_SPACE.with(std::cell::Cell::get) {
-            return Err(Error::new(ErrorCode::StorageFailed, "stopped by the test"));
+        if finish_now {
+            finish(&mut inner, old.0, new.0, &pending)?;
         }
-        finish(&mut inner, old.0, new.0, &pending)?;
         Ok(Moved {
             notice: Notice::OBJECT_MOVED,
             ids: sources.iter().map(Object::id).collect(),
@@ -197,17 +208,16 @@ pub(crate) fn resume(inner: &mut Inner) -> Result<(), Error> {
     Ok(())
 }
 
+/// Moves `objects` of `space` to `destination`, stopping after the new
+/// space's change: the pending record stays, as on a device that stops
+/// between the two changes (`crate::moving_tests`).
 #[cfg(test)]
-thread_local! {
-    /// Stops a move after its new space's change, as a device that stops
-    /// in between (`crate::moving_tests`).
-    static STOP_AFTER_NEW_SPACE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
-/// Makes the moves of this thread stop after the new space's change.
-#[cfg(test)]
-pub(crate) fn stop_after_new_space(stop: bool) {
-    STOP_AFTER_NEW_SPACE.with(|cell| cell.set(stop));
+pub(crate) fn move_without_finishing(
+    space: &Space,
+    objects: &[Object],
+    destination: &Space,
+) -> Result<Moved, Error> {
+    space.move_objects_in_steps(objects, destination, false)
 }
 
 /// Each object of `objects`, read again from the view of `space`: refused

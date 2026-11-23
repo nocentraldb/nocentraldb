@@ -68,13 +68,7 @@ fn a_move_cut_off_after_the_new_space_is_finished_when_the_database_opens_again(
     {
         let personal = space(&db, personal);
         let task = now(personal.get("tasks", t)).unwrap().unwrap();
-        crate::moving::stop_after_new_space(true);
-        let stopped = now(personal.move_objects(&[task], &space(&db, shared)));
-        crate::moving::stop_after_new_space(false);
-        assert!(
-            stopped.is_err(),
-            "the test stops the move between its changes"
-        );
+        crate::moving::move_without_finishing(&personal, &[task], &space(&db, shared)).unwrap();
         // Both spaces hold the object now, live: a duplicate, not a gap.
         let old = now(personal.get("tasks", t)).unwrap().unwrap();
         assert_eq!(old.moved_to(), None);
