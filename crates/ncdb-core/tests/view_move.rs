@@ -244,10 +244,10 @@ fn a_deleted_object_whose_move_is_taken_back_stays_out_of_the_indexes() {
 mod convergence {
     use super::*;
     // The glob above and the prelude both name `test` on wasm32.
-    #[cfg(target_arch = "wasm32")]
-    use wasm_bindgen_test::wasm_bindgen_test as test;
     use proptest::prelude::*;
     use support::convergence::{self, Config, Mergeable, Op, OpId, Outcome, independent};
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
 
     /// One copy of the view, with the frames it received.
     struct ViewCopy(Copy, Vec<Vec<u8>>);
