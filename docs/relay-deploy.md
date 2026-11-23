@@ -1,6 +1,9 @@
 # Deploying the relay to AWS
 
-This runbook is for the owner. It deploys the relay as RFC 0007 describes it ("The AWS backend") into the account NoCentralDb-Prod, in eu-central-1. The infrastructure is the CDK app in `infra/aws`. The function is `crates/ncdb-relay-lambda`, built with its feature `aws`.
+The relay on AWS is the CDK construct `Relay` in `infra/aws/src/relay.ts`, as RFC 0007 describes it ("The AWS backend"). Its function is `crates/ncdb-relay-lambda`, built with its feature `aws`. This guide has two parts:
+
+- **Sections 1 to 4 and "What it costs" are the owner's runbook.** They deploy the project's own relay, the stack `RelayStack` built on the construct, into the account NoCentralDb-Prod, in eu-central-1.
+- **"Use the relay in your own stack", "Protect the endpoint" and "What the relay logs" are for app developers.** They put the construct into a stack of their own app and protect its endpoint.
 
 **Deploys run from GitHub Actions** (`.github/workflows/relay-deploy.yml`), as decided on NOC-264. Every merge to `main` that changes the relay's infrastructure or the crates its function is built from deploys it, after you approve the deploy.
 
@@ -43,16 +46,18 @@ In the repository's Settings → Environments, create `aws-prod`:
 - **Environment variables.** These are variables, not secrets; none of them is a secret:
   - `AWS_DEPLOY_ROLE_ARN`: the deploy role's ARN from section 1.1.
   - `RELAY_ID`: the relay's stable id, 32 hex digits. Draw it once, with `openssl rand -hex 16`, and never change it: members sign it into every connection's authentication (RFC 0007, "Opening a connection").
-  - `ALLOWED_ACCOUNTS`: the account keys whose members may create spaces, 64 hex digits each, separated by commas.
+  - `ALLOWED_ACCOUNTS`: the identities of the accounts whose members may create spaces, 64 hex digits each, separated by commas.
   - `ALARM_EMAIL`: where the budget and the alarms send their mails.
 
-`ALLOWED_ACCOUNTS` holds an account key, which an app's invitation carries at a fixed place. This prints the account key of an invitation `ncdb-invite-1:…`, such as the example app prints with `tasks … invitation`:
+`ALLOWED_ACCOUNTS` holds each account's identity: its recovery key, which stays the same when the account recovers from its code or replaces a lost device (RFC 0015, "The account's identity"). An account that a database drew before it had a recovery key has no identity but its account key. An app's invitation carries both keys at fixed places. This prints the identity of an invitation `ncdb-invite-1:…`, such as the example app prints with `tasks … invitation`: the recovery key when the invitation carries an account key statement, and the account key when it does not:
 
 ```sh
-python3 -c 'import base64,sys; t=sys.argv[1].removeprefix("ncdb-invite-1:"); print(base64.urlsafe_b64decode(t+"="*(-len(t)%4))[65:97].hex())' "ncdb-invite-1:…"
+python3 -c 'import base64,sys; t=sys.argv[1].removeprefix("ncdb-invite-1:"); b=base64.urlsafe_b64decode(t+"="*(-len(t)%4)); print((b[163:195] if b[162]==1 else b[65:97]).hex())' "ncdb-invite-1:…"
 ```
 
-It reads the key without checking the invitation. The local relay does check it: `ncdb-relay --allow-invitation` refuses a malformed one.
+It reads the key without checking the invitation. The local relay does check it: `ncdb-relay --allow-invitation` refuses a malformed one and lists the same identity.
+
+**A list of account keys from before.** Earlier versions of this guide printed the account key of every invitation. Such an entry keeps admitting its account until the account's first recovery or lost device, because the relay also matches an entry against the certificate's account key. Replace each entry with the identity this command prints, before that happens, so the account is not refused with `not_allowed` afterwards.
 
 ### 1.4 Branch protection on `main`
 
@@ -228,3 +233,135 @@ RFC 0007 estimates about 10 USD a month for a small team. The stack holds:
 - **Two alarms on the function,** one for errors and one for throttles. They mail through SNS.
 - **The orphan sweep,** which deletes frames in S3 that no change holds and that are older than a day (RFC 0007, "How large changes go to S3"). It runs every hour at :17, in runs that stop 5 seconds before the function's 29-second timeout and continue where the last stopped, and starts a new pass at most once a day (NOC-293). Each run writes two log lines, `{"sweep":"orphans","phase":"start",…}` and `…"phase":"end",…,"pass":"paused"` (or `"completed"`, `"skipped"`). A failed run counts as an error of the function, so the error alarm mails you. `SweepUnfinished` mails you within the hour when a run started and never ended, and `SweepPassOverdue` when no pass completed in two days.
 - **The function's logs,** kept 14 days. They hold ids, sizes, codes and times; no content and no keys.
+
+## Use the relay in your own stack
+
+An app can run its own relay in its own AWS account, with the construct `Relay` in a CDK stack of its own. It is the same relay the project deploys: `RelayStack` is built on it. There is no npm package and no prebuilt function: your CI checks out NoCentralDB at a release tag, builds the function with cargo-lambda, and imports the construct from the checkout.
+
+1. **Check out NoCentralDB at a tag,** for example into `vendor/nocentraldb` in your repository. Do not install the checkout's own dependencies: the construct then uses your app's `aws-cdk-lib`, which must be the version that `infra/aws/package.json` pins at that tag (`aws-cdk-lib` and `constructs`).
+2. **Build the function** from the checkout, which needs the Rust toolchain and [cargo-lambda](https://www.cargo-lambda.info/):
+
+   ```sh
+   cd vendor/nocentraldb
+   cargo lambda build --release --arm64 -p ncdb-relay-lambda --features aws
+   # the package is target/lambda/ncdb-relay-lambda, which holds bootstrap
+   ```
+
+3. **Put the construct into your stack.** Its files are TypeScript that import each other with the `.ts` extension; run your CDK app with Node 24 (`node bin/app.ts`, as `infra/aws/cdk.json` does) or with a runner such as tsx.
+
+   ```ts
+   import { CfnOutput, Stack } from "aws-cdk-lib";
+   import { EmailSubscription } from "aws-cdk-lib/aws-sns-subscriptions";
+   import { Relay } from "../vendor/nocentraldb/infra/aws/src/relay.ts";
+
+   const relay = new Relay(stack, "Relay", {
+     stage: "myapp",
+     settings: {
+       relayId: "…", // 32 hex digits, drawn once: openssl rand -hex 16
+       allowedAccounts: ["…"], // the identities of section 1.3
+     },
+     lambdaPackage: "vendor/nocentraldb/target/lambda/ncdb-relay-lambda",
+   });
+   relay.addAlarms().addSubscription(new EmailSubscription("ops@example.com"));
+   new CfnOutput(stack, "RelayUrl", { value: relay.url });
+   ```
+
+What the construct takes and gives:
+
+- **`stage`** names the tables (`ncdb-<stage>-log` and so on), the API and its stage. Table names are fixed, so two relays in one account and region need two stages.
+- **`settings`** is what the relay itself is told: `relayId`, which never changes once members use the relay, and `allowedAccounts`, as in section 1.3. They become the function's `NCDB_*` variables (`infra/aws/src/relay-settings.ts`), and the construct refuses malformed values when it synthesizes.
+- **`addAlarms()`** adds the four alarms of "What it costs" and returns the SNS topic they notify. Without it there are none. The project's budget of 20 USD is part of `RelayStack`, not of the construct; set your own.
+- **Public properties:** `api` (the WebSocket API), `stage`, `connectRoute` (the `$connect` route), `handler` (the function), `logGroup` and `url`.
+
+The tables and the bucket are kept when the stack is deleted, as in section 4.
+
+## Protect the endpoint
+
+**Protect your relay's endpoint.** The relay checks every member's signatures and membership, and only the accounts in `allowedAccounts` may create spaces. But anyone who knows the URL can open a connection, and every connection costs you Lambda invocations and DynamoDB requests. The construct leaves the gate in front of it to you, so you can admit connections the way your app signs in its users.
+
+API Gateway's WebSocket APIs take a Lambda authorizer on `$connect`. They have no JWT authorizer; that is only for HTTP APIs. A browser's WebSocket cannot send an `Authorization` header, so the token travels in the relay URL's query string. The SDK opens the URL as you give it, query string included:
+
+```ts
+const db = await nc.open({
+  model,
+  lock,
+  relay: `${relayUrl}?token=${encodeURIComponent(accessToken)}`,
+});
+```
+
+### Example: AWS Cognito
+
+`infra/aws/examples/cognito.ts` is a stack that admits only connections that carry a valid access token of your Cognito user pool; the project's tests synthesize it. It binds a Lambda authorizer to the construct's own `$connect` route with plain CDK:
+
+```ts
+import type { CfnRoute } from "aws-cdk-lib/aws-apigatewayv2";
+import { WebSocketLambdaAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
+
+const authorizer = new WebSocketLambdaAuthorizer("Cognito", authorize, {
+  identitySource: ["route.request.querystring.token"],
+});
+const { authorizerId, authorizationType } = authorizer.bind({
+  route: relay.connectRoute,
+  scope: stack,
+});
+const connect = relay.connectRoute.node.defaultChild as CfnRoute;
+connect.authorizationType = authorizationType;
+connect.authorizerId = authorizerId;
+```
+
+`authorize` is a function of your own, with `USER_POOL_ID` and `USER_POOL_CLIENT_ID` in its environment. API Gateway refuses a connection without `token` before it calls either function. The function checks the token with [aws-jwt-verify](https://github.com/awslabs/aws-jwt-verify) and logs nothing of the request:
+
+```ts
+import { CognitoJwtVerifier } from "aws-jwt-verify";
+
+const verifier = CognitoJwtVerifier.create({
+  userPoolId: process.env.USER_POOL_ID ?? "",
+  clientId: process.env.USER_POOL_CLIENT_ID ?? "",
+  tokenUse: "access",
+});
+
+export const handler = async (event: {
+  methodArn: string;
+  queryStringParameters?: Record<string, string>;
+}) => {
+  let principalId = "anonymous";
+  let effect = "Deny";
+  try {
+    const claims = await verifier.verify(event.queryStringParameters?.token ?? "");
+    principalId = claims.sub;
+    effect = "Allow";
+  } catch {
+    // Never log the event or the token: a log is a copy nobody can erase.
+  }
+  return {
+    principalId,
+    policyDocument: {
+      Version: "2012-10-17",
+      Statement: [{ Action: "execute-api:Invoke", Effect: effect, Resource: event.methodArn }],
+    },
+  };
+};
+```
+
+The same pattern takes any token your app can check, for example a delegation token an agent got by an RFC 8693 token exchange.
+
+### What it does not do
+
+- **It decides who may connect, not who may create spaces.** The relay still admits only the accounts in `allowedAccounts` to create spaces, and checks every member's signatures and membership as before.
+- **It checks the token once, when the connection opens.** A connection that is open when the token expires stays open until it closes; API Gateway closes every connection after at most two hours, and after ten idle minutes.
+- **The SDK keeps the URL it was opened with.** It reconnects with the same URL, so once the token has expired, reconnects are refused and the database stops syncing. It keeps working on its own copy and syncs again when your app opens it with a URL that carries a fresh token. The SDK has no option yet to fetch a new token for a reconnect.
+- **A token in a URL can land in logs.** API Gateway's WebSocket access logs have no variable for the query string, so they cannot hold it. But anything else that sees the URL can log it: a proxy in front of the relay, your app's own logging, an authorizer that logs its event (AWS's own `$connect` examples log `queryStringParameters`), or your app logging the TypeScript SDK's sync status, which names the relay's URL with its query string. Use short-lived tokens.
+
+## What the relay logs, and what to leave off around it
+
+The relay writes one fixed JSON line per invocation (`crates/ncdb-relay-lambda/src/log.rs`): the route, the connection id, the member id, the message's type, the bytes in and out, error and refusal codes, and when and how long. It never logs an event, a frame, a key or a token, and its logs are kept 14 days. Its tables are keyed by space ids, member ids and change ids, not content, and the changes it stores are ciphertext.
+
+What you add around it can still expose more. Leave these off, or keep them as described:
+
+| Setting | Default | Risk | Rule |
+| --- | --- | --- | --- |
+| API Gateway execution logging with data trace (`dataTraceEnabled`) | off | logs full message bodies | never on in production |
+| API Gateway access logs | off | none for the token: the WebSocket access log has no variable for the query string | allowed, with the `$context` variables you list |
+| Lambda logs of your own functions, such as the authorizer | on; CloudWatch keeps them forever by default | anything the code prints, such as the event or its query string | never log the event or the query string; set a retention |
+| CloudTrail data events | off | DynamoDB events log full primary keys, S3 events log object keys | never put content into keys |
+| X-Ray | off; WebSocket APIs are not traced | only what your code adds | no payloads as metadata |

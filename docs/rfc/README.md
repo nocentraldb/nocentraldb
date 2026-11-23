@@ -40,7 +40,7 @@ A newly published RFC states its design directly. Each choice sits in the sectio
 A decided RFC changes by rewriting its text, never by adding to it. A pull request that changes a decided RFC does three things:
 
 1. The change is written into the text where it belongs, so that the RFC reads as if it had been written that way from the start. The pull request adds no amendment section and no mark such as "(Amendment 3)": an RFC has no amendment sections.
-2. The decision goes under "Decisions", in short form: what changed, who decided it and when, and a link to its entry in the decision log ([`factory/decisions/`](../../factory/decisions/)); the decision log's entry says why, and which options were not taken. Where a decision was made on its ticket and has no entry yet, the line names the ticket. This section appears only once a decision is made after publication, on new findings.
+2. The decision goes under "Decisions", in short form: when, what changed, and a link to its entry in the decision log ([`factory/decisions/`](../../factory/decisions/)). The entry names nobody who decided: the decision log's entry says who decided, why, and which options were not taken. Where a decision was made on its ticket and has no entry yet, the line names the ticket. This section appears only once a decision is made after publication, on new findings.
 3. A dated line in "History" names the pull request, and the discussion the change came from, if any.
 
 "History" starts at publication with one line, and each later change adds one. The git log keeps how the drafts got there. A change to a decision waits for the owner, as every RFC decision does. A withdrawn decision stays under "Decisions", marked as withdrawn.

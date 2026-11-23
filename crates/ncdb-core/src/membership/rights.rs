@@ -10,7 +10,7 @@ use crate::ids::{ChangeId, MemberId, SpaceId};
 use super::body::{ACKNOWLEDGEMENT, Action, Entry, MembershipEntry, Role};
 use super::certificate::{Certificate, MemberKind};
 use super::genesis::generation_id;
-use super::input::Node;
+use super::input::{Input, Node};
 use super::judge::Judged;
 use super::person_key::{ErasureDecision, ShredEntry, SignOff};
 use super::resolve::Resolved;
@@ -340,7 +340,7 @@ pub(crate) fn seniority(
 /// dependencies and the edges before it is skipped.
 pub(crate) fn edges(
     nodes: &BTreeMap<ChangeId, &Node>,
-    all: &BTreeMap<ChangeId, Node>,
+    input: &Input,
     judged: &Judged,
     rank: &BTreeMap<MemberId, usize>,
 ) -> BTreeMap<ChangeId, BTreeSet<ChangeId>> {
@@ -353,7 +353,7 @@ pub(crate) fn edges(
     let mut after = successors(nodes);
     let mut edges: BTreeMap<ChangeId, BTreeSet<ChangeId>> = BTreeMap::new();
     for r in revocations {
-        for y in nodes.values().filter(|y| excludes(r, y, all, judged)) {
+        for y in nodes.values().filter(|y| excludes(r, y, input, judged)) {
             if reaches(&after, y.id, r.id) {
                 continue;
             }
@@ -396,12 +396,7 @@ fn reaches(after: &BTreeMap<ChangeId, BTreeSet<ChangeId>>, from: ChangeId, to: C
 /// subject's, needs a right above the role `r` sets, has an author
 /// sequence above `r`'s cutoff, and no valid grant of that right to its
 /// author that saw `r` is in `y`'s causal past.
-pub(crate) fn excludes(
-    r: &Node,
-    y: &Node,
-    all: &BTreeMap<ChangeId, Node>,
-    judged: &Judged,
-) -> bool {
+pub(crate) fn excludes(r: &Node, y: &Node, input: &Input, judged: &Judged) -> bool {
     let Some(revocation) = r.membership() else {
         return false;
     };
@@ -420,8 +415,8 @@ pub(crate) fn excludes(
     {
         return false;
     }
-    let covered = y.past.iter().filter_map(|id| all.get(id)).any(|g| {
-        g.past.contains(&r.id)
+    let covered = input.nodes_of(&y.past).any(|g| {
+        g.past.contains(r.number)
             && judged.valid(g.id)
             && g.membership()
                 .is_some_and(|grant| grant.subject == y.author && grant.role() >= Some(right))

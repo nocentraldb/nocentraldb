@@ -12,6 +12,7 @@ use crate::seal;
 
 use super::body::{Action, BodyError, ControlBody, Entry, MembershipEntry};
 use super::certificate::MemberKind;
+use super::past::Past;
 use super::state::{Rejection, Verdict};
 
 /// One control change that takes part in the fold.
@@ -19,12 +20,15 @@ pub(crate) struct Node {
     pub(crate) id: ChangeId,
     pub(crate) author: MemberId,
     pub(crate) sequence: u64,
+    /// Its number in the [`Memo`], which its causal past is a set of.
+    pub(crate) number: u32,
     pub(crate) body: ControlBody,
     /// Its control dependencies that the holder holds as nodes.
     pub(crate) deps: BTreeSet<ChangeId>,
-    /// Its causal past: every node its dependencies reach. Shared with the
-    /// [`Memo`], which hands the same set to the next call while it holds.
-    pub(crate) past: Arc<BTreeSet<ChangeId>>,
+    /// Its causal past: the numbers of every node its dependencies reach.
+    /// Shared with the [`Memo`], which hands the same set to the next call
+    /// while it holds.
+    pub(crate) past: Arc<Past>,
     /// Whether it or a node of its causal past names a dependency the
     /// holder does not hold: the holder does not hold its whole causal
     /// past yet.
@@ -51,6 +55,8 @@ pub(crate) struct Input {
     pub(crate) verdicts: BTreeMap<ChangeId, Verdict>,
     /// Dependencies that name no change the holder holds.
     pub(crate) gaps: BTreeSet<ChangeId>,
+    /// The change id of each node, by its number.
+    ids: BTreeMap<u32, ChangeId>,
 }
 
 /// What [`Input::new`] remembers from one call to the next (NOC-424): what
@@ -70,15 +76,18 @@ pub(crate) struct Memo {
     signed: BTreeMap<ChangeId, (Vec<u8>, Option<Rejection>)>,
     /// Each node's causal past, with the pasts of its dependencies among
     /// the nodes that it was built from.
-    pasts: BTreeMap<ChangeId, Past>,
+    pasts: BTreeMap<ChangeId, Built>,
+    /// Each node's number, given when the node is first seen, after its
+    /// dependencies (NOC-442): a number names one change id in every call.
+    numbers: BTreeMap<ChangeId, u32>,
 }
 
 /// A node's causal past, and the past of each of its dependencies it was
 /// built from: while each dependency has the very same past, so has the
 /// node.
-struct Past {
-    deps: BTreeMap<ChangeId, Arc<BTreeSet<ChangeId>>>,
-    past: Arc<BTreeSet<ChangeId>>,
+struct Built {
+    deps: BTreeMap<ChangeId, Arc<Past>>,
+    past: Arc<Past>,
 }
 
 /// What a change's header gives on its own.
@@ -175,6 +184,7 @@ impl Input {
                 id,
                 author: header.author,
                 sequence: header.sequence,
+                number: 0,
                 deps: BTreeSet::new(),
                 past: Arc::default(),
                 gap: false,
@@ -191,7 +201,7 @@ impl Input {
                 .copied()
                 .collect();
         }
-        let pasts = pasts(&nodes, &mut memo.pasts);
+        let pasts = pasts(&nodes, memo);
         let missing: BTreeSet<ChangeId> = nodes
             .values()
             .filter(|node| {
@@ -214,15 +224,34 @@ impl Input {
             let node = nodes.get_mut(&id).expect("a node");
             node.gap = gap;
         }
+        let mut ids = BTreeMap::new();
         for (id, past) in pasts {
-            nodes.get_mut(&id).expect("a node").past = past;
+            let node = nodes.get_mut(&id).expect("a node");
+            node.number = memo.numbers[&id];
+            node.past = past;
+            ids.insert(node.number, id);
         }
         Input {
             space,
             nodes,
             verdicts,
             gaps,
+            ids,
         }
+    }
+
+    /// Whether the node `b` is in the causal past of the node `a`; false
+    /// when either is no node.
+    pub(crate) fn saw(&self, a: ChangeId, b: ChangeId) -> bool {
+        match (self.nodes.get(&a), self.nodes.get(&b)) {
+            (Some(a), Some(b)) => a.past.contains(b.number),
+            _ => false,
+        }
+    }
+
+    /// The nodes of `past`, by change id.
+    pub(crate) fn nodes_of<'a>(&'a self, past: &'a Past) -> impl Iterator<Item = &'a Node> + 'a {
+        past.iter().map(|number| &self.nodes[&self.ids[&number]])
     }
 }
 
@@ -266,14 +295,12 @@ fn valid_genesis(space: SpaceId, change: &Change, body: &ControlBody) -> bool {
 
 /// The causal past of every node, in an order where a node's dependencies
 /// come first; a cycle of dependencies cannot occur, since a change id
-/// hashes the dependencies it names. A node whose dependencies have the
-/// very pasts `remembered` built its past from keeps that past: the same
-/// set, not built again.
-fn pasts(
-    nodes: &BTreeMap<ChangeId, Node>,
-    remembered: &mut BTreeMap<ChangeId, Past>,
-) -> BTreeMap<ChangeId, Arc<BTreeSet<ChangeId>>> {
-    let mut pasts: BTreeMap<ChangeId, Arc<BTreeSet<ChangeId>>> = BTreeMap::new();
+/// hashes the dependencies it names. A node seen for the first time gets
+/// the next number, after its dependencies. A node whose dependencies have
+/// the very pasts `memo` built its past from keeps that past: the same set,
+/// not built again.
+fn pasts(nodes: &BTreeMap<ChangeId, Node>, memo: &mut Memo) -> BTreeMap<ChangeId, Arc<Past>> {
+    let mut pasts: BTreeMap<ChangeId, Arc<Past>> = BTreeMap::new();
     let mut stack: Vec<(ChangeId, bool)> = nodes.keys().map(|id| (*id, false)).collect();
     while let Some((id, expanded)) = stack.pop() {
         if pasts.contains_key(&id) {
@@ -281,7 +308,9 @@ fn pasts(
         }
         let deps = &nodes[&id].deps;
         if expanded {
-            let same = remembered.get(&id).filter(|before| {
+            let next = u32::try_from(memo.numbers.len()).expect("fewer than 2^32 control changes");
+            memo.numbers.entry(id).or_insert(next);
+            let same = memo.pasts.get(&id).filter(|before| {
                 before.deps.len() == deps.len()
                     && deps.iter().all(|dep| {
                         before
@@ -293,17 +322,17 @@ fn pasts(
             let past = match same {
                 Some(before) => Arc::clone(&before.past),
                 None => {
-                    let mut past = BTreeSet::new();
+                    let mut past = Past::default();
                     for dep in deps {
-                        past.insert(*dep);
-                        past.extend(pasts[dep].iter().copied());
+                        past.insert(memo.numbers[dep]);
+                        past.extend(&pasts[dep]);
                     }
                     let past = Arc::new(past);
-                    let built = Past {
+                    let built = Built {
                         deps: deps.iter().map(|d| (*d, Arc::clone(&pasts[d]))).collect(),
                         past: Arc::clone(&past),
                     };
-                    remembered.insert(id, built);
+                    memo.pasts.insert(id, built);
                     past
                 }
             };

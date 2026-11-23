@@ -3,7 +3,10 @@
 // 1. the core: the crate nocentraldb-wasm for wasm32, in release;
 // 2. its JavaScript glue: wasm-bindgen, at the version the root task
 //    `wasm-runner` installs into target/tools, into dist/wasm/;
-// 3. the TypeScript: tsc with tsconfig.build.json, into dist/.
+// 3. the TypeScript: tsc with tsconfig.build.json, into dist/;
+// 4. the core of the `ncdb` bin (dist/ncdb.js): build-ncdb.mjs, into
+//    dist/ncdb/, right after step 2 (NOC-415; Carsten, 2026-11-23,
+//    NOC-443, A).
 //
 // The worker (dist/worker.js) finds dist/wasm/ with new URL(...,
 // import.meta.url), so an app's bundler copies what dist/ holds.
@@ -99,6 +102,7 @@ if (!tsOnly) {
     "nocentraldb_wasm",
     MODULE,
   ]);
+  run("node", [join(PACKAGE, "build-ncdb.mjs"), join(BUILD, "ncdb")]);
 }
 run(join(ROOT, "node_modules", ".bin", "tsc"), [
   "-p",

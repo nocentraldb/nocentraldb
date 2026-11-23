@@ -8,7 +8,7 @@ A local-first database for people and agents.
 
 NoCentralDB puts all the data right next to the people and agents who use it. A relay, the server in the middle, keeps everyone in sync, yet it only ever sees encrypted data.
 
-**Status.** Decided by the owner (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Partly built. Built: spaces, members and roles; the full copy, folded into an SQLite view; the relay, locally on SQLite and on AWS with DynamoDB and S3; island mode; the lock and `ncdb model build`; declared indexes and ordered pages; basic values, sets, links, references and personal fields; plugin field types in the Rust SDK; erasure and its audit; accounts with pairing and a recovery code; synced ad-hoc spaces for sub-agents. Not built: rich text, streams, computed fields and views, work orders with compaction and the archive, the Postgres relay, adapters, the TypeScript SDK outside the browser, and native mobile apps.
 
@@ -188,10 +188,10 @@ Two forms were not taken. Groups as members of many spaces, as the first draft o
 
 ## Decisions
 
-- **2026-11-11 · A shred is final once a member accepts it; a space with one account erases provisionally for 7 days.** (Carsten, 2026-11-11, NOC-224, NOC-230)
-- **2026-11-11 · No passkey unlocks the browser's wrapping key in v1.** (Carsten, 2026-11-11, NOC-210; [decision](../../factory/decisions/2026-11-11-NOC-175-the-browser-keys-sit-in-indexeddb-under-a-webcrypto-key-and-chromium-tests-them.md))
-- **2026-11-19 · RFC 0001 opens with what the product is for, as the landing page's hero does.** (Carsten, 2026-11-19, NOC-362; [decision](../../factory/decisions/2026-11-19-NOC-362-rfc-0001-opens-with-what-the-product-is-for.md))
-- **2026-11-20 · An erasure stays a work order; 0.1's `Db::erase` is an interim call the work-order RFC will replace.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-erasure-is-a-work-order-0-1-s-db-erase-is-an-interim-call.md))
+- **2026-11-11 · A shred is final once a member accepts it; a space with one account erases provisionally for 7 days.** (NOC-224, NOC-230)
+- **2026-11-11 · No passkey unlocks the browser's wrapping key in v1.** ([decision](../../factory/decisions/2026-11-11-NOC-175-the-browser-keys-sit-in-indexeddb-under-a-webcrypto-key-and-chromium-tests-them.md))
+- **2026-11-19 · RFC 0001 opens with what the product is for, as the landing page's hero does.** ([decision](../../factory/decisions/2026-11-19-NOC-362-rfc-0001-opens-with-what-the-product-is-for.md))
+- **2026-11-20 · An erasure stays a work order; 0.1's `Db::erase` is an interim call the work-order RFC will replace.** ([decision](../../factory/decisions/2026-11-20-NOC-362-erasure-is-a-work-order-0-1-s-db-erase-is-an-interim-call.md))
 
 ## History
 
@@ -206,3 +206,4 @@ Two forms were not taken. Groups as members of many spaces, as the first draft o
 - 2026-11-19 · No passkey unlocks the browser's keys in v1 (NOC-362, #389)
 - 2026-11-20 · "Why now" says why agents need their data at the speed of local memory, in the owner's words (NOC-362, #387)
 - 2026-11-20 · Erasure stays a work order, with 0.1's `Db::erase` as an interim call, as the owner answered (NOC-362, #396)
+- 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)

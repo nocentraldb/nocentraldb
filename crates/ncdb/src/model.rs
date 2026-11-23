@@ -1,36 +1,32 @@
 //! `ncdb model build` and `ncdb model check`.
 
-use std::fs;
 use std::io::ErrorKind;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use ncdb_core::model_lock::{ModelId, ModelLock, build};
 
+use crate::Outcome;
 use crate::args::Paths;
+use crate::host::Host;
 use crate::report;
 use crate::schema;
 use crate::texts;
 
 /// Runs `ncdb model build`, or `ncdb model check` when `check` is set.
-pub fn run(check: bool, paths: &Paths) -> u8 {
-    match build_or_check(check, paths) {
-        Ok(message) => {
-            print!("{message}");
-            0
-        }
-        Err(message) => {
-            eprint!("{message}");
-            1
-        }
+pub fn run(host: &mut dyn Host, check: bool, paths: &Paths) -> Outcome {
+    match build_or_check(host, check, paths) {
+        Ok(message) => Outcome::out(0, message),
+        Err(message) => Outcome::err(1, message),
     }
 }
 
-fn build_or_check(check: bool, paths: &Paths) -> Result<String, String> {
+fn build_or_check(host: &mut dyn Host, check: bool, paths: &Paths) -> Result<String, String> {
     let lock_name = paths.lock.display().to_string();
     let model_name = paths.model.display().to_string();
-    let draft =
-        schema::describe(&paths.model).map_err(|message| format!("{model_name}: {message}\n"))?;
-    let previous_text = read(&paths.lock).map_err(|message| format!("{lock_name}: {message}\n"))?;
+    let draft = schema::describe(host, &paths.model)
+        .map_err(|message| format!("{model_name}: {message}\n"))?;
+    let previous_text =
+        read(host, &paths.lock).map_err(|message| format!("{lock_name}: {message}\n"))?;
     let previous = match &previous_text {
         None if check => return Err(format!("{}\n", texts::lock_missing(&lock_name))),
         None => None,
@@ -56,13 +52,13 @@ fn build_or_check(check: bool, paths: &Paths) -> Result<String, String> {
         };
         return Err(texts::out_of_date(&lock_name, would));
     }
-    write(&paths.lock, &text).map_err(|message| format!("{lock_name}: {message}\n"))?;
+    write(host, &paths.lock, &text).map_err(|message| format!("{lock_name}: {message}\n"))?;
     Ok(format!("{lock_name}: {changes}"))
 }
 
 /// The lock's text, or `None` when there is none yet.
-fn read(path: &Path) -> Result<Option<String>, String> {
-    match fs::read_to_string(path) {
+fn read(host: &mut dyn Host, path: &Path) -> Result<Option<String>, String> {
+    match host.read(path) {
         Ok(text) => Ok(Some(text)),
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
         Err(error) => Err(texts::cannot_be_read(error)),
@@ -82,10 +78,11 @@ fn parse(text: &str) -> Result<ModelLock, String> {
 
 /// Writes the lock through a temporary file next to it, so a failed write
 /// never leaves half a lock.
-fn write(path: &Path, text: &str) -> Result<(), String> {
+fn write(host: &mut dyn Host, path: &Path, text: &str) -> Result<(), String> {
     let mut temporary = path.as_os_str().to_owned();
     temporary.push(".tmp");
-    fs::write(&temporary, text)
-        .and_then(|()| fs::rename(&temporary, path))
+    let temporary = PathBuf::from(temporary);
+    host.write(&temporary, text)
+        .and_then(|()| host.rename(&temporary, path))
         .map_err(texts::cannot_be_written)
 }
