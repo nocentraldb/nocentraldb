@@ -253,6 +253,12 @@ pub(crate) fn put_person_keys(req: u64, space: SpaceId, records: &[Record]) -> V
     )
 }
 
+/// `admit` {2 req, 3 admission}: an admission's canonical map (RFC 0007,
+/// "Admit: present an admission token").
+pub(crate) fn admit(req: u64, admission: Vec<u8>) -> Vec<u8> {
+    message("admit", Some(req), vec![Value::Bytes(admission)])
+}
+
 pub(crate) fn ping(req: u64) -> Vec<u8> {
     message("ping", Some(req), Vec::new())
 }
