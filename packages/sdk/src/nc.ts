@@ -41,6 +41,14 @@ interface Ref<D extends boolean = false> extends Value<Target, D> {
   deprecated(reason: string): Ref<true>;
 }
 
+/** A rich-text field, deprecated when `D` is true: it reads as its Markdown, takes `describe` and `deprecated`, and cannot be personal (RFC 0013, "The field in the schema and the lock"). */
+interface RichText<D extends boolean = false> extends Value<string, D> {
+  /** Adds a description, which is copied into the lock. */
+  describe(text: string): RichText<D>;
+  /** Hides the field from the app, and keeps it in the model and the data. */
+  deprecated(reason: string): RichText<true>;
+}
+
 /** The fields of a collection, by name. */
 type Fields = Record<string, Value<unknown, boolean>>;
 
@@ -162,6 +170,7 @@ type Spec =
       type: "ncdb/link" | "ncdb/links" | "ncdb/ref";
       targets: string[];
     }
+  | { kind: "richText" }
   | { kind: "reserved"; name: string };
 
 /** A field's type with its modifiers. */
@@ -211,13 +220,14 @@ const field = <T>(state: FieldState): Field<T> => {
   return made;
 };
 
-/** The reference with this state: a field without `personal` (RFC 0005, "References into another space"). */
-const reference = <D extends boolean>(state: FieldState): Ref<D> => {
+/** A field without `personal`, with this state: a reference (RFC 0005, "References into another space") or rich text (RFC 0013). */
+const unpersonal = <F>(state: FieldState): F => {
   const made = {
-    describe: (text: string) => reference({ ...state, description: text }),
-    deprecated: (reason: string) => reference({ ...state, deprecated: reason }),
-  } as unknown as Ref<D>;
-  fieldStates.set(made, state);
+    describe: (text: string) => unpersonal({ ...state, description: text }),
+    deprecated: (reason: string) =>
+      unpersonal({ ...state, deprecated: reason }),
+  } as unknown as F;
+  fieldStates.set(made as object, state);
   return made;
 };
 
@@ -310,12 +320,12 @@ export const links = (target: string | readonly string[]): Field<ObjectId[]> =>
   });
 /** A reference to one object, which may live in another space, in one collection or in one of several (RFC 0005, "References into another space"). */
 export const ref = (target: string | readonly string[]): Ref =>
-  reference({
+  unpersonal({
     spec: { kind: "link", type: "ncdb/ref", targets: targets(target) },
   });
-/** Rich text: reserved, its field type belongs to a later RFC. */
-export const richText = (): Field<never> =>
-  field({ spec: { kind: "reserved", name: "nc.richText" } });
+/** Rich text: a shared document, which reads as its Markdown and takes no options (RFC 0013, "The field in the schema and the lock"). */
+export const richText = (): RichText =>
+  unpersonal({ spec: { kind: "richText" } });
 /** A stream: reserved, its field type belongs to a later RFC. */
 export const stream = (): Field<never> =>
   field({ spec: { kind: "reserved", name: "nc.stream" } });
@@ -434,6 +444,8 @@ const describeType = (path: string, spec: Spec): Record<string, unknown> => {
         : { type: spec.type, options: spec.options };
     case "link":
       return { type: spec.type, targets: spec.targets };
+    case "richText":
+      return { type: "ncdb/richText" };
     case "reserved":
       throw new Error(texts.reservedFieldType(path, spec.name));
     case "set": {

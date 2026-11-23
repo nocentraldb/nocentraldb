@@ -275,6 +275,7 @@ fn kind(map: &Map<String, Value>, path: &str) -> Result<Kind, LockError> {
         "ncdb/link" => Kind::Link(list("targets")?),
         "ncdb/links" => Kind::Links(list("targets")?),
         "ncdb/ref" => Kind::Ref(list("targets")?),
+        "ncdb/richText" => Kind::RichText,
         other => match other.split_once('/') {
             Some((namespace, name))
                 if !namespace.is_empty() && !name.is_empty() && namespace != super::BUILT_IN =>

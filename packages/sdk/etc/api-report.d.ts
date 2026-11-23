@@ -309,6 +309,10 @@ interface Ref<D extends boolean = false> extends Value<Target, D> {
     describe(text: string): Ref<D>;
     deprecated(reason: string): Ref<true>;
 }
+interface RichText<D extends boolean = false> extends Value<string, D> {
+    describe(text: string): RichText<D>;
+    deprecated(reason: string): RichText<true>;
+}
 type Fields = Record<string, Value<unknown, boolean>>;
 interface Collection<F extends Fields = Fields, D extends boolean = false, I extends Indexes = Indexes> {
     readonly "nc.collection": F;
@@ -382,7 +386,7 @@ export declare const set: <T>(element: Field<T>) => Field<T[]>;
 export declare const link: (target: string | readonly string[]) => Field<ObjectId>;
 export declare const links: (target: string | readonly string[]) => Field<ObjectId[]>;
 export declare const ref: (target: string | readonly string[]) => Ref;
-export declare const richText: () => Field<never>;
+export declare const richText: () => RichText;
 export declare const stream: () => Field<never>;
 export declare const reach: (..._args: unknown[]) => Named;
 export declare const view: (..._args: unknown[]) => Named;
