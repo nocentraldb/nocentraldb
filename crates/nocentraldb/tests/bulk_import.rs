@@ -6,57 +6,10 @@
 //! takes minutes and runs by hand, as that guide says; this test keeps the
 //! example working.
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+#[path = "support/example.rs"]
+mod example;
 
-/// Builds `target` of `package` with the cargo that runs this test, into
-/// the same target directory.
-fn build(package: &str, target: &[&str]) {
-    let built = Command::new(env!("CARGO"))
-        .args(["build", "--locked", "-q", "-p", package])
-        .args(target)
-        .status()
-        .expect("cargo runs");
-    assert!(built.success(), "cargo build of {target:?} failed");
-}
-
-/// target/<profile>, where this test runs from.
-fn profile() -> PathBuf {
-    // target/<profile>/deps/bulk_import-<hash> → target/<profile>
-    let exe = std::env::current_exe().expect("the test's path");
-    exe.parent()
-        .and_then(Path::parent)
-        .expect("target/<profile>")
-        .to_owned()
-}
-
-/// Runs the example with `args`, which must succeed; its report, as a
-/// function from a line's key to its value.
-fn measure(args: &[&str]) -> impl Fn(&str) -> String {
-    build("ncdb-relay-server", &["--bin", "ncdb-relay"]);
-    build("nocentraldb", &["--example", "bulk_import"]);
-    let exe = profile()
-        .join("examples")
-        .join(format!("bulk_import{}", std::env::consts::EXE_SUFFIX));
-    let output = Command::new(exe)
-        .args(args)
-        .output()
-        .expect("the example runs");
-    let report = String::from_utf8_lossy(&output.stdout).into_owned();
-    assert!(
-        output.status.success(),
-        "the measurement failed:\n{report}{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    move |key: &str| {
-        report
-            .lines()
-            .find_map(|l| l.strip_prefix(key))
-            .unwrap_or_else(|| panic!("no line {key} in:\n{report}"))
-            .trim()
-            .to_owned()
-    }
-}
+use example::measure;
 
 #[test]
 fn a_small_import_reaches_the_relay_and_a_second_device_catches_up() {
