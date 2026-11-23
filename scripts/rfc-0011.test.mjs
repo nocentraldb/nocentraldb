@@ -58,15 +58,12 @@ test("RFC 0011 exists and the RFC index lists it", () => {
   );
 });
 
-test("RFC 0011 says it is decided, by the owner, with the date", () => {
+test("RFC 0011 says it is decided, with the date", () => {
   const text = rfc();
   assert.equal(text.split("\n")[0], "# RFC 0011: Plugin field types");
   assert.doesNotMatch(text.split("\n")[2], /draft/i);
   const status = line(text, "**Status.**");
-  assert.match(
-    status,
-    /^\*\*Status\.\*\* Decided\. [^\n]*\(Carsten, 2026-11-12\)\.$/,
-  );
+  assert.match(status, /^\*\*Status\.\*\* Decided, 2026-11-12\.$/);
   assert.doesNotMatch(status, /NOC-\d+|#\d+/, "the status tags a ticket or PR");
 });
 
