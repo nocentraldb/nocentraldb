@@ -8,7 +8,15 @@
 use ncdb_core::cbor::{self, Value};
 
 use super::{Bridge, LOCK, field, map, ok, text};
-use crate::sync::tests::support::now;
+
+/// Runs `future` to its end on a runtime of its own: the fetch waits for
+/// the answer.
+fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    tokio::runtime::Builder::new_current_thread()
+        .build()
+        .expect("a runtime")
+        .block_on(future)
+}
 
 fn opened(admission: bool) -> Bridge {
     let mut bridge = Bridge::new();
@@ -39,7 +47,7 @@ fn the_sync_asks_the_sdk_and_gets_its_answer() {
     let identity = "ab".repeat(32);
     let pending = std::thread::spawn({
         let identity = identity.clone();
-        move || now(fetch(identity))
+        move || block_on(fetch(identity))
     });
     let mut events = Vec::new();
     for _ in 0..200 {
@@ -74,7 +82,7 @@ fn a_null_answer_gives_the_sync_nothing() {
         .admission
         .clone()
         .unwrap();
-    let pending = std::thread::spawn(move || now(fetch("cd".repeat(32))));
+    let pending = std::thread::spawn(move || block_on(fetch("cd".repeat(32))));
     let request = loop {
         if let Some(event) = asked(&bridge).pop() {
             break field(&event, "request").unwrap().clone();

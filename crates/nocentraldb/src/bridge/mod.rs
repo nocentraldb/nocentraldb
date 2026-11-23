@@ -93,6 +93,12 @@
 //! `null`; `account.confirmRecoveryCode` `{}` forgets the code;
 //! `account.recovered` `{}` answers a notice or `null`.
 //!
+//! For RFC 0015's `admission` option (NOC-469), `open` takes
+//! `"admission": true`; the worker then sends `{"event": "admission",
+//! "request": n, "identity": hex}` when the sync needs an admission, and
+//! `admission.answer` `{"request": n, "admission": text | null}` answers
+//! it (`admission.rs`).
+//!
 //! For RFC 0015's `db.account.identity` (NOC-469), `open` and
 //! `account.completePairing` also answer `"identity"`: the account's
 //! recovery key in hex, or `null` while the database waits to be paired.
@@ -125,6 +131,7 @@
 
 mod account;
 mod ad_hoc;
+mod admission;
 mod erase;
 mod erasures;
 mod events;
@@ -276,6 +283,10 @@ impl Bridge {
             "account.pair" => account::pair(&db, args).await,
             "account.completePairing" => account::complete_pairing(&db, args).await,
             "account.removeMember" => account::remove_member(&db, args).await,
+            "admission.answer" => match &self.events {
+                Some(events) => events.asks.answer(args),
+                None => Ok(Value::Null),
+            },
             "durability" => {
                 db.refresh_storage().await;
                 Ok(reports::durability(&db.durability()))
@@ -372,6 +383,10 @@ impl Bridge {
         if let Some(Value::Text(words)) = get(args, "recover") {
             options = options.recover(words);
         }
+        let asks = admission::Asks::default();
+        if let Some(Value::Bool(true)) = get(args, "admission") {
+            options.admission = Some(asks.fetch());
+        }
         let db = Db::open(options).await?;
         let (status, sync) = db.sync().watch();
         let (durability, durability_watch) = db.durability_watch();
@@ -383,6 +398,7 @@ impl Bridge {
             list: Arc::new(Mutex::new(None)),
             durability: Arc::new(Mutex::new(durability_watch)),
             view: Arc::new(Mutex::new(view_watch)),
+            asks,
         });
         let identity = account::identity(&db);
         self.db = Some(db);
