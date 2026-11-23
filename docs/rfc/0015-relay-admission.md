@@ -59,6 +59,8 @@ admission
 
 As text it is `ncdb-admit-1:` and unpadded base64url, like the invitation and the pairing answer ([RFC 0010, "The pairing answer"](0010-accounts.md#the-pairing-answer)).
 
+`docs/rfc/vectors/0015/` holds two admissions, of an identity that is a recovery key and of one that is an account key, as text and as bytes, with their inputs and the hash the admission key signs in `fields.txt`. `generate.py` writes them with independent libraries; the core and `scripts/rfc-0015-admission.test.mjs` check them.
+
 An admission need not prove that its presenter holds the identity: it admits only geneses whose certificate names that identity, so a stolen admission gives its thief nothing.
 
 ### How the relay takes it
