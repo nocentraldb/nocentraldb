@@ -17,6 +17,7 @@ mod members;
 mod refs;
 mod reports;
 mod spaces;
+mod split;
 mod sync;
 
 const LOCK: &str = include_str!("../../../tests/model/model.lock.json");
