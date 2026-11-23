@@ -93,6 +93,54 @@ fn a_warm_relay_reads_only_the_control_changes_it_has_not_read() {
     );
 }
 
+/// The person-key entry of the `n`th of many persons, by the writer, after
+/// `head`: person ids here are numbers, so a space can hold more than 255.
+fn many(space: &mut Space, n: u32, head: &Change) -> Change {
+    let mut person = [0x60; 16];
+    person[..4].copy_from_slice(&n.to_be_bytes());
+    let entry = PersonKeyEntry {
+        person_key: person,
+        commitment: [0xc0; 32],
+        generation: space.first_generation,
+        record_hash: membership::record_hash(&n.to_be_bytes()),
+    };
+    space.write(WRITER, Entry::PersonKey(entry), &[head])
+}
+
+#[test]
+fn a_warm_relay_remembers_a_space_above_the_square_limit_of_1200_control_changes() {
+    let dir = TempDir::new();
+    let relay = Relay::new(Counting::new(dir.store()), config());
+    let mut space = Space::new(CREATOR);
+    let genesis = space.genesis.clone();
+    let writer = space.add(CREATOR, WRITER, Role::Writer, &[&genesis]);
+    let pushed = push_with(&relay, CREATOR, &[&genesis, &writer]);
+    assert!(pushed.iter().all(|p| matches!(p, Pushed::Accepted(_))));
+    // 1,300 control changes in all, above the 1,200 the memory held while
+    // it weighed a space by the square of its control changes.
+    let mut head = writer;
+    let mut changes = Vec::new();
+    for n in 0..1_298 {
+        let change = many(&mut space, n, &head);
+        changes.push(change.clone());
+        head = change;
+    }
+    let pushed = push_with(&relay, WRITER, &changes.iter().collect::<Vec<_>>());
+    assert!(pushed.iter().all(|p| matches!(p, Pushed::Accepted(_))));
+    let change = many(&mut space, 1_298, &head);
+    let frame = change.bytes().len();
+    relay.store().take_bytes();
+    let pushed = push_with(&relay, WRITER, &[&change]);
+    assert!(matches!(pushed[..], [Pushed::Accepted(_)]), "{pushed:?}");
+    let (bytes, _) = relay.store().take_bytes();
+    // The push reads only the last entry it holds, to see that it is still
+    // there, not the 1,300 control changes of the log.
+    assert!(
+        bytes <= 2 * frame + 64,
+        "the push read {bytes} frame bytes, for a new frame of {frame}"
+    );
+}
+
 /// `uploader` pushes these changes to a relay over any store.
 fn push_with<S: ncdb_relay::store::RelayStore>(
     relay: &Relay<S>,

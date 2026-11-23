@@ -27,10 +27,14 @@ use std::thread::{self, Thread};
 use ncdb_core::change::Kind;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 
+mod admission;
 mod guest;
 mod large;
+mod statement;
+pub use admission::*;
 pub use guest::*;
 pub use large::*;
+pub use statement::*;
 
 use crate::store::{
     AppendOutcome, Effect, MemberRecord, NewEntry, PersonKeyId, PersonKeyPut, PersonKeyRecord,
@@ -104,6 +108,10 @@ macro_rules! conformance_suite {
             control_entries_are_read_alone,
             a_bounded_read_stops_before_its_byte_budget,
             an_account_records_one_guest_space,
+            the_highest_statement_number_is_kept_per_identity,
+            an_admission_is_recorded_and_replaced_with_its_count_kept,
+            an_admitted_space_holds_only_below_spaces,
+            concurrent_admitted_spaces_do_not_exceed_spaces,
         );
     };
     (@tests $fresh:path; $attrs:tt; $($name:ident),* $(,)?) => {

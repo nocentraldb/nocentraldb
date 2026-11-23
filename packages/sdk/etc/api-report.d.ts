@@ -153,6 +153,7 @@ export interface Db {
         subscribe(listener: (view: ViewStatus) => void): Stop;
     };
     readonly account: {
+        readonly identity: string | null;
         recoveryCode(): Promise<RecoveryCode | null>;
         recovered(): Promise<import("./members.ts").Notice | null>;
         pair(request: {
@@ -197,6 +198,7 @@ interface OpenOptions {
     ifStorageLost?: "refuse" | "open-empty";
     pairing?: "request";
     recover?: string;
+    admission?: (identity: string) => Promise<string>;
 }
 export declare const open: (options: OpenOptions) => Promise<Db>;
 export declare const add: <E>(...elements: E[]) => Elements<E>;

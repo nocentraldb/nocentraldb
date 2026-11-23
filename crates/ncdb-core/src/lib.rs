@@ -34,7 +34,11 @@
 //! A member keeps its log and the view folded from it in SQLite, natively
 //! and on wasm32, as RFC 0006 (`docs/rfc/0006-local-view.md`) defines it
 //! ([`view`]).
+//!
+//! With the compiler cfg `ncdb_rich_text`, it also holds rich text, RFC 0013's
+//! `ncdb/richText` (`rich_text`).
 
+pub mod admission;
 pub mod basic;
 /// The canonical CBOR of RFC 0002, which the core shares with plugins'
 /// `Data` (RFC 0011): it lives in `ncdb-plugin`.
@@ -60,6 +64,8 @@ pub mod receive;
 pub mod recovery;
 mod redact;
 pub mod reference;
+#[cfg(ncdb_rich_text)]
+pub mod rich_text;
 pub mod seal;
 pub mod set;
 /// Every text the core words itself, generated from texts/texts.json (NOC-329).

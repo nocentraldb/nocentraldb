@@ -127,13 +127,59 @@ pub enum Effect {
     /// Writes a member's row of the space's membership table, replacing the
     /// row it had.
     Member(MemberRecord),
-    /// Records that the account, by its account key, created this space as
-    /// the one space an account the relay does not list may create (RFC
-    /// 0007, "Who may create a space"; Carsten, 2026-11-12, NOC-286). It
+    /// Records that the account, by its identity (the recovery key, or the
+    /// account key of an account without one; RFC 0015, "The account's
+    /// identity"), created this space as the one space an account the
+    /// relay does not list may create (RFC 0007, "Who may create a space";
+    /// Carsten, 2026-11-12, NOC-286). It
     /// holds only if the account has no such space yet; otherwise nothing
     /// of the append is applied, and the append is
     /// [`AppendOutcome::GuestSpaceTaken`].
     GuestSpace([u8; 32]),
+    /// Raises the highest account key statement number the relay has seen
+    /// for the identity, the recovery key, to `number` (RFC 0015, "The
+    /// account's identity"). It never lowers the stored number and never
+    /// keeps the append from holding.
+    Statement {
+        /// The recovery key the statement names.
+        identity: [u8; 32],
+        /// The statement's number.
+        number: u64,
+    },
+    /// Records that the identity created this space under its admission
+    /// (RFC 0015, "How the relay takes it"): raises its count of spaces
+    /// created by one. It holds only if the identity has an admission whose
+    /// count is below its spaces; otherwise nothing of the append is
+    /// applied, and the append is [`AppendOutcome::AdmissionSpent`]. Whether
+    /// the admission lapsed is the core's to check before.
+    AdmittedSpace([u8; 32]),
+}
+
+/// What `admit` records for an identity (RFC 0015, "How the relay takes
+/// it"): the admission's until and spaces, and the admission key that
+/// signed it, so an operator finds what a key admitted.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Admitted {
+    /// When the admission lapses, in Unix seconds.
+    pub until: u64,
+    /// How many spaces the identity may create.
+    pub spaces: u64,
+    /// The admission key that signed it.
+    pub key: [u8; 32],
+}
+
+/// An identity's admission as the relay holds it: what the latest `admit`
+/// recorded, and the spaces the identity created under its admissions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AdmissionRecord {
+    /// When the admission lapses, in Unix seconds.
+    pub until: u64,
+    /// How many spaces the identity may create.
+    pub spaces: u64,
+    /// The admission key that signed it.
+    pub key: [u8; 32],
+    /// How many spaces the identity created under its admissions.
+    pub created: u64,
 }
 
 /// A person-key record (RFC 0003, "Person-key record"): opaque wrapped bytes and the
@@ -201,6 +247,9 @@ pub enum AppendOutcome {
     /// The account of an [`Effect::GuestSpace`] already created its one
     /// space. Nothing was appended.
     GuestSpaceTaken,
+    /// The identity of an [`Effect::AdmittedSpace`] has no admission, or
+    /// created its admission's spaces already. Nothing was appended.
+    AdmissionSpent,
 }
 
 /// A backend that failed or timed out. Nothing was appended. Its detail
@@ -284,6 +333,30 @@ pub trait RelayStore: Send + Sync {
         space: SpaceId,
         member: MemberId,
     ) -> impl Future<Output = Result<Option<MemberRecord>, StoreError>> + Send;
+
+    /// The highest account key statement number the relay has seen for
+    /// the identity, the recovery key, if any (RFC 0015, "The account's
+    /// identity"). Written only through [`Effect::Statement`].
+    fn statement(
+        &self,
+        identity: [u8; 32],
+    ) -> impl Future<Output = Result<Option<u64>, StoreError>> + Send;
+
+    /// Records an admission for `identity`, replacing the until, spaces and
+    /// key of an earlier one and keeping its count of spaces created (RFC
+    /// 0015, "How the relay takes it"; Carsten, 2026-11-23, NOC-493). A new identity starts at a count of 0.
+    fn admit(
+        &self,
+        identity: [u8; 32],
+        admitted: Admitted,
+    ) -> impl Future<Output = Result<(), StoreError>> + Send;
+
+    /// The identity's admission, if `admit` recorded one. Its count rises
+    /// only through [`Effect::AdmittedSpace`].
+    fn admission(
+        &self,
+        identity: [u8; 32],
+    ) -> impl Future<Output = Result<Option<AdmissionRecord>, StoreError>> + Send;
 
     /// The spaces the member currently belongs to, in id order.
     fn members_of(
@@ -495,6 +568,16 @@ mod debug {
                 Effect::GuestSpace(account) => {
                     f.write_str("GuestSpace(")?;
                     hex(f, account)?;
+                    f.write_str(")")
+                }
+                Effect::Statement { identity, number } => {
+                    f.write_str("Statement(")?;
+                    hex(f, identity)?;
+                    write!(f, ", {number})")
+                }
+                Effect::AdmittedSpace(identity) => {
+                    f.write_str("AdmittedSpace(")?;
+                    hex(f, identity)?;
                     f.write_str(")")
                 }
             }

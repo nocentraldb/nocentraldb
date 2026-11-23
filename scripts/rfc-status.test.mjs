@@ -1,10 +1,9 @@
 // Asserts that a decided RFC never calls itself a draft (NOC-35). An RFC is
-// decided once its status paragraph says so: it starts with "Decided." or,
-// once rewritten as a fresh text (NOC-165), with "Decided by the owner", and
-// names the owner from factory/CONFIG.md with a date. The RFC's own status
-// line is the record; the decision log holds the single decisions, each
-// under a title that states it (NOC-378), so no log heading marks a whole
-// RFC as decided. Such an RFC's header line carries no draft number, and no
+// decided once its status paragraph says so: it starts with "Decided," and
+// the date, and names nobody who decided, since the decision log records
+// that (Carsten, 2026-11-23, NOC-454 B). The RFC's own status line is the
+// record; the decision log holds the single decisions, each under a title
+// that states it (NOC-378), so no log heading marks a whole RFC as decided. Such an RFC's header line carries no draft number, and no
 // sentence in its status still waits for its own pull request to be merged.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
@@ -70,7 +69,7 @@ test("a decided RFC's header line carries no draft number", () => {
   }
 });
 
-test("a decided RFC's status says Decided, with the owner and a date", () => {
+test('a decided RFC\'s status reads "Decided, YYYY-MM-DD." and names nobody', () => {
   const name = owner();
   for (const number of decidedRfcs()) {
     const path = rfcFile(number);
@@ -78,13 +77,13 @@ test("a decided RFC's status says Decided, with the owner and a date", () => {
     assert.ok(line, `${path} has no status paragraph`);
     assert.match(
       line,
-      /^\*\*Status\.\*\* Decided(\. | by the owner )/,
+      /^\*\*Status\.\*\* Decided, \d{4}-\d{2}-\d{2}\.( |$)/,
       `${path}: ${line.slice(0, 80)}`,
     );
-    assert.match(
+    assert.doesNotMatch(
       line,
-      new RegExp(`\\(${name}, \\d{4}-\\d{2}-\\d{2}\\)`),
-      `${path}: the status names no decision by ${name} with a date`,
+      new RegExp(`\\b(${name}|pm)\\b|\\bthe owner\\b`),
+      `${path}: the status names who decided; the decision log records that`,
     );
   }
 });

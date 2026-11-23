@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · nocentraldb.io
 
 Which keys NoCentralDB uses, who holds them, and which audited primitives use them.
 
-**Status.** Decided by the owner (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Partly built. Built: the member key and its key record, in the keystores of macOS, Windows and Linux, in a key file and in the browser's IndexedDB; key envelopes, the key chain and rotation; person keys, shreds and the account sign-off; accounts, the recovery key and pairing; invitations; the relay's authentication. Not built: the keystores of iOS and Android; local ad-hoc spaces and personal fields in ad-hoc copies; `db.workOrders.erase`, since the Rust SDK erases with `Db::erase` until work orders exist; the notices for moving data between spaces and for invitations; and the hybrid post-quantum suite, which this RFC only reserves.
 
@@ -517,7 +517,7 @@ The names are [RFC 0009](0009-sdk-api.md)'s, except `db.workOrders.erase`, which
 - **Creates** the member key on first open, the space key with the space, a person key on the first personal field for a person in a space, and the next generation on every removal.
 - **Stores** private keys in the platform's keystore, or in the key file a headless agent names, and never hands their bytes to the app: the Keychain on macOS and iOS, the Android Keystore, the Windows credential store, the Secret Service on Linux, and in the browser a non-extractable WebCrypto key that wraps the core's keys in IndexedDB ([The member key](#the-member-key) gives its layout). Only the file's permissions protect a key file.
 - **Offers no API that returns key bytes.** The developer handles member ids, invitations and fingerprints, which are public. A private key leaves a device only when a person pairs a new device of the account: the account key travels to it sealed to the new device's member key ([Pairing answer](#pairing-answer)). Recovery derives the recovery key on the device where the person enters the code, so nothing leaves a device for it.
-- **Says what a permission change means.** Removing a member, moving data between spaces, creating an ad-hoc space and running an erasure return a notice that states the limits above in plain words, so the developer can pass them on. The notices of moving data between spaces and of invitations come later, with the calls that return them (Carsten, 2026-11-20, NOC-362). A change of how permissions behave is never silent (GENESIS.md, "What it must never do").
+- **Says what a permission change means.** Removing a member, moving data between spaces, creating an ad-hoc space and running an erasure return a notice that states the limits above in plain words, so the developer can pass them on. Moving data between spaces returns the notice `objectMoved`, which [RFC 0016](0016-moving-an-object.md#the-sdk-call-and-its-notice) defines with the move. The notice of invitations comes later, with the call that returns it (Carsten, 2026-11-20, NOC-362). A change of how permissions behave is never silent (GENESIS.md, "What it must never do").
 
 `members.add` takes an invitation and `members.remove` a member id, and every call that changes who can read what (`members.add`, `members.remove`, `workOrders.erase`, invitations) returns a notice. A developer then never handles key material, and a change of who can read what is never silent. Public keys passed to `members.add` were not taken: a public key is not secret, but passing an invitation or a member id keeps developers away from key material altogether. [Use case 3](../use-cases.md#3-an-outside-agent-limited-to-one-space) shows `members.add(invitation)` and `members.remove(memberId)`.
 
@@ -585,18 +585,19 @@ It makes them more precise in these points:
 
 ## Decisions
 
-- **2026-11-11 · No passkey unlocks the browser's wrapping key in v1.** (Carsten, 2026-11-11, NOC-210; [decision](../../factory/decisions/2026-11-11-NOC-175-the-browser-keys-sit-in-indexeddb-under-a-webcrypto-key-and-chromium-tests-them.md))
-- **2026-11-11 · A space with one account erases provisionally for 7 days.** (Carsten, 2026-11-11, NOC-230)
-- **2026-11-20 · A member reads a generation with the key its control change confirms.** (Carsten, 2026-11-20, NOC-389; [decision](../../factory/decisions/2026-11-20-NOC-389-a-member-reads-a-generation-with-the-key-its-control-change-confirms.md))
-- **2026-11-12 · The key record's format 2, the pairing invitation and a recovered key's number.** (Carsten, 2026-11-12, NOC-285)
-- **2026-11-12 · A personal value is sealed under a subkey of the person key.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
-- **2026-11-15 · A sub-agent's invitation is version 3, and its parent signs its certificate.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q1-a-sub-agent-invitation-is-version-3-of-the-invitation.md))
-- **2026-11-15 · An erasure reaches every space of the member's database where it may write.** (Carsten, 2026-11-15, NOC-326; [decision](../../factory/decisions/2026-11-15-NOC-326-q5-a-every-space-of-this-database.md))
-- **2026-11-15 · Local ad-hoc spaces come later; synced ones first.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q3-c-local-ad-hoc-spaces-come-later.md))
-- **2026-11-15 · Personal fields in copies get a person key of the ad-hoc space.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q8-b-personal-copies-get-their-own-person-key.md))
-- **2026-11-15 · A sub-agent's database has no account.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q11-a-sub-agent-s-database-has-no-account.md))
-- **2026-11-20 · An erasure stays a work order; 0.1's `Db::erase` is an interim call the work-order RFC will replace.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-erasure-is-a-work-order-0-1-s-db-erase-is-an-interim-call.md))
-- **2026-11-20 · The notices of moving data between spaces and of invitations come later.** (Carsten, 2026-11-20, NOC-362)
+- **2026-11-11 · No passkey unlocks the browser's wrapping key in v1.** ([decision](../../factory/decisions/2026-11-11-NOC-175-the-browser-keys-sit-in-indexeddb-under-a-webcrypto-key-and-chromium-tests-them.md))
+- **2026-11-11 · A space with one account erases provisionally for 7 days.** (NOC-230)
+- **2026-11-20 · A member reads a generation with the key its control change confirms.** ([decision](../../factory/decisions/2026-11-20-NOC-389-a-member-reads-a-generation-with-the-key-its-control-change-confirms.md))
+- **2026-11-12 · The key record's format 2, the pairing invitation and a recovered key's number.** (NOC-285)
+- **2026-11-12 · A personal value is sealed under a subkey of the person key.** ([decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
+- **2026-11-15 · A sub-agent's invitation is version 3, and its parent signs its certificate.** ([decision](../../factory/decisions/2026-11-15-NOC-320-q1-a-sub-agent-invitation-is-version-3-of-the-invitation.md))
+- **2026-11-15 · An erasure reaches every space of the member's database where it may write.** ([decision](../../factory/decisions/2026-11-15-NOC-326-q5-a-every-space-of-this-database.md))
+- **2026-11-15 · Local ad-hoc spaces come later; synced ones first.** ([decision](../../factory/decisions/2026-11-15-NOC-320-q3-c-local-ad-hoc-spaces-come-later.md))
+- **2026-11-15 · Personal fields in copies get a person key of the ad-hoc space.** ([decision](../../factory/decisions/2026-11-15-NOC-320-q8-b-personal-copies-get-their-own-person-key.md))
+- **2026-11-15 · A sub-agent's database has no account.** ([decision](../../factory/decisions/2026-11-15-NOC-320-q11-a-sub-agent-s-database-has-no-account.md))
+- **2026-11-20 · An erasure stays a work order; 0.1's `Db::erase` is an interim call the work-order RFC will replace.** ([decision](../../factory/decisions/2026-11-20-NOC-362-erasure-is-a-work-order-0-1-s-db-erase-is-an-interim-call.md))
+- **2026-11-20 · The notices of moving data between spaces and of invitations come later.** (NOC-362)
+- **2026-11-22 · Moving an object to another space returns the notice `objectMoved`.** ([decision](../../factory/decisions/2026-11-22-NOC-447-a-moved-object-s-trace-shows-no-fields.md))
 
 ## History
 
@@ -619,3 +620,5 @@ It makes them more precise in these points:
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · Erasure stays a work order, with 0.1's `Db::erase` as an interim call, and two notices come later, as the owner answered (NOC-362, #396)
 - 2026-11-20 · A member that holds several keys for a generation opens its changes with the one the generation's control change confirms (NOC-389)
+- 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
+- 2026-11-23 · The notice of moving data between spaces is RFC 0016's `objectMoved` (NOC-474, #474)

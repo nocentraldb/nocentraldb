@@ -2,8 +2,10 @@
 // that a single note can be shared. It is decided and published as a fresh
 // text, as docs/rfc/README.md asks of a newly published RFC: each section
 // states what the design does and why, then the options not taken, in plain
-// words. It has no list of decisions, no option labels to decode and no
-// Decisions section; who decided each choice stays in factory/decisions/.
+// words. It has no list of decisions and no option labels to decode; who
+// decided each choice stays in factory/decisions/. Its Decisions section
+// records only what was decided after its publication, as every decided RFC's
+// does (NOC-474).
 // It names the GENESIS principles it serves and touches. These tests check
 // that each part is there; whether the design is right was the owner's
 // review.
@@ -11,7 +13,7 @@ import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { historyLines } from "./lib/rfc-record.mjs";
+import { assertRecord, historyLines } from "./lib/rfc-record.mjs";
 import { headings, read, root, section } from "./lib/rfc-text.mjs";
 
 const file = () => {
@@ -34,19 +36,12 @@ test("RFC 0016 is decided and is about moving an object", () => {
     markdown.split("\n")[2],
     "REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-447",
   );
-  assert.match(
-    markdown,
-    /^\*\*Status\.\*\* Decided\. .*\(Carsten, 2026-11-22\)/m,
-  );
+  assert.match(markdown, /^\*\*Status\.\*\* Decided, 2026-11-22\. /m);
 });
 
 test("RFC 0016 states its design directly, with no list of decisions", () => {
   const found = headings(text());
-  for (const heading of [
-    "What the owner decided",
-    "Questions to the owner",
-    "Decisions",
-  ]) {
+  for (const heading of ["What the owner decided", "Questions to the owner"]) {
     assert.ok(!found.includes(heading), `it has a section "${heading}"`);
   }
   const body = prose();
@@ -58,9 +53,10 @@ test("RFC 0016 states its design directly, with no list of decisions", () => {
   assert.ok(!label, `an option label the reader must decode: ${label?.[0]}`);
 });
 
-test("RFC 0016's History is its one publication line", () => {
+test("RFC 0016's History starts with its publication and keeps the record form", () => {
   const lines = historyLines(text());
-  assert.deepEqual(lines, ["- 2026-11-22 · First published (NOC-447)"]);
+  assert.equal(lines[0], "- 2026-11-22 · First published (NOC-447)");
+  assertRecord(text(), "2026-11-22 · First published (NOC-447)");
 });
 
 // Each open choice has its own section, which states what the design does

@@ -98,6 +98,7 @@ async fn main() -> ExitCode {
         runtime.clone(),
     );
     let mut config = Config::new(settings.allowed_accounts);
+    config.admission_keys = settings.admission_keys;
     config.max_frame = ncdb_relay::MAX_FRAME;
     let connections = DynamoConnections::new(db, settings.connections, runtime.clone());
     let api = aws_sdk_apigatewaymanagement::config::Builder::from(&aws)

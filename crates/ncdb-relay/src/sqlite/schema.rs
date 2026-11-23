@@ -1,6 +1,6 @@
 //! The tables of the SQLite backend: the log and the spaces' heads, the
 //! membership table, the person-key store, the one space of each account
-//! the relay does not list, uploads and download tokens, and the epoch.
+//! the relay does not list, the highest statement number per identity, uploads and download tokens, and the epoch.
 
 pub(super) const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS relay (
@@ -52,6 +52,17 @@ CREATE INDEX IF NOT EXISTS uploads_expiry ON uploads (expires_at);
 CREATE TABLE IF NOT EXISTS guest_spaces (
     account BLOB PRIMARY KEY,
     space BLOB NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS admissions (
+    identity BLOB PRIMARY KEY,
+    until INTEGER NOT NULL,
+    spaces INTEGER NOT NULL,
+    key BLOB NOT NULL,
+    created INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS statements (
+    identity BLOB PRIMARY KEY,
+    number INTEGER NOT NULL
 ) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS downloads (
     token BLOB PRIMARY KEY,

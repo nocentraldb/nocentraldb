@@ -93,11 +93,21 @@
 //! `null`; `account.confirmRecoveryCode` `{}` forgets the code;
 //! `account.recovered` `{}` answers a notice or `null`.
 //!
+//! For RFC 0015's `admission` option (NOC-469), `open` takes
+//! `"admission": true`; the worker then sends `{"event": "admission",
+//! "request": n, "identity": hex}` when the sync needs an admission, and
+//! `admission.answer` `{"request": n, "admission": text | null}` answers
+//! it (`admission.rs`).
+//!
+//! For RFC 0015's `db.account.identity` (NOC-469), `open` and
+//! `account.completePairing` also answer `"identity"`: the account's
+//! recovery key in hex, or `null` while the database waits to be paired.
+//!
 //! The calls of NOC-316, slice 2, in `account.rs`: `account.pair` `{"kind":
 //! "device" | "agent", "invitation": text}` answers `{"answer": text,
 //! "added": [{"space": id, "notice": notice}], "askAdmins": [id]}`;
 //! `account.completePairing` `{"answer": text}` answers `{"notices":
-//! [notice]}`.
+//! [notice], "identity": text}`.
 //!
 //! The call of NOC-316, slice 3, in `account.rs`: `account.removeMember`
 //! `{"member": id, "recover": words}` answers `{"removed": [{"space": id,
@@ -121,6 +131,7 @@
 
 mod account;
 mod ad_hoc;
+mod admission;
 mod erase;
 mod erasures;
 mod events;
@@ -209,14 +220,20 @@ impl Bridge {
 
     /// Answers one request, given and answered as CBOR.
     pub async fn handle(&mut self, request: &[u8]) -> Vec<u8> {
-        let Ok(request) = cbor::decode(request) else {
+        let Ok(mut request) = cbor::decode(request) else {
             return cbor::encode(&failure(0, "invalidValue", "the request is not CBOR"));
         };
         let id = match get(&request, "id") {
             Some(Value::Unsigned(id)) => *id,
             _ => 0,
         };
-        let answer = match (get(&request, "call"), get(&request, "args")) {
+        // The call takes its arguments: a write frees each record's tree as
+        // it reads it (NOC-422).
+        let args = match &mut request {
+            Value::Map(map) => map.remove(&Key::Text("args".into())),
+            _ => None,
+        };
+        let answer = match (get(&request, "call"), args) {
             (Some(Value::Text(call)), Some(args)) if id > 0 => self.call(call, args).await,
             _ => Err(invalid(crate::texts::bridge::NOT_AREQUEST)),
         };
@@ -242,7 +259,8 @@ impl Bridge {
         crate::browser::release()
     }
 
-    async fn call(&mut self, call: &str, args: &Value) -> Result<Value, Failed> {
+    async fn call(&mut self, call: &str, owned: Value) -> Result<Value, Failed> {
+        let args = &owned;
         if call == "open" {
             return self.open(args).await;
         }
@@ -272,6 +290,10 @@ impl Bridge {
             "account.pair" => account::pair(&db, args).await,
             "account.completePairing" => account::complete_pairing(&db, args).await,
             "account.removeMember" => account::remove_member(&db, args).await,
+            "admission.answer" => match &self.events {
+                Some(events) => events.asks.answer(args),
+                None => Ok(Value::Null),
+            },
             "durability" => {
                 db.refresh_storage().await;
                 Ok(reports::durability(&db.durability()))
@@ -324,7 +346,7 @@ impl Bridge {
                     members::notice_of(space.leave().await?),
                 )]))
             }
-            "write" => write(&db, args).await,
+            "write" => write(&db, owned).await,
             "get" => {
                 let space = db.spaces().get(space_id(args)?).await?;
                 let collection = text(args, "collection")?;
@@ -368,6 +390,10 @@ impl Bridge {
         if let Some(Value::Text(words)) = get(args, "recover") {
             options = options.recover(words);
         }
+        let asks = admission::Asks::default();
+        if let Some(Value::Bool(true)) = get(args, "admission") {
+            options.admission = Some(asks.fetch());
+        }
         let db = Db::open(options).await?;
         let (status, sync) = db.sync().watch();
         let (durability, durability_watch) = db.durability_watch();
@@ -379,9 +405,12 @@ impl Bridge {
             list: Arc::new(Mutex::new(None)),
             durability: Arc::new(Mutex::new(durability_watch)),
             view: Arc::new(Mutex::new(view_watch)),
+            asks,
         });
+        let identity = account::identity(&db);
         self.db = Some(db);
         Ok(entries([
+            ("identity", identity),
             ("sync", sync_status(&status)),
             ("durability", reports::durability(&durability)),
             ("view", reports::view(&view)),
@@ -449,15 +478,21 @@ impl Bridge {
     }
 }
 
-/// `{"space": id, "ops": [op]}`, written as one change.
-async fn write(db: &Db, args: &Value) -> Result<Value, Failed> {
-    let space = db.spaces().get(space_id(args)?).await?;
+/// `{"space": id, "ops": [op]}`, written as one change. Each op's tree is
+/// dropped once read, and the transaction takes the values read: the
+/// records are held whole once at a time, not three times (NOC-422).
+async fn write(db: &Db, args: Value) -> Result<Value, Failed> {
+    let space = db.spaces().get(space_id(&args)?).await?;
     let model = db.lock().model.clone();
-    let Some(Value::Array(ops)) = get(args, "ops") else {
+    let Value::Map(mut args) = args else {
+        unreachable!("space_id read a map");
+    };
+    let Some(Value::Array(ops)) = args.remove(&Key::Text("ops".into())) else {
         return Err(invalid(crate::texts::bridge::WRITE_TAKES_OPS));
     };
     let mut parsed = Vec::with_capacity(ops.len());
     for op in ops {
+        let op = &op;
         let collection = text(op, "collection")?.to_owned();
         let values = match get(op, "values") {
             Some(Value::Map(map)) => fields(&model, &collection, map)?,
@@ -474,7 +509,8 @@ async fn write(db: &Db, args: &Value) -> Result<Value, Failed> {
     }
     let written = space
         .write(|tx| {
-            for (kind, collection, id, values) in &parsed {
+            for (kind, collection, id, values) in parsed {
+                let collection = collection.as_str();
                 let values = values
                     .iter()
                     .map(|(name, value)| (name.as_str(), value.clone()));
@@ -485,9 +521,9 @@ async fn write(db: &Db, args: &Value) -> Result<Value, Failed> {
                     ("create", None) => {
                         tx.create(collection, values)?;
                     }
-                    ("update", Some(id)) => tx.update(collection, *id, values)?,
-                    ("restore", Some(id)) => tx.restore(collection, *id)?,
-                    (_, Some(id)) => tx.delete(collection, *id)?,
+                    ("update", Some(id)) => tx.update(collection, id, values)?,
+                    ("restore", Some(id)) => tx.restore(collection, id)?,
+                    (_, Some(id)) => tx.delete(collection, id)?,
                     _ => unreachable!("parsed above"),
                 }
             }

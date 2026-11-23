@@ -6,7 +6,8 @@ The function checks nothing itself. Every request goes through the relay core, t
 
 **On AWS** the binary runs the handler over the AWS backend (`ncdb-relay-aws`, DynamoDB and S3), the `connections` table on DynamoDB, API Gateway's connection API and presigned S3 URLs for large changes. It reads its settings from the environment, which the deployment sets:
 - `NCDB_RELAY_ID`: the relay id, 32 hex digits;
-- `NCDB_ALLOWED_ACCOUNTS`: the account keys whose members may create spaces, comma-separated;
+- `NCDB_ALLOWED_ACCOUNTS`: the identities of the accounts whose members may create spaces, comma-separated: each account's recovery key, or the account key of an account without one (RFC 0015, "The account's identity");
+- `NCDB_ADMISSION_KEYS`: the public admission keys whose admissions the relay takes, one per app, 64 hex digits each, comma-separated (RFC 0015, "Admission tokens"); empty for none. The CDK stack does not set it yet;
 - `NCDB_TABLE_PREFIX`: the prefix of its tables;
 - `NCDB_BUCKET`: the frames bucket;
 - `NCDB_CONNECTIONS_URL`: the connection API's stage URL.

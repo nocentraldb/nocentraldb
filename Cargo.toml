@@ -21,6 +21,7 @@ homepage = "https://nocentraldb.io"
 # to the version. A crate with `publish = false` has no version, so cargo
 # drops it from a published crate's dev-dependencies when it packages the
 # crate (check-version checks both, NOC-372).
+ncdb = { path = "crates/ncdb", version = "=0.2.0" }
 ncdb-core = { path = "crates/ncdb-core", version = "=0.2.0" }
 ncdb-harness = { path = "crates/ncdb-harness" }
 ncdb-plugin = { path = "crates/ncdb-plugin", version = "=0.2.0" }

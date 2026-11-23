@@ -17,11 +17,17 @@
 // The example app apps/tasks-ts: the same job runs it in Chromium, on the
 // SDK built above, whenever a pull request touches the app or the SDK.
 //
+// NOC-448: the TypeScript SDK's long browser tests, which idle or write for
+// minutes (scripts/sdk-browser/long/), run in a job of their own, one per
+// engine, so the `view` job stays near ten minutes and every engine still
+// runs every test.
+//
 // NOC-319: the same job runs the landing page's live demo in Chromium
 // (scripts/site-demo/): the site is built on the runner with the demo's
 // assets from the SDK built above, whenever a pull request touches the
 // site, the demo's tests or the SDK.
 import assert from "node:assert/strict";
+import { existsSync, readdirSync } from "node:fs";
 import {
   imageChecks,
   jobSteps,
@@ -38,12 +44,35 @@ const SDK_BUILD = "node scripts/sdk-browser/build.mjs";
 const SDK_TESTS = "scripts/sdk-browser/*.test.mjs";
 /** The engines the TypeScript SDK's browser tests run in (NOC-344). */
 const SDK_ENGINES = ["chromium", "firefox", "webkit"];
+/** The TypeScript SDK's long browser tests, outside SDK_TESTS (NOC-448). */
+const LONG_DIR = "scripts/sdk-browser/long";
+const LONG_TESTS = `${LONG_DIR}/*.test.mjs`;
+const WASM_RUNNER = "moon exec repo:wasm-runner";
 const APP_TESTS = "apps/tasks-ts/e2e/*.e2e.mjs";
 const DEMO_BUILD = "node scripts/site-demo/build.mjs";
 const DEMO_TESTS = "scripts/site-demo/*.test.mjs";
 
+/** The job of the long tests, to read or change. */
+const longJob = (ctx) => {
+  const job = ctx.workflow?.jobs?.long;
+  assert.ok(job, "the long tests have no job of their own");
+  return job;
+};
+
+/** The step of the long job whose `run` mentions `text`, and its index. */
+const longStep = (ctx, text) => {
+  const all = longJob(ctx).steps ?? [];
+  const at = all.findIndex((s) => s.run?.includes(text));
+  return { at, step: all[at] };
+};
+
 runWorkflowChecks({
-  files: load(".github/workflows/browser-view.yml"),
+  files: {
+    ...load(".github/workflows/browser-view.yml"),
+    longTests: existsSync(LONG_DIR)
+      ? readdirSync(LONG_DIR).filter((f) => f.endsWith(".test.mjs"))
+      : [],
+  },
   clone: (files) => structuredClone(files),
   checks: [
     ...imageChecks(),
@@ -338,6 +367,116 @@ runWorkflowChecks({
             all.findIndex((s) => s.run?.includes(DEMO_TESTS)),
             1,
           );
+        },
+      },
+    },
+    {
+      name: "the long browser tests run in a job of their own, once per engine, on the SDK built on the runner",
+      check: (ctx) => {
+        const job = longJob(ctx);
+        assert.deepEqual(
+          job.strategy?.matrix?.engine,
+          SDK_ENGINES,
+          "the long tests do not run in every engine",
+        );
+        assert.equal(
+          job.strategy?.["fail-fast"],
+          false,
+          "a failing engine cancels the long tests of the others",
+        );
+        assert.ok(
+          Number.isInteger(job["timeout-minutes"]) &&
+            job["timeout-minutes"] <= 30,
+          "the long job has no timeout of at most 30 minutes",
+        );
+        const runner = longStep(ctx, WASM_RUNNER).at;
+        const build = longStep(ctx, SDK_BUILD).at;
+        const pull = longStep(ctx, "docker pull");
+        const test = longStep(ctx, LONG_TESTS);
+        assert.ok(runner >= 0, "wasm-bindgen is not installed for the build");
+        assert.ok(build > runner, "the SDK is not built on the runner");
+        assert.ok(
+          pull.at >= 0 &&
+            Number.isInteger(pull.step["timeout-minutes"]) &&
+            pull.step["timeout-minutes"] <= 10 &&
+            /for attempt in 1 2\b/.test(pull.step.run) &&
+            /timeout \d+s? docker pull "\$PLAYWRIGHT_IMAGE"/.test(
+              pull.step.run,
+            ),
+          "the image is not pulled with a short timeout and one retry",
+        );
+        assert.ok(
+          test.at > build && test.at > pull.at,
+          "the long tests do not run after the build",
+        );
+        assert.match(test.step.run, /docker run/);
+        assert.match(test.step.run, /"\$PLAYWRIGHT_IMAGE"/);
+        assert.match(test.step.run, /SDK_BROWSER_PREBUILT=1/);
+        assert.match(
+          test.step.run,
+          /SDK_BROWSER_ENGINE=\$\{\{ matrix\.engine \}\}/,
+          "the long tests name no engine",
+        );
+      },
+      mutants: {
+        "no long job": (ctx) => {
+          delete ctx.workflow.jobs.long;
+        },
+        "no WebKit": (ctx) => {
+          longJob(ctx).strategy.matrix.engine = ["chromium", "firefox"];
+        },
+        "fail-fast": (ctx) => {
+          longJob(ctx).strategy["fail-fast"] = true;
+        },
+        "no job timeout": (ctx) => {
+          delete longJob(ctx)["timeout-minutes"];
+        },
+        "no wasm-bindgen": (ctx) => {
+          const all = longJob(ctx).steps;
+          all.splice(longStep(ctx, WASM_RUNNER).at, 1);
+        },
+        "no build on the runner": (ctx) => {
+          const all = longJob(ctx).steps;
+          all.splice(longStep(ctx, SDK_BUILD).at, 1);
+        },
+        "a pull without retry": (ctx) => {
+          longStep(ctx, "docker pull").step.run =
+            'timeout 240 docker pull "$PLAYWRIGHT_IMAGE"';
+        },
+        "the tests rebuild in the image": (ctx) => {
+          const { step } = longStep(ctx, LONG_TESTS);
+          step.run = step.run.replace("SDK_BROWSER_PREBUILT=1", "X=1");
+        },
+        "the tests name no engine": (ctx) => {
+          const { step } = longStep(ctx, LONG_TESTS);
+          step.run = step.run.replace(/SDK_BROWSER_ENGINE=\S+/, "X=1");
+        },
+        "no long tests run": (ctx) => {
+          const all = longJob(ctx).steps;
+          all.splice(longStep(ctx, LONG_TESTS).at, 1);
+        },
+      },
+    },
+    {
+      name: "the long browser tests live apart from the others, and only the long job runs them",
+      check: (ctx) => {
+        assert.ok(ctx.longTests.length > 0, `${LONG_DIR} holds no test`);
+        const view = ctx.workflow.jobs.view.steps ?? [];
+        for (const step of view) {
+          assert.ok(
+            !step.run?.includes(LONG_DIR),
+            "the view job runs the long tests",
+          );
+        }
+      },
+      mutants: {
+        "no long tests": (ctx) => {
+          ctx.longTests = [];
+        },
+        "the view job runs them too": (ctx) => {
+          ctx.workflow.jobs.view.steps.push({
+            run: `node --test '${LONG_TESTS}'`,
+          });
         },
       },
     },

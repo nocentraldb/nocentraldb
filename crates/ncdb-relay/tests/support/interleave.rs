@@ -6,9 +6,9 @@ use std::sync::Mutex;
 
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 use ncdb_relay::store::{
-    AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry, PersonKeyId, PersonKeyPut,
-    PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError, Token, TokenUrls, Upload,
-    UploadId,
+    AdmissionRecord, Admitted, AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry,
+    PersonKeyId, PersonKeyPut, PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError,
+    Token, TokenUrls, Upload, UploadId,
 };
 
 /// What runs once, right before the first person-key write reaches the
@@ -99,6 +99,18 @@ impl<S: RelayStore> RelayStore for Interleave<S> {
 
     async fn members_of(&self, member: MemberId) -> Result<Vec<SpaceId>, StoreError> {
         self.inner.members_of(member).await
+    }
+
+    async fn statement(&self, identity: [u8; 32]) -> Result<Option<u64>, StoreError> {
+        self.inner.statement(identity).await
+    }
+
+    async fn admit(&self, identity: [u8; 32], admitted: Admitted) -> Result<(), StoreError> {
+        self.inner.admit(identity, admitted).await
+    }
+
+    async fn admission(&self, identity: [u8; 32]) -> Result<Option<AdmissionRecord>, StoreError> {
+        self.inner.admission(identity).await
     }
 
     async fn person_keys(&self, space: SpaceId) -> Result<Vec<PersonKeyRecord>, StoreError> {

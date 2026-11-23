@@ -8,7 +8,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member f
 
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0006: The local view on SQLite](https://github.com/nocentraldb/nocentraldb/discussions/146), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Decided by the owner (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Partly built. Built: the fold, the rebuild, declared indexes and ordered pages, natively and in the browser on `opfs-sahpool`, with the owning tab and `db.durability`. Not built: the TypeScript SDK's native addon for Node.js, the Derive step of computed fields, and folding or restoring changes received directly from another member.
 
@@ -441,17 +441,17 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 
 ## Decisions
 
-- **2026-11-12 · A database lives at a name on OPFS, and the SDK reports its durability.** (Carsten, 2026-11-12, NOC-231; [decision](../../factory/decisions/2026-11-12-NOC-175-a-browser-database-opens-at-a-name-on-opfs-and-durability.md))
-- **2026-11-12 · The age of a provisional erasure counts from when this device first held the shred.** (pm, 2026-11-12, NOC-234; [decision](../../factory/decisions/2026-11-12-NOC-234-a-decision-on-a-later-shred-of-a-taken-back-key-changes-nothing.md))
-- **2026-11-13 · One tab owns a browser database, and the other tabs reach it.** (pm, 2026-11-13, NOC-177; [decision](../../factory/decisions/2026-11-13-NOC-177-a-tab-with-another-lock-is-refused-and-the-owners-relay-serves-every-tab.md); [decision](../../factory/decisions/2026-11-13-NOC-177-a-write-the-lost-owner-tab-never-answered-fails-and-is-not-sent-again.md))
-- **2026-11-14 · `requestPersistent()` answers the browser's answer.** (Carsten, 2026-11-14, NOC-317; [decision](../../factory/decisions/2026-11-14-NOC-317-request-persistent-answers-the-browsers-answer.md))
-- **2026-11-15 · A hidden owner tab gives the database up.** (Carsten, 2026-11-15, NOC-333; [decision](../../factory/decisions/2026-11-15-NOC-333-a-hidden-owner-tab-gives-the-database-up.md))
-- **2026-11-15 · Which object each copy came from is a device-local table, `ad_hoc_copies`.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q5-the-copies-are-a-device-local-table.md))
-- **2026-11-16 · The owner's worker gives the storage back itself, and the next worker waits for it.** (pm, 2026-11-16, NOC-352; [decision](../../factory/decisions/2026-11-16-NOC-352-the-owners-worker-gives-the-storage-back-and-the-next-waits-for-it.md))
-- **2026-11-16 · A tab that waits for another tab's storage reports `waitingForTab` after 1 s.** (Carsten, 2026-11-16, NOC-355; [decision](../../factory/decisions/2026-11-16-NOC-355-a-tab-that-waits-for-another-tabs-storage-reports-waitingfortab-after-1-s.md))
-- **2026-11-16 · A browser window without OPFS refuses to open with `storageUnavailable`.** (Carsten, 2026-11-16, NOC-347; [decision](../../factory/decisions/2026-11-16-NOC-347-a-browser-window-without-opfs-refuses-to-open.md))
-- **2026-11-23 · A browser database whose files the browser dropped is refused with `storageLost`, until the app opens it with `ifStorageLost: "open-empty"`.** (pm, 2026-11-23, NOC-445, option B with A; the names and refusing over a flag await the owner's review; [decision](../../factory/decisions/2026-11-23-NOC-445-a-browser-database-whose-files-were-dropped-is-refused-with-storagelost.md))
-- **2026-11-16 · RFC 0012 replaces the owning tab: every tab takes the database per transaction, after 0.1.** (Carsten, 2026-11-16, NOC-357; [decision](../../factory/decisions/2026-11-16-NOC-357-browser-tabs-take-the-database-per-transaction.md); [decision](../../factory/decisions/2026-11-16-NOC-357-every-browser-tab-opens-the-database-itself-on-the-same-relay.md))
+- **2026-11-12 · A database lives at a name on OPFS, and the SDK reports its durability.** ([decision](../../factory/decisions/2026-11-12-NOC-175-a-browser-database-opens-at-a-name-on-opfs-and-durability.md))
+- **2026-11-12 · The age of a provisional erasure counts from when this device first held the shred.** ([decision](../../factory/decisions/2026-11-12-NOC-234-a-decision-on-a-later-shred-of-a-taken-back-key-changes-nothing.md))
+- **2026-11-13 · One tab owns a browser database, and the other tabs reach it.** ([decision](../../factory/decisions/2026-11-13-NOC-177-a-tab-with-another-lock-is-refused-and-the-owners-relay-serves-every-tab.md); [decision](../../factory/decisions/2026-11-13-NOC-177-a-write-the-lost-owner-tab-never-answered-fails-and-is-not-sent-again.md))
+- **2026-11-14 · `requestPersistent()` answers the browser's answer.** ([decision](../../factory/decisions/2026-11-14-NOC-317-request-persistent-answers-the-browsers-answer.md))
+- **2026-11-15 · A hidden owner tab gives the database up.** ([decision](../../factory/decisions/2026-11-15-NOC-333-a-hidden-owner-tab-gives-the-database-up.md))
+- **2026-11-15 · Which object each copy came from is a device-local table, `ad_hoc_copies`.** ([decision](../../factory/decisions/2026-11-15-NOC-320-q5-the-copies-are-a-device-local-table.md))
+- **2026-11-16 · The owner's worker gives the storage back itself, and the next worker waits for it.** ([decision](../../factory/decisions/2026-11-16-NOC-352-the-owners-worker-gives-the-storage-back-and-the-next-waits-for-it.md))
+- **2026-11-16 · A tab that waits for another tab's storage reports `waitingForTab` after 1 s.** ([decision](../../factory/decisions/2026-11-16-NOC-355-a-tab-that-waits-for-another-tabs-storage-reports-waitingfortab-after-1-s.md))
+- **2026-11-16 · A browser window without OPFS refuses to open with `storageUnavailable`.** ([decision](../../factory/decisions/2026-11-16-NOC-347-a-browser-window-without-opfs-refuses-to-open.md))
+- **2026-11-16 · RFC 0012 replaces the owning tab: every tab takes the database per transaction, after 0.1.** ([decision](../../factory/decisions/2026-11-16-NOC-357-browser-tabs-take-the-database-per-transaction.md); [decision](../../factory/decisions/2026-11-16-NOC-357-every-browser-tab-opens-the-database-itself-on-the-same-relay.md))
+- **2026-11-23 · A browser database whose files the browser dropped is refused with `storageLost`, until the app opens it with `ifStorageLost: "open-empty"`.** ([decision](../../factory/decisions/2026-11-23-NOC-445-a-browser-database-whose-files-were-dropped-is-refused-with-storagelost.md))
 
 ## History
 
@@ -470,4 +470,5 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 - 2026-11-19 · The table `ad_hoc_copies`, what a rebuild keeps, and RFC 0012's verdict on `OPFSCoopSyncVFS` (NOC-362, #389)
 - 2026-11-20 · A plain introduction to the ideas behind it, and its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-21 · A day and a point in time sort as numbers, in time order (NOC-412, #430)
+- 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
 - 2026-11-23 · nc.open reports a browser database whose files Chromium dropped in a private window with storageLost (NOC-445)

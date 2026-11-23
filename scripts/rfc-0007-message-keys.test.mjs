@@ -51,6 +51,7 @@ const MESSAGES = [
   ["ok", "relay → member", "2 req"],
   ["upload", "member → relay", "2 req, 3 space, 4 size"],
   ["upload", "relay → member", "2 req, 3 id, 4 url"],
+  ["admit", "member → relay", "2 req, 3 admission"],
   ["ping", "member → relay", "2 req"],
   ["pong", "relay → member", "2 req"],
   ["error", "relay → member", "2 req, 3 code, 4 retry after, 5 removal"],
