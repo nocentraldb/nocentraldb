@@ -6,11 +6,18 @@
 // untouched.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { parse as parseYaml } from "yaml";
 
 const script = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -345,4 +352,13 @@ test("a --base that does not exist is an error, never a pass", () => {
   const { status, out } = check(dir, ["--base", "nowhere"]);
   assert.equal(status, 1, out);
   assert.match(out, /nowhere/);
+});
+
+test("pnpm gates runs the check as repo:test-changes, uncached, against origin/main", () => {
+  const root = join(dirname(script), "..");
+  const moon = parseYaml(readFileSync(join(root, "moon.yml"), "utf8"));
+  const task = moon.tasks["test-changes"];
+  assert.equal(task?.command, "node scripts/check-test-changes.mjs");
+  assert.equal(task.options?.cache, false, "its answer depends on git, no input");
+  assert.ok(moon.tasks.gates.deps.includes("~:test-changes"));
 });
