@@ -10,7 +10,7 @@ use ncdb_core::change::{Change, Kind};
 use ncdb_core::ids::ObjectId as CoreObjectId;
 use ncdb_core::receive::Checks;
 
-use crate::{Db, OpenOptions, Space, Value};
+use crate::{Db, ErrorCode, OpenOptions, Space, Value};
 
 const LOCK: &str = include_str!("../tests/model/model.lock.json");
 
@@ -131,6 +131,7 @@ fn a_single_operation_above_the_limit_is_refused_and_nothing_is_written() {
     }));
 
     let error = refused.expect_err("an operation above the limit is refused");
+    assert_eq!(error.code(), ErrorCode::TooLarge);
     assert!(
         error.to_string().contains(&RELAY_LIMIT.to_string()),
         "{error}"
@@ -157,6 +158,7 @@ fn an_object_whose_operations_together_exceed_the_limit_is_refused() {
     }));
 
     let error = refused.expect_err("an object above the limit is refused");
+    assert_eq!(error.code(), ErrorCode::TooLarge);
     assert!(
         error.to_string().contains(&RELAY_LIMIT.to_string()),
         "{error}"

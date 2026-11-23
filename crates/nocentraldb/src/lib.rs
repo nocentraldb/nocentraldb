@@ -58,6 +58,7 @@ mod pairing;
 mod personal;
 mod query;
 mod space;
+mod split;
 mod status;
 mod subscribe;
 mod sync;
