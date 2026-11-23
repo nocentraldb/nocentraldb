@@ -5,7 +5,7 @@
 //!
 //! `admit` is one `UpdateItem` that sets the first three and keeps
 //! `created`, starting it at 0 for a new identity. An append raises
-//! `created` with an update in its own transaction, on the condition that
+//! `created` with an `ADD` in its own transaction, on the condition that
 //! the item exists and `created` is below `spaces`, so two appends at once
 //! cannot exceed it.
 
@@ -75,12 +75,15 @@ pub async fn admission(
 }
 
 /// The update that raises the identity's count by one, on the condition
-/// that it has an admission and its count is below its spaces.
+/// that it has an admission and its count is below its spaces. It is an
+/// `ADD`, not `SET created = created + 1`: DynamoDB refuses the latter with
+/// a `ValidationException`, before it checks the condition, when the
+/// identity has no item, where the append must answer `AdmissionSpent`.
 pub fn count(aws: &Aws, identity: [u8; 32]) -> Result<TransactWriteItem, StoreError> {
     let update = Update::builder()
         .table_name(&aws.names.spaces)
         .key("space", b(&admission_key(identity)))
-        .update_expression("SET #created = #created + :one")
+        .update_expression("ADD #created :one")
         .condition_expression("attribute_exists(#created) AND #created < #spaces")
         .expression_attribute_names("#created", "created")
         .expression_attribute_names("#spaces", "spaces")
