@@ -309,8 +309,9 @@ fn elements(
     }
 }
 
-/// The space `edits` go to and the edits, checked against the later
-/// edits of `space` now.
+/// The space `edits` go to and the edits as this space holds them,
+/// checked against its later edits now: the caller's copy of an edit is
+/// only a name for it.
 fn plan(
     inner: &Inner,
     space: SpaceId,
@@ -318,45 +319,33 @@ fn plan(
 ) -> Result<(SpaceId, Vec<LaterEdit>), Error> {
     let now = later_edits(inner, space)?;
     let mut to = BTreeSet::new();
+    let mut plan = Vec::new();
     for edit in edits {
-        let found = now.iter().find(|later| {
-            later.id == edit.object
-                && later
-                    .edits
-                    .iter()
-                    .any(|e| e.change == edit.change && e.position == edit.position)
+        let held = now.iter().find_map(|later| {
+            let held = later.edits.iter().find(|e| {
+                e.object == edit.object && e.change == edit.change && e.position == edit.position
+            })?;
+            Some((later.moved_to, held))
         });
-        let Some(later) = found else {
+        let Some((moved_to, held)) = held else {
             return Err(Error::new(
                 ErrorCode::InvalidValue,
                 crate::texts::error::no_later_edit(edit.position, edit.change, edit.object),
             ));
         };
-        if let Edit::Other = edit.edit {
+        if let Edit::Other = held.edit {
             return Err(Error::new(
                 ErrorCode::NotAllowed,
                 crate::texts::error::carry_over_unreadable(edit.position, edit.change),
             ));
         }
-        to.insert(later.moved_to);
+        to.insert(moved_to);
+        plan.push(held.clone());
     }
     let mut to = to.into_iter();
     match (to.next(), to.next()) {
-        (Some(space), None) => {
-            // The edit as this space holds it, not as the caller passed it.
-            let plan = edits
-                .iter()
-                .map(|edit| {
-                    now.iter()
-                        .flat_map(|later| &later.edits)
-                        .find(|e| e.change == edit.change && e.position == edit.position)
-                        .cloned()
-                        .expect("checked above")
-                })
-                .collect();
-            Ok((space, plan))
-        }
-        (None, _) => Ok((space, Vec::new())),
+        (Some(destination), None) => Ok((destination, plan)),
+        (None, _) => Ok((space, plan)),
         _ => Err(Error::new(
             ErrorCode::InvalidValue,
             crate::texts::error::CARRY_OVER_TO_SEVERAL_SPACES,

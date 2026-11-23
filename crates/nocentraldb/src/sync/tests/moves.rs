@@ -211,3 +211,110 @@ async fn a_later_tag_and_a_later_delete_carry_over_as_one_write() {
         [Value::from("late")]
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn later_edits_of_objects_moved_to_two_spaces_carry_over_one_space_at_a_time() {
+    let relay = LocalRelay::start().await;
+    let a = open(A, &relay.url()).await;
+    let b = open(B, &relay.url()).await;
+    let (project, on_b, first) = shared_task(&a, &b).await;
+    let second = now(project.write(|tx| {
+        tx.create("tasks", [("title", Value::from("second"))])?;
+        Ok(())
+    }))
+    .unwrap()
+    .ids[0];
+    let (one, two) = (
+        now(a.spaces().create()).unwrap(),
+        now(a.spaces().create()).unwrap(),
+    );
+    synced(&a).await;
+    eventually("B holds the second task", || {
+        now(on_b.get("tasks", second)).unwrap().is_some()
+    })
+    .await;
+
+    relay.proxy.cut();
+    let read = now(project.get("tasks", first)).unwrap().unwrap();
+    now(project.move_objects(&[read], &one)).unwrap();
+    let read = now(project.get("tasks", second)).unwrap().unwrap();
+    now(project.move_objects(&[read], &two)).unwrap();
+    now(on_b.write(|tx| {
+        tx.update("tasks", first, [("title", Value::from("b1"))])?;
+        tx.update("tasks", second, [("title", Value::from("b2"))])
+    }))
+    .unwrap();
+    relay.proxy.restore();
+    synced(&a).await;
+    synced(&b).await;
+    holds_all(&relay, &a, &project).await;
+
+    let later = now(project.moves().later_edits()).unwrap();
+    assert_eq!(later.len(), 2);
+    let all: Vec<_> = later.iter().flat_map(|l| l.edits.clone()).collect();
+    let refused = now(project.moves().carry_over(&all)).unwrap_err();
+    assert_eq!(refused.code(), ErrorCode::InvalidValue);
+    for edits in &later {
+        now(project.moves().carry_over(&edits.edits)).unwrap();
+    }
+    let one_read = now(one.get("tasks", first)).unwrap().unwrap();
+    assert_eq!(one_read.get::<&str>("title").unwrap(), Some("b1"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_later_personal_value_is_read_as_other_and_not_carried_over() {
+    // `tasks.title` is personal to the task's project; the moved task
+    // holds no title, so it moves, and B's title written while it moved
+    // is a sealed value this SDK does not carry over (NOC-477).
+    let lock = LOCK.replacen(
+        r#""title": { "rule": 1, "since": 1, "type": "ncdb/string" }"#,
+        r#""title": { "personal": { "person": "project" }, "rule": 1, "since": 1, "type": "ncdb/string" }"#,
+        1,
+    );
+    let relay = LocalRelay::start().await;
+    let a = open_with(A, &relay.url(), &lock).await;
+    let b = open_with(B, &relay.url(), &lock).await;
+    let space = now(a.spaces().create()).unwrap();
+    let written = now(space.write(|tx| {
+        let project = tx.create("projects", [("name", Value::from("p"))])?;
+        tx.create("tasks", [("project", Value::from(project))])?;
+        Ok(())
+    }))
+    .unwrap();
+    let (project, task) = (written.ids[0], written.ids[1]);
+    let writer = AddMember {
+        role: Role::Writer,
+        fingerprint: None,
+    };
+    now(space.members().add(&now(b.invitation()), writer)).unwrap();
+    let private = now(a.spaces().create()).unwrap();
+    synced(&a).await;
+    let mut on_b = Err(());
+    eventually("B holds the task", || {
+        on_b = now(b.spaces().get(space.id())).map_err(|_| ());
+        on_b.as_ref()
+            .is_ok_and(|s| now(s.get("tasks", task)).unwrap().is_some())
+    })
+    .await;
+    let on_b = on_b.unwrap();
+
+    relay.proxy.cut();
+    let read = [
+        now(space.get("projects", project)).unwrap().unwrap(),
+        now(space.get("tasks", task)).unwrap().unwrap(),
+    ];
+    // The project's name is not personal; the task's title is unset.
+    now(space.move_objects(&read, &private)).unwrap();
+    let wrote = now(on_b.update("tasks", task, [("title", Value::from("secret"))]));
+    relay.proxy.restore();
+    wrote.expect("B holds the project's person key once it synced");
+    synced(&a).await;
+    synced(&b).await;
+    holds_all(&relay, &a, &space).await;
+
+    let later = now(space.moves().later_edits()).unwrap();
+    let edit = &later[0].edits[0];
+    assert_eq!(edit.edit, Edit::Other);
+    let refused = now(space.moves().carry_over(std::slice::from_ref(edit))).unwrap_err();
+    assert_eq!(refused.code(), ErrorCode::NotAllowed);
+}
