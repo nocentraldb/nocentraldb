@@ -12,7 +12,10 @@ function pastGroup(text, start) {
   let depth = 0;
   for (let i = start; i < text.length; i += 1) {
     if (OPEN.includes(text[i])) depth += 1;
-    else if (CLOSE.includes(text[i]) && (depth -= 1) === 0) return i + 1;
+    else if (CLOSE.includes(text[i])) {
+      depth -= 1;
+      if (depth === 0) return i + 1;
+    }
   }
   return text.length;
 }
@@ -27,8 +30,10 @@ function statementEnd(text, start) {
   for (let i = start; i < text.length; i += 1) {
     const c = text[i];
     if (OPEN.includes(c)) depth += 1;
-    else if (CLOSE.includes(c) && (depth -= 1) < 0) return i;
-    else if (depth === 0 && (c === ";" || c === ",")) return i;
+    else if (CLOSE.includes(c)) {
+      depth -= 1;
+      if (depth < 0) return i;
+    } else if (depth === 0 && (c === ";" || c === ",")) return i;
     else if (depth === 0 && c === "\n" && !/^\s*\??\./.test(text.slice(i)))
       return i;
   }

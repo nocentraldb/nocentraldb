@@ -83,8 +83,7 @@ const check = (dir, args = ["--base", "main", "--head", "HEAD"], env = {}) => {
 const pr = (base, head, message = "NOC-1: change") =>
   check(repo(base, [{ files: head, message }]));
 
-const rust = (...tests) =>
-  `use crate::x;\n\n${tests.join("\n")}`;
+const rust = (...tests) => `use crate::x;\n\n${tests.join("\n")}`;
 const rustTest = (name, body = "assert_eq!(1 + 1, 2);", attrs = "#[test]") =>
   `${attrs}\nfn ${name}() {\n    ${body}\n}\n`;
 const ts = (...tests) =>
@@ -114,7 +113,10 @@ test("a removed TypeScript it or test is flagged by name", () => {
     { [TS]: ts(tsTest("keeps")), "scripts/b.test.mjs": null },
   );
   assert.equal(status, 1, out);
-  assert.match(out, /packages\/sdk\/test\/a\.test\.ts: removes the test `goes`/);
+  assert.match(
+    out,
+    /packages\/sdk\/test\/a\.test\.ts: removes the test `goes`/,
+  );
   assert.match(out, /scripts\/b\.test\.mjs: removes the test `node goes`/);
   assert.doesNotMatch(out, /`keeps`/);
 });
@@ -153,10 +155,19 @@ test("a new .skip, .only or skip option on a TypeScript test is flagged", () => 
     [tsTest("runs", undefined, "it.todo"), "it.todo"],
     [`describe.skip("all", () => {\n${tsTest("runs")}});\n`, "describe.skip"],
     [`xit("runs", () => {\n  expect(1 + 1).toBe(2);\n});\n`, "xit"],
-    [`it("runs", { skip: true }, () => {\n  expect(1 + 1).toBe(2);\n});\n`, "skip:"],
-    [`it("runs", (t) => {\n  t.skip();\n  expect(1 + 1).toBe(2);\n});\n`, "t.skip"],
+    [
+      `it("runs", { skip: true }, () => {\n  expect(1 + 1).toBe(2);\n});\n`,
+      "skip:",
+    ],
+    [
+      `it("runs", (t) => {\n  t.skip();\n  expect(1 + 1).toBe(2);\n});\n`,
+      "t.skip",
+    ],
   ]) {
-    const { status, out } = pr({ [TS]: ts(tsTest("runs")) }, { [TS]: ts(head) });
+    const { status, out } = pr(
+      { [TS]: ts(tsTest("runs")) },
+      { [TS]: ts(head) },
+    );
     assert.equal(status, 1, `${marker}\n${out}`);
     assert.ok(
       out.includes(`packages/sdk/test/a.test.ts: adds \`${marker}\``),
@@ -166,7 +177,9 @@ test("a new .skip, .only or skip option on a TypeScript test is flagged", () => 
 });
 
 test("an ignored test or a skip marker that was there before is not flagged", () => {
-  const ignored = rust(rustTest("slow", undefined, '#[test]\n#[ignore = "slow"]'));
+  const ignored = rust(
+    rustTest("slow", undefined, '#[test]\n#[ignore = "slow"]'),
+  );
   const skipped = ts(tsTest("later", undefined, "it.skip"));
   const { status, out } = pr(
     { [RS]: ignored, [TS]: skipped },
@@ -178,8 +191,15 @@ test("an ignored test or a skip marker that was there before is not flagged", ()
 test("a removed Rust assert or TypeScript expect is flagged", () => {
   const { status, out } = pr(
     {
-      [RS]: rust(rustTest("one", "assert!(ready());\n    assert_eq!(count(), 2);")),
-      [TS]: ts(tsTest("one", "expect(ready()).toBe(true);\n  expect(count()).toBe(2);")),
+      [RS]: rust(
+        rustTest("one", "assert!(ready());\n    assert_eq!(count(), 2);"),
+      ),
+      [TS]: ts(
+        tsTest(
+          "one",
+          "expect(ready()).toBe(true);\n  expect(count()).toBe(2);",
+        ),
+      ),
       "scripts/b.test.mjs": `test("b", () => {\n  assert.equal(count(), 2);\n  assert.ok(ready());\n});\n`,
     },
     {
@@ -189,9 +209,24 @@ test("a removed Rust assert or TypeScript expect is flagged", () => {
     },
   );
   assert.equal(status, 1, out);
-  assert.ok(out.includes(`${RS}: removes or rewrites the assertion \`assert_eq!(count(), 2)\``), out);
-  assert.ok(out.includes(`${TS}: removes or rewrites the assertion \`expect(count()).toBe(2)\``), out);
-  assert.ok(out.includes("scripts/b.test.mjs: removes or rewrites the assertion `assert.equal(count(), 2)`"), out);
+  assert.ok(
+    out.includes(
+      `${RS}: removes or rewrites the assertion \`assert_eq!(count(), 2)\``,
+    ),
+    out,
+  );
+  assert.ok(
+    out.includes(
+      `${TS}: removes or rewrites the assertion \`expect(count()).toBe(2)\``,
+    ),
+    out,
+  );
+  assert.ok(
+    out.includes(
+      "scripts/b.test.mjs: removes or rewrites the assertion `assert.equal(count(), 2)`",
+    ),
+    out,
+  );
   assert.doesNotMatch(out, /ready/);
 });
 
@@ -208,7 +243,10 @@ test("an assertion inside a Rust #[cfg(test)] module counts, one outside does no
     { "crates/a/src/lib.rs": src("", "assert!(x > 0);") },
   );
   assert.equal(removed.status, 1, removed.out);
-  assert.match(removed.out, /removes or rewrites the assertion `assert_eq!\(f\(1\), \(\)\)`/);
+  assert.match(
+    removed.out,
+    /removes or rewrites the assertion `assert_eq!\(f\(1\), \(\)\)`/,
+  );
 });
 
 test("a changed literal in an assertion is flagged with both versions", () => {
@@ -223,8 +261,18 @@ test("a changed literal in an assertion is flagged with both versions", () => {
     },
   );
   assert.equal(status, 1, out);
-  assert.ok(out.includes(`${RS}: changes an expected value: \`assert_eq!(name(), "alpha")\` became \`assert_eq!(name(), "beta")\``), out);
-  assert.ok(out.includes(`${TS}: changes an expected value: \`expect(count()).toBe(2)\` became \`expect(count()).toBe(3)\``), out);
+  assert.ok(
+    out.includes(
+      `${RS}: changes an expected value: \`assert_eq!(name(), "alpha")\` became \`assert_eq!(name(), "beta")\``,
+    ),
+    out,
+  );
+  assert.ok(
+    out.includes(
+      `${TS}: changes an expected value: \`expect(count()).toBe(2)\` became \`expect(count()).toBe(3)\``,
+    ),
+    out,
+  );
 });
 
 test("an assertion only reformatted or moved to another file is not flagged", () => {
@@ -234,9 +282,13 @@ test("an assertion only reformatted or moved to another file is not flagged", ()
       [RS]: rust(rustTest("one", "assert_eq!(count(), 2);")),
     },
     {
-      [TS]: ts(tsTest("one", "expect(count()).toEqual([\n    1,\n    2,\n  ]);")),
+      [TS]: ts(
+        tsTest("one", "expect(count()).toEqual([\n    1,\n    2,\n  ]);"),
+      ),
       [RS]: rust(rustTest("one", "helper();")),
-      "crates/a/tests/b.rs": rust("fn helper() {\n    assert_eq!( count(), 2 );\n}\n"),
+      "crates/a/tests/b.rs": rust(
+        "fn helper() {\n    assert_eq!( count(), 2 );\n}\n",
+      ),
     },
   );
   assert.equal(status, 0, out);
@@ -249,13 +301,20 @@ const REMOVED = [
 
 test("a flagged pull request passes with a Test-change trailer in one of its commits", () => {
   const dir = repo(REMOVED[0], [
-    { files: REMOVED[1], message: "NOC-1: drop the goes test\n\nTest-change: goes duplicated keeps since NOC-7" },
+    {
+      files: REMOVED[1],
+      message:
+        "NOC-1: drop the goes test\n\nTest-change: goes duplicated keeps since NOC-7",
+    },
     { files: { "README.md": "later\n" }, message: "NOC-1: docs" },
   ]);
   const { status, out } = check(dir);
   assert.equal(status, 0, out);
   assert.match(out, /removes the test `goes`/);
-  assert.match(out, /Test-change: goes duplicated keeps since NOC-7 \([0-9a-f]{7}\)/);
+  assert.match(
+    out,
+    /Test-change: goes duplicated keeps since NOC-7 \([0-9a-f]{7}\)/,
+  );
 });
 
 test("a flagged pull request without the trailer fails and says how to pass", () => {
@@ -266,7 +325,16 @@ test("a flagged pull request without the trailer fails and says how to pass", ()
 });
 
 test("a trailer that names no reason in words does not count", () => {
-  for (const reason of ["", "-", "n/a", "none", "<reason>", "TODO", "fix", "x y"]) {
+  for (const reason of [
+    "",
+    "-",
+    "n/a",
+    "none",
+    "<reason>",
+    "TODO",
+    "fix",
+    "x y",
+  ]) {
     const message = `NOC-1: drop\n\nTest-change: ${reason}`;
     const { status, out } = pr(...REMOVED, message);
     assert.equal(status, 1, `${JSON.stringify(reason)}\n${out}`);
@@ -277,7 +345,13 @@ test("a trailer in a commit of the base branch does not count", () => {
   const dir = repo(REMOVED[0], [{ files: REMOVED[1], message: "NOC-1: drop" }]);
   const git = gitIn(dir);
   git(["checkout", "--quiet", "main"]);
-  git(["commit", "--quiet", "--allow-empty", "-m", "NOC-2: other\n\nTest-change: another pull request's reason"]);
+  git([
+    "commit",
+    "--quiet",
+    "--allow-empty",
+    "-m",
+    "NOC-2: other\n\nTest-change: another pull request's reason",
+  ]);
   git(["checkout", "--quiet", "pr"]);
   git(["merge", "--quiet", "--no-edit", "main"]);
   const { status, out } = check(dir);
@@ -299,18 +373,35 @@ test("a pull request that only adds tests passes untouched", () => {
 
 test("tests, markers and assertions in strings and comments do not count", () => {
   const rsBase = rust(
-    rustTest("one", 'let s = "#[test] fn gone() {} assert!(x)";\n    // assert_eq!(a, 1);\n    assert_eq!(s.len(), 2);'),
+    rustTest(
+      "one",
+      'let s = "#[test] fn gone() {} assert!(x)";\n    // assert_eq!(a, 1);\n    assert_eq!(s.len(), 2);',
+    ),
   );
   const rsHead = rust(
-    rustTest("one", 'let s = r#"#[ignore] fn x() {} "#;\n    /* assert!(y) */\n    let c = \'(\';\n    assert_eq!(s.len(), 2);'),
+    rustTest(
+      "one",
+      "let s = r#\"#[ignore] fn x() {} \"#;\n    /* assert!(y) */\n    let c = '(';\n    assert_eq!(s.len(), 2);",
+    ),
   );
   const tsBase = ts(
-    tsTest("one", 'const s = "it(\\"ghost\\", () => {})";\n  // expect(a).toBe(1);\n  expect(s.length).toBe(2);'),
+    tsTest(
+      "one",
+      'const s = "it(\\"ghost\\", () => {})";\n  // expect(a).toBe(1);\n  expect(s.length).toBe(2);',
+    ),
   );
   const tsHead = ts(
-    tsTest("one", "const s = `it.skip(${\"x\"}) skip: t.skip()`;\n  const r = /[(]\\)/;\n  /* expect(b).toBe(2); */\n  expect(s.length).toBe(2);"),
+    tsTest(
+      "one",
+      // A template literal with an expression: `it.skip(${"x"}) …`.
+      "const s = `it.skip($" +
+        '{"x"}) skip: t.skip()`;\n  const r = /[(]\\)/;\n  /* expect(b).toBe(2); */\n  expect(s.length).toBe(2);',
+    ),
   );
-  const { status, out } = pr({ [RS]: rsBase, [TS]: tsBase }, { [RS]: rsHead, [TS]: tsHead });
+  const { status, out } = pr(
+    { [RS]: rsBase, [TS]: tsBase },
+    { [RS]: rsHead, [TS]: tsHead },
+  );
   assert.deepEqual({ status, out }, { status: 0, out: "" });
 });
 
@@ -318,21 +409,35 @@ test("an assertion with a bracket in a string is read to its real end", () => {
   const { status, out } = pr(
     {
       [RS]: rust(rustTest("one", 'assert_eq!(f(")"), 1);\n    assert!(g());')),
-      [TS]: ts(tsTest("one", 'expect(f(")")).toBe(1);\n  expect(g()).toBe(true);')),
+      [TS]: ts(
+        tsTest("one", 'expect(f(")")).toBe(1);\n  expect(g()).toBe(true);'),
+      ),
     },
     {
       [RS]: rust(rustTest("one", 'assert_eq!(f(")"), 2);\n    assert!(g());')),
-      [TS]: ts(tsTest("one", 'expect(f(")")).toBe(2);\n  expect(g()).toBe(true);')),
+      [TS]: ts(
+        tsTest("one", 'expect(f(")")).toBe(2);\n  expect(g()).toBe(true);'),
+      ),
     },
   );
   assert.equal(status, 1, out);
-  assert.ok(out.includes('`assert_eq!(f(")"), 1)` became `assert_eq!(f(")"), 2)`'), out);
-  assert.ok(out.includes('`expect(f(")")).toBe(1)` became `expect(f(")")).toBe(2)`'), out);
+  assert.ok(
+    out.includes('`assert_eq!(f(")"), 1)` became `assert_eq!(f(")"), 2)`'),
+    out,
+  );
+  assert.ok(
+    out.includes('`expect(f(")")).toBe(1)` became `expect(f(")")).toBe(2)`'),
+    out,
+  );
   assert.doesNotMatch(out, /g\(\)/);
 });
 
 test("without --base it compares with origin/main, as pnpm gates runs it", () => {
-  const dir = repo(...REMOVED.map((files, i) => (i ? [{ files, message: "NOC-1: drop" }] : files)));
+  const dir = repo(
+    ...REMOVED.map((files, i) =>
+      i ? [{ files, message: "NOC-1: drop" }] : files,
+    ),
+  );
   gitIn(dir)(["update-ref", "refs/remotes/origin/main", "main"]);
   const { status, out } = check(dir, []);
   assert.equal(status, 1, out);
@@ -340,7 +445,11 @@ test("without --base it compares with origin/main, as pnpm gates runs it", () =>
 });
 
 test("without --base and without origin/main it says it compared nothing, and passes", () => {
-  const dir = repo(...REMOVED.map((files, i) => (i ? [{ files, message: "NOC-1: drop" }] : files)));
+  const dir = repo(
+    ...REMOVED.map((files, i) =>
+      i ? [{ files, message: "NOC-1: drop" }] : files,
+    ),
+  );
   const { status, out } = check(dir, []);
   assert.equal(status, 0, out);
   assert.match(out, /no origin\/main/);
@@ -348,7 +457,11 @@ test("without --base and without origin/main it says it compared nothing, and pa
 });
 
 test("a --base that does not exist is an error, never a pass", () => {
-  const dir = repo(...REMOVED.map((files, i) => (i ? [{ files, message: "NOC-1: drop" }] : files)));
+  const dir = repo(
+    ...REMOVED.map((files, i) =>
+      i ? [{ files, message: "NOC-1: drop" }] : files,
+    ),
+  );
   const { status, out } = check(dir, ["--base", "nowhere"]);
   assert.equal(status, 1, out);
   assert.match(out, /nowhere/);
@@ -359,6 +472,10 @@ test("pnpm gates runs the check as repo:test-changes, uncached, against origin/m
   const moon = parseYaml(readFileSync(join(root, "moon.yml"), "utf8"));
   const task = moon.tasks["test-changes"];
   assert.equal(task?.command, "node scripts/check-test-changes.mjs");
-  assert.equal(task.options?.cache, false, "its answer depends on git, no input");
+  assert.equal(
+    task.options?.cache,
+    false,
+    "its answer depends on git, no input",
+  );
   assert.ok(moon.tasks.gates.deps.includes("~:test-changes"));
 });

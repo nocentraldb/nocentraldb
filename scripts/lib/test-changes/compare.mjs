@@ -56,7 +56,10 @@ function assertionFindings(base, head) {
  */
 export function compare(base, head) {
   const findings = [];
-  const counts = (pick, key) => [tally(base, pick, key), tally(head, pick, key)];
+  const counts = (pick, key) => [
+    tally(base, pick, key),
+    tally(head, pick, key),
+  ];
   const name = (t) => t.name;
   const [testsBefore, testsAfter] = counts((s) => s.tests, name);
   for (const t of lost(testsBefore, testsAfter)) {
@@ -66,7 +69,10 @@ export function compare(base, head) {
   for (const t of lost(ignoredAfter, ignoredBefore)) {
     findings.push({ ...t, text: `ignores the test \`${t.name}\`` });
   }
-  const [markersBefore, markersAfter] = counts((s) => s.markers, (m) => m.key);
+  const [markersBefore, markersAfter] = counts(
+    (s) => s.markers,
+    (m) => m.key,
+  );
   for (const m of lost(markersAfter, markersBefore)) {
     findings.push({ ...m, text: `adds \`${m.key}\`` });
   }

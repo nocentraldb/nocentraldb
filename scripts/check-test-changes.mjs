@@ -21,10 +21,10 @@
 // finding (a git error is a failure too, never a pass), 2 on a usage error.
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { changedPaths, fileAt, git, mergeBase } from "./release/lib/git.mjs";
 import { compare } from "./lib/test-changes/compare.mjs";
 import { kindOf } from "./lib/test-changes/files.mjs";
 import { scan } from "./lib/test-changes/scan.mjs";
+import { changedPaths, fileAt, git, mergeBase } from "./release/lib/git.mjs";
 
 const NAME = "check-test-changes";
 const USAGE = `usage: ${NAME} [--base <rev>] [--head <rev>]`;
@@ -36,7 +36,8 @@ function parseArgs(argv) {
     const flag = argv[i];
     if (flag === "--base" || flag === "--head") {
       if (argv[i + 1] === undefined) return null;
-      args[flag.slice(2)] = argv[(i += 1)];
+      i += 1;
+      args[flag.slice(2)] = argv[i];
     } else {
       return null;
     }

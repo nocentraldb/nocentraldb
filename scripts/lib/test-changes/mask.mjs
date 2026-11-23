@@ -26,7 +26,8 @@ function pastTemplate(text, i) {
   for (let j = i + 1; j < text.length; j += 1) {
     if (text[j] === "\\") j += 1;
     else if (text[j] === "`") return j + 1;
-    else if (text[j] === "$" && text[j + 1] === "{") j = pastCode(text, j + 2) - 1;
+    else if (text[j] === "$" && text[j + 1] === "{")
+      j = pastCode(text, j + 2) - 1;
   }
   return text.length;
 }
@@ -39,7 +40,10 @@ function pastCode(text, i) {
     if (c === '"' || c === "'") j = pastQuoted(text, j, c) - 1;
     else if (c === "`") j = pastTemplate(text, j) - 1;
     else if (c === "{") depth += 1;
-    else if (c === "}" && (depth -= 1) < 0) return j + 1;
+    else if (c === "}") {
+      depth -= 1;
+      if (depth < 0) return j + 1;
+    }
   }
   return text.length;
 }
@@ -115,7 +119,8 @@ export function mask(text, kind) {
   let i = 0;
   const literal = (end, open, close) => {
     const inner = text.slice(i + open, end - close);
-    code += text.slice(i, i + open) + blank(inner) + text.slice(end - close, end);
+    code +=
+      text.slice(i, i + open) + blank(inner) + text.slice(end - close, end);
     plain += text.slice(i, end);
     i = end;
   };
