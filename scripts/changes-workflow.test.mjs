@@ -2,14 +2,16 @@
 // check (epic mt08.q8rt §12): it runs on every pull request event that can
 // change its answer, labeled and unlabeled included, so adding or removing
 // the skip-changes label re-runs it; it reads only; it reports one job named
-// `changes`; its actions are pinned by SHA; it fetches the history the merge
-// base needs; it passes the PR's base and head and the label-derived --skip
-// to check-fragments; superseded runs are cancelled and the job is bounded.
-// Breaking-change detection (epic §14.2): cargo-semver-checks against the
-// merge base of the PR's base and head (NOC-503), allowed to fail so the
-// fragment step still runs, and the TypeScript API report against the same
-// merge base; either one's finding turns into
-// --require-breaking for check-fragments, which --skip never waives.
+// `changes`; its actions are pinned by SHA; it fetches the full history; it
+// passes the merge ref's first parent and the merge ref (HEAD^1 and HEAD)
+// and the label-derived --skip to check-fragments; superseded runs are
+// cancelled and the job is bounded. Breaking-change detection (epic §14.2):
+// cargo-semver-checks against HEAD^1, the main the PR is merged into
+// (NOC-505), allowed to fail so the fragment step still runs, and the
+// TypeScript API report against the same HEAD^1; either one's finding turns
+// into --require-breaking for check-fragments, which --skip never waives.
+// scripts/changes-workflow-merge-ref.test.mjs runs these steps against a
+// fixture merge ref.
 // cargo-semver-checks checks only the publishable crates the base also has
 // (scripts/release/semver-packages.mjs), and does not run when there are
 // none: a crate new in the pull request has no baseline (NOC-253).
@@ -63,8 +65,6 @@ const gh = (expression) => `\${{ ${expression} }}`;
 
 const TYPES = ["opened", "synchronize", "reopened", "labeled", "unlabeled"];
 const FRAGMENTS_ENV = {
-  BASE: gh("github.event.pull_request.base.sha"),
-  HEAD: gh("github.event.pull_request.head.sha"),
   SKIP: gh(
     "contains(github.event.pull_request.labels.*.name, 'skip-changes') && '--skip' || ''",
   ),
@@ -73,12 +73,13 @@ const FRAGMENTS_ENV = {
   ),
 };
 const FRAGMENTS_RUN =
-  'node scripts/release/check-fragments.mjs --base "$BASE" --head "$HEAD" $SKIP $BREAKING';
+  'node scripts/release/check-fragments.mjs --base HEAD^1 --head HEAD $SKIP $BREAKING';
 const SEMVER_ACTION = "obi1kenobi/cargo-semver-checks-action@";
-// The merge base, not the base tip: a pull request behind main must not be
-// compared with API that main changed after it forked (NOC-503).
+// The merge ref's first parent, the main the PR is merged into: neither the
+// event's base tip nor the merge base, which miss what main gained since the
+// PR's push (NOC-505).
 const BASELINE_RUN =
-  'git worktree add --detach "$RUNNER_TEMP/baseline" "$(git merge-base "$BASE" "$HEAD")"';
+  'git worktree add --detach "$RUNNER_TEMP/baseline" HEAD^1';
 const PACKAGES_RUN =
   'node scripts/release/semver-packages.mjs --baseline "$RUNNER_TEMP/baseline" >> "$GITHUB_OUTPUT"';
 const SEMVER_IF = "steps.packages.outputs.any == 'true'";
@@ -87,7 +88,7 @@ const SEMVER_NOTICE = {
   run: 'echo "::warning title=cargo-semver-checks failed::Its log above shows which item broke. If it shows no failed lint, the tool itself failed (a download or build error): re-run the job instead of adding a breaking fragment."',
 };
 const API_RUN = `set +e
-node scripts/release/api-report.mjs --base "$(git merge-base "$BASE" "$HEAD")"
+node scripts/release/api-report.mjs --base HEAD^1
 code=$?
 set -e
 echo "breaking=$([ "$code" = 3 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
@@ -206,10 +207,15 @@ const checks = [
     mutants: {
       "hard-codes SKIP to --skip": (ctx) =>
         ctx.doc.setIn([...STEPS, fragmentsStep(ctx), "env", "SKIP"], "--skip"),
-      "sets BASE to github.sha": (ctx) =>
+      "diffs from the event's base tip": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, fragmentsStep(ctx), "run"],
+          FRAGMENTS_RUN.replace("--base HEAD^1", '--base "$BASE"'),
+        ),
+      "sets BASE in the env": (ctx) =>
         ctx.doc.setIn(
           [...STEPS, fragmentsStep(ctx), "env", "BASE"],
-          gh("github.sha"),
+          gh("github.event.pull_request.base.sha"),
         ),
       "drops $SKIP from the command": (ctx) =>
         ctx.doc.setIn(
@@ -247,10 +253,7 @@ const checks = [
         "api runs before pnpm install",
       );
 
-      assert.deepEqual(all[baseline].env, {
-        BASE: gh("github.event.pull_request.base.sha"),
-        HEAD: gh("github.event.pull_request.head.sha"),
-      });
+      assert.equal(all[baseline].env, undefined);
       assert.equal(all[baseline].run, BASELINE_RUN);
 
       const sv = all[semver];
@@ -264,10 +267,7 @@ const checks = [
       assert.equal(sv["continue-on-error"], true);
 
       const report = all[api];
-      assert.deepEqual(report.env, {
-        BASE: gh("github.event.pull_request.base.sha"),
-        HEAD: gh("github.event.pull_request.head.sha"),
-      });
+      assert.equal(report.env, undefined);
       assert.equal(report.run, API_RUN);
       assert.equal(report["continue-on-error"], undefined);
 
@@ -331,22 +331,25 @@ const checks = [
         },
       "the baseline is the head": (ctx) =>
         ctx.doc.setIn(
-          [...STEPS, baselineStep(ctx), "env", "BASE"],
-          gh("github.sha"),
+          [...STEPS, baselineStep(ctx), "run"],
+          BASELINE_RUN.replace("HEAD^1", "HEAD"),
         ),
-      "the baseline is the base tip, not the merge base": (ctx) =>
+      "the baseline is the merge base of the event's base and head": (ctx) =>
         ctx.doc.setIn(
           [...STEPS, baselineStep(ctx), "run"],
-          'git worktree add --detach "$RUNNER_TEMP/baseline" "$BASE"',
+          BASELINE_RUN.replace("HEAD^1", '"$(git merge-base "$BASE" "$HEAD")"'),
         ),
-      "the baseline step has no HEAD": (ctx) =>
-        ctx.doc.deleteIn([...STEPS, baselineStep(ctx), "env", "HEAD"]),
-      "the API report diffs against the base tip, not the merge base": (ctx) =>
+      "the API report diffs against the event's base tip": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, apiStep(ctx), "run"],
+          API_RUN.replace("--base HEAD^1", '--base "$BASE"'),
+        ),
+      "the API report diffs against the merge base": (ctx) =>
         ctx.doc.setIn(
           [...STEPS, apiStep(ctx), "run"],
           API_RUN.replace(
+            "--base HEAD^1",
             '--base "$(git merge-base "$BASE" "$HEAD")"',
-            '--base "$BASE"',
           ),
         ),
       "the baseline step comes after semver": (ctx) => {
