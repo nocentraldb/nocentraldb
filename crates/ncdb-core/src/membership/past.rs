@@ -20,7 +20,10 @@ impl Past {
 
     /// How many numbers the set holds.
     pub(crate) fn len(&self) -> usize {
-        self.0.iter().map(|(start, end)| (end - start) as usize).sum()
+        self.0
+            .iter()
+            .map(|(start, end)| (end - start) as usize)
+            .sum()
     }
 
     /// The numbers of the set, ascending.

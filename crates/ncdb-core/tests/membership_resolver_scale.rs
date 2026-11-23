@@ -26,7 +26,11 @@ fn opening_a_space_of_10k_persons_folds_each_control_change_a_bounded_number_of_
     let (space, changes) = persons::chain(PERSONS);
     let mut resolver = Resolver::new(space.space);
     let resolved = resolver.resolve(&changes);
-    assert_eq!(resolver.judged(), changes.len(), "the first call judges all");
+    assert_eq!(
+        resolver.judged(),
+        changes.len(),
+        "the first call judges all"
+    );
     assert!(
         resolver.folded() <= 2 * changes.len(),
         "{} nodes folded for {} control changes",

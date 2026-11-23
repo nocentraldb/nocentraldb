@@ -396,12 +396,7 @@ fn reaches(after: &BTreeMap<ChangeId, BTreeSet<ChangeId>>, from: ChangeId, to: C
 /// subject's, needs a right above the role `r` sets, has an author
 /// sequence above `r`'s cutoff, and no valid grant of that right to its
 /// author that saw `r` is in `y`'s causal past.
-pub(crate) fn excludes(
-    r: &Node,
-    y: &Node,
-    input: &Input,
-    judged: &Judged,
-) -> bool {
+pub(crate) fn excludes(r: &Node, y: &Node, input: &Input, judged: &Judged) -> bool {
     let Some(revocation) = r.membership() else {
         return false;
     };

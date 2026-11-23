@@ -48,7 +48,12 @@ fn in_every_order(space: &Space, changes: &[Change]) -> Resolved {
         for held in 1..=order.len() {
             let held = &order[..held];
             let oracle = Resolver::from_scratch(space.space).resolve(held);
-            assert_eq!(resolver.resolve(held), oracle, "after {} changes", held.len());
+            assert_eq!(
+                resolver.resolve(held),
+                oracle,
+                "after {} changes",
+                held.len()
+            );
         }
     }
     let all = Resolver::new(space.space).resolve(changes);
@@ -157,5 +162,9 @@ fn a_chain_that_arrives_in_order_extends_the_fold_and_skips_the_folds_from_scrat
     let mut oracle = Resolver::from_scratch(s.space);
     assert_eq!(resolver.resolve(&changes), oracle.resolve(&changes));
     assert!(resolver.folded() < 10, "{} nodes folded", resolver.folded());
-    assert!(oracle.folded() > 50 * 49 / 2, "{} nodes folded", oracle.folded());
+    assert!(
+        oracle.folded() > 50 * 49 / 2,
+        "{} nodes folded",
+        oracle.folded()
+    );
 }

@@ -115,12 +115,16 @@ impl Resolver {
                 judged.judgements.insert(node.id, before.judgement);
             } else {
                 self.judged += 1;
-                let covered = running.as_ref().filter(|r| !node.gap && r.covers(&node.past));
+                let covered = running
+                    .as_ref()
+                    .filter(|r| !node.gap && r.covers(&node.past));
                 let past = match covered {
                     Some(running) => running.folded(),
                     None => {
                         self.folded += node.past.len();
-                        fresh.insert(Running::new(&input, &judged, &node.past)).folded()
+                        fresh
+                            .insert(Running::new(&input, &judged, &node.past))
+                            .folded()
                     }
                 };
                 let judgement = judge(&input, &judged, node, past);
