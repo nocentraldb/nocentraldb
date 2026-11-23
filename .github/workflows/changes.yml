@@ -5,7 +5,9 @@
 # full history is fetched so the merge base with the PR's base exists.
 #
 # Breaking-change detection: cargo-semver-checks compares the workspace
-# crates with the PR's base commit, checked out as a worktree (action input
+# crates with the merge base of the PR's base and head, not the base's tip, so
+# a PR behind main is never compared with API main changed after it forked
+# (NOC-503). The merge base is checked out as a worktree (action input
 # `baseline-root`; `baseline-rev` would extract the base as an archive, which
 # refuses the repository's symlink that points outside the tree), with
 # `rust-toolchain: manual`, so it uses the toolchain rust-toolchain.toml pins,
@@ -13,9 +15,9 @@
 # the fragment step still runs and turns its finding into a requirement; a
 # warning then says that a failure without a failed lint is the tool's own
 # and wants a re-run, not a breaking fragment. The TypeScript API report is
-# diffed against the base's committed report (exit 3: a removed or changed
-# line). Either finding adds --require-breaking, which the skip-changes
-# label never waives.
+# diffed against the report committed at the same merge base (exit 3: a
+# removed or changed line). Either finding adds --require-breaking, which
+# the skip-changes label never waives.
 # scripts/changes-workflow.test.mjs asserts these rules.
 name: changes
 
@@ -55,7 +57,8 @@ jobs:
         id: base-worktree
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
-        run: git worktree add --detach "$RUNNER_TEMP/baseline" "$BASE"
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: git worktree add --detach "$RUNNER_TEMP/baseline" "$(git merge-base "$BASE" "$HEAD")"
       - run: rustup toolchain install --no-self-update
       # Only the publishable crates the base also has: a crate new in the
       # pull request has no baseline, and the tool's failure on it would read
@@ -80,9 +83,10 @@ jobs:
         id: api
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set +e
-          node scripts/release/api-report.mjs --base "$BASE"
+          node scripts/release/api-report.mjs --base "$(git merge-base "$BASE" "$HEAD")"
           code=$?
           set -e
           echo "breaking=$([ "$code" = 3 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
