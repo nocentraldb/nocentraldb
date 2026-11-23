@@ -6,7 +6,7 @@ This RFC defines what a change is, how it is encoded byte for byte, and how a sp
 
 It builds on [RFC 0001](0001-nocentraldb.md) and on the principles in [GENESIS.md](../../factory/GENESIS.md); [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) says which RFCs build on it.
 
-**Status.** Decided by the owner (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Built, except what this RFC leaves to later RFCs: compaction and the archive, and the values of rich text and streams, which are not built.
 
@@ -574,11 +574,11 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 
 ## Decisions
 
-- **2026-11-11 · The shape of key 64 and the order of step 6.** (Carsten, 2026-11-11, NOC-202; [decision](../../factory/decisions/2026-11-10-NOC-197-key-64-shape-and-step-6-order.md))
-- **2026-11-12 · The log keeps the time a member wrote each of its changes.** (Carsten, 2026-11-12, NOC-231; [decision](../../factory/decisions/2026-11-12-NOC-175-a-browser-database-opens-at-a-name-on-opfs-and-durability.md))
-- **2026-11-12 · A personal value is sealed under a subkey of the person key, inside the payload.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
-- **2026-11-20 · Key 0 is "must understand".** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-header-and-payload-keys-0-to-63-are-must-understand.md))
-- **2026-11-20 · A change the relay holds is answered `duplicate` to its own author, even after it left the space.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-the-relay-answers-duplicate-when-a-former-member-re-sends-its-own-change.md))
+- **2026-11-11 · The shape of key 64 and the order of step 6.** ([decision](../../factory/decisions/2026-11-10-NOC-197-key-64-shape-and-step-6-order.md))
+- **2026-11-12 · The log keeps the time a member wrote each of its changes.** ([decision](../../factory/decisions/2026-11-12-NOC-175-a-browser-database-opens-at-a-name-on-opfs-and-durability.md))
+- **2026-11-12 · A personal value is sealed under a subkey of the person key, inside the payload.** ([decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
+- **2026-11-20 · Key 0 is "must understand".** ([decision](../../factory/decisions/2026-11-20-NOC-362-header-and-payload-keys-0-to-63-are-must-understand.md))
+- **2026-11-20 · A change the relay holds is answered `duplicate` to its own author, even after it left the space.** ([decision](../../factory/decisions/2026-11-20-NOC-362-the-relay-answers-duplicate-when-a-former-member-re-sends-its-own-change.md))
 
 ## History
 
@@ -593,3 +593,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - 2026-11-20 · Each guarantee to RFC 0003 and RFC 0004 stands in its own section, restructured for readers, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · Key 0 is "must understand", and a former member's own change pushed again is answered `duplicate`, as the owner answered (NOC-362, #396)
+- 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)

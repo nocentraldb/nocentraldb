@@ -43,16 +43,18 @@ In the repository's Settings → Environments, create `aws-prod`:
 - **Environment variables.** These are variables, not secrets; none of them is a secret:
   - `AWS_DEPLOY_ROLE_ARN`: the deploy role's ARN from section 1.1.
   - `RELAY_ID`: the relay's stable id, 32 hex digits. Draw it once, with `openssl rand -hex 16`, and never change it: members sign it into every connection's authentication (RFC 0007, "Opening a connection").
-  - `ALLOWED_ACCOUNTS`: the account keys whose members may create spaces, 64 hex digits each, separated by commas.
+  - `ALLOWED_ACCOUNTS`: the identities of the accounts whose members may create spaces, 64 hex digits each, separated by commas.
   - `ALARM_EMAIL`: where the budget and the alarms send their mails.
 
-`ALLOWED_ACCOUNTS` holds an account key, which an app's invitation carries at a fixed place. This prints the account key of an invitation `ncdb-invite-1:…`, such as the example app prints with `tasks … invitation`:
+`ALLOWED_ACCOUNTS` holds each account's identity: its recovery key, which stays the same when the account recovers from its code or replaces a lost device (RFC 0015, "The account's identity"). An account that a database drew before it had a recovery key has no identity but its account key. An app's invitation carries both keys at fixed places. This prints the identity of an invitation `ncdb-invite-1:…`, such as the example app prints with `tasks … invitation`: the recovery key when the invitation carries an account key statement, and the account key when it does not:
 
 ```sh
-python3 -c 'import base64,sys; t=sys.argv[1].removeprefix("ncdb-invite-1:"); print(base64.urlsafe_b64decode(t+"="*(-len(t)%4))[65:97].hex())' "ncdb-invite-1:…"
+python3 -c 'import base64,sys; t=sys.argv[1].removeprefix("ncdb-invite-1:"); b=base64.urlsafe_b64decode(t+"="*(-len(t)%4)); print((b[163:195] if b[162]==1 else b[65:97]).hex())' "ncdb-invite-1:…"
 ```
 
-It reads the key without checking the invitation. The local relay does check it: `ncdb-relay --allow-invitation` refuses a malformed one.
+It reads the key without checking the invitation. The local relay does check it: `ncdb-relay --allow-invitation` refuses a malformed one and lists the same identity.
+
+**A list of account keys from before.** Earlier versions of this guide printed the account key of every invitation. Such an entry keeps admitting its account until the account's first recovery or lost device, because the relay also matches an entry against the certificate's account key. Replace each entry with the identity this command prints, before that happens, so the account is not refused with `not_allowed` afterwards.
 
 ### 1.4 Branch protection on `main`
 

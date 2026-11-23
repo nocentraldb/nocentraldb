@@ -13,7 +13,11 @@
 //!   `frame_key`.
 //! - `changes`: PK `space`, SK `change`; `position`.
 //! - `spaces`: PK `space`; `head`. The item with key [`EPOCH_ITEM`] holds
-//!   the relay epoch.
+//!   the relay epoch. An item under an account's 32-byte identity holds
+//!   its one space as `guest_space`, when the relay does not list it, and
+//!   an item under the identity and the byte `s` holds the highest
+//!   account key statement number seen for it as `statement` (RFC 0015,
+//!   "The account's identity").
 //! - `members`: PK `space`, SK `member`; `current`, `state`, and a global
 //!   secondary index `by_member` on `member`, sorted by `space`.
 //! - `person_keys`: PK `space`, SK `id`; `generation`, `writer`, `wrapped`,
@@ -53,6 +57,7 @@ mod item;
 mod keys;
 mod read;
 pub mod schema;
+mod statement;
 mod sweep;
 mod uploads;
 
@@ -66,7 +71,7 @@ pub const EPOCH_ITEM: &[u8] = b"epoch";
 
 /// The key of the reserved item in `spaces` that holds where the orphan
 /// sweep stands (NOC-293; its place decided by Carsten, 2026-11-13, NOC-306): the 5 bytes
-/// `sweep`, which no 16-byte space id, no 32-byte account key and not
+/// `sweep`, which no 16-byte space id, no 32-byte account identity and not
 /// [`EPOCH_ITEM`] can be.
 pub const SWEEP_ITEM: &[u8] = b"sweep";
 
@@ -273,6 +278,13 @@ impl RelayStore for AwsStore {
         member: MemberId,
     ) -> impl Future<Output = Result<Option<MemberRecord>, StoreError>> + Send {
         self.run(move |aws| async move { keys::member(&aws, space, member).await })
+    }
+
+    fn statement(
+        &self,
+        identity: [u8; 32],
+    ) -> impl Future<Output = Result<Option<u64>, StoreError>> + Send {
+        self.run(move |aws| async move { statement::statement(&aws, identity).await })
     }
 
     fn members_of(

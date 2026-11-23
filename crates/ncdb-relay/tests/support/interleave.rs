@@ -101,6 +101,10 @@ impl<S: RelayStore> RelayStore for Interleave<S> {
         self.inner.members_of(member).await
     }
 
+    async fn statement(&self, identity: [u8; 32]) -> Result<Option<u64>, StoreError> {
+        self.inner.statement(identity).await
+    }
+
     async fn person_keys(&self, space: SpaceId) -> Result<Vec<PersonKeyRecord>, StoreError> {
         self.inner.person_keys(space).await
     }
