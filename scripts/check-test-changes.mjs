@@ -2,7 +2,13 @@
 // The test-change check (NOC-508): a pull request that removes a test, skips
 // one, removes an assertion or changes an expected value in one is flagged.
 //
-// usage: check-test-changes --base <rev> [--head <rev>]
+// usage: check-test-changes [--base <rev>] [--head <rev>]
+//
+// Without --base (the gate task repo:test-changes in `pnpm gates`) the base
+// is origin/main; a checkout without it, such as CI's shallow gates job,
+// compares nothing and says so, because the `changes` check
+// (.github/workflows/changes.yml) runs this with the pull request's base and
+// head on every pull request. A --base that does not exist is an error.
 //
 // The pull request's test files are compared as they stand at the merge base
 // of base and head and at head (lib/test-changes/). A flagged pull request
@@ -21,7 +27,8 @@ import { kindOf } from "./lib/test-changes/files.mjs";
 import { scan } from "./lib/test-changes/scan.mjs";
 
 const NAME = "check-test-changes";
-const USAGE = `usage: ${NAME} --base <rev> [--head <rev>]`;
+const USAGE = `usage: ${NAME} [--base <rev>] [--head <rev>]`;
+const DEFAULT_BASE = "origin/main";
 
 function parseArgs(argv) {
   const args = { head: "HEAD" };
@@ -34,7 +41,7 @@ function parseArgs(argv) {
       return null;
     }
   }
-  return args.base ? args : null;
+  return args;
 }
 
 /** The scans of `paths` as they stand at `ref`; a file absent there is left out. */
@@ -84,11 +91,29 @@ pm reads the reason in review, and the daily note lists the pull request
 (factory/FACTORY.md, "Rules for every coding agent"). If it is not intended,
 restore the tests.`;
 
+const exists = (ref) => {
+  try {
+    git(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export function main(argv) {
   const args = parseArgs(argv);
   if (!args) {
     console.error(USAGE);
     return 2;
+  }
+  if (args.base === undefined) {
+    if (!exists(DEFAULT_BASE)) {
+      console.log(
+        `${NAME}: no ${DEFAULT_BASE} in this checkout, so nothing is compared; the \`changes\` check compares every pull request with its base`,
+      );
+      return 0;
+    }
+    args.base = DEFAULT_BASE;
   }
   const from = mergeBase(args.base, args.head);
   const paths = changedPaths(args.base, args.head).filter(kindOf);
