@@ -5,7 +5,9 @@
 # full history is fetched so the merge base with the PR's base exists.
 #
 # Breaking-change detection: cargo-semver-checks compares the workspace
-# crates with the PR's base commit, checked out as a worktree (action input
+# crates with the merge base of the PR's base and head, not the base's tip, so
+# a PR behind main is never compared with API main changed after it forked
+# (NOC-503). The merge base is checked out as a worktree (action input
 # `baseline-root`; `baseline-rev` would extract the base as an archive, which
 # refuses the repository's symlink that points outside the tree), with
 # `rust-toolchain: manual`, so it uses the toolchain rust-toolchain.toml pins,
@@ -55,7 +57,8 @@ jobs:
         id: base-worktree
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
-        run: git worktree add --detach "$RUNNER_TEMP/baseline" "$BASE"
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: git worktree add --detach "$RUNNER_TEMP/baseline" "$(git merge-base "$BASE" "$HEAD")"
       - run: rustup toolchain install --no-self-update
       # Only the publishable crates the base also has: a crate new in the
       # pull request has no baseline, and the tool's failure on it would read
