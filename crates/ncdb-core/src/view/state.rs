@@ -147,6 +147,9 @@ impl ObjectState {
                 (Some(Value::Unsigned(1)), 5) => {
                     ObjectOperation::Delete(write(fields.try_into().map_err(|_| CORRUPT)?)?)
                 }
+                (Some(Value::Unsigned(2)), 5) => {
+                    ObjectOperation::Move(write(fields.try_into().map_err(|_| CORRUPT)?)?)
+                }
                 _ => return Err(CORRUPT),
             };
             state.insert(operation);
@@ -158,14 +161,15 @@ impl ObjectState {
     pub(super) fn insert(&mut self, operation: ObjectOperation) {
         let id = match &operation {
             ObjectOperation::Create(create) => create.id,
-            ObjectOperation::Delete(write) => write.id,
+            ObjectOperation::Delete(write) | ObjectOperation::Move(write) => write.id,
         };
         self.0.entry(id).or_insert(operation);
     }
 
     /// The canonical CBOR of every operation, in operation id order: a
     /// create as `[0, id, author, stamp, collection]`, a delete as `[1, id,
-    /// author, stamp, value, [replaced id…]]`. Not a wire format.
+    /// author, stamp, value, [replaced id…]]`, a move as a delete with 2 in
+    /// place of 1. Not a wire format.
     pub(super) fn bytes(&self) -> Vec<u8> {
         let items = self
             .0
@@ -178,8 +182,12 @@ impl ObjectState {
                     Value::Unsigned(c.stamp.0),
                     Value::Text(c.collection.clone()),
                 ]),
-                ObjectOperation::Delete(w) => Value::Array(vec![
-                    Value::Unsigned(1),
+                ObjectOperation::Delete(w) | ObjectOperation::Move(w) => Value::Array(vec![
+                    Value::Unsigned(if matches!(operation, ObjectOperation::Move(_)) {
+                        2
+                    } else {
+                        1
+                    }),
                     id_value(&w.id),
                     Value::Bytes(w.author.0.to_vec()),
                     Value::Unsigned(w.stamp.0),

@@ -28,6 +28,9 @@ pub const REMOVE: u64 = 3;
 
 /// Operation number 4: delete or restore the object.
 pub const DELETE: u64 = 4;
+/// Operation number 6: move the object to another space, or take a move
+/// back (RFC 0016, "Formats"). Number 5 belongs to RFC 0013 (NOC-474).
+pub const MOVE: u64 = 6;
 
 /// Argument 1: the value written, or the element added or removed.
 const VALUE: u64 = 1;
@@ -97,11 +100,21 @@ pub fn delete(object: ObjectId, collection: &str, write: &Write) -> Operation {
     Operation::new(object, collection.to_owned(), None, DELETE, Some(arguments))
 }
 
-/// Reads `operation`, an operation without a field, as a create or a
-/// delete of its object, or says why it is parked.
+/// The operation map that moves `object` to the space whose 16-byte id
+/// `write` holds, or takes a move back with `null` (RFC 0016, "Formats").
+/// `collection` is the one the author's copy showed for the object; the
+/// move belongs to the object whatever it names.
+pub fn move_object(object: ObjectId, collection: &str, write: &Write) -> Operation {
+    let (_, arguments) = write_arguments(write);
+    Operation::new(object, collection.to_owned(), None, MOVE, Some(arguments))
+}
+
+/// Reads `operation`, an operation without a field, as a create, a delete
+/// or a move of its object, or says why it is parked.
 ///
 /// A create carries no arguments, so one with key 5 is malformed: each
-/// operation has exactly one encoding. A delete's arguments are set's.
+/// operation has exactly one encoding. The arguments of a delete and of a
+/// move are set's.
 pub fn decode_object(
     operation: &Operation,
     origin: Origin,
@@ -115,6 +128,7 @@ pub fn decode_object(
             collection: operation.collection.clone(),
         })),
         DELETE => read_write(operation, origin).map(ObjectOperation::Delete),
+        MOVE => read_write(operation, origin).map(ObjectOperation::Move),
         _ => Err(OperationParkReason::UnknownOperation),
     }
 }
@@ -192,7 +206,7 @@ impl Encoding for Links {
     }
 }
 
-/// set and delete: `{1: value, 2: replaces}`.
+/// set, delete and move: `{1: value, 2: replaces}`.
 fn write_arguments(op: &Write) -> (u64, Value) {
     (
         SET,
@@ -241,7 +255,7 @@ fn decode_write(operation: &Operation, origin: Origin) -> Result<Write, Operatio
     read_write(operation, origin)
 }
 
-/// The arguments of a set or a delete: `{1: value, 2: replaces}`.
+/// The arguments of a set, a delete or a move: `{1: value, 2: replaces}`.
 fn read_write(operation: &Operation, origin: Origin) -> Result<Write, OperationParkReason> {
     let mut arguments = arguments(operation, &[VALUE, REPLACES])?;
     Ok(Write {

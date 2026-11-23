@@ -647,7 +647,9 @@ impl Fold for SqlFold<'_> {
             let result = self.fold_object_operation(object, &operation);
             let collection = match &operation {
                 ObjectOperation::Create(create) => Some(create.collection.clone()),
-                ObjectOperation::Delete(_) => self.collection_of(object),
+                ObjectOperation::Delete(_) | ObjectOperation::Move(_) => {
+                    self.collection_of(object)
+                }
             };
             if result.is_ok()
                 && let Some(collection) = collection

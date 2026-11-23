@@ -38,13 +38,17 @@ pub enum ObjectOperation {
     Create(Create),
     /// Operation 4: a write of whether the object is deleted.
     Delete(Write),
+    /// Operation 6: a write of the space the object moved to, or `null`
+    /// to take a move back (RFC 0016, "Formats").
+    Move(Write),
 }
 
-/// One object of a copy: its creates and its deletion.
+/// One object of a copy: its creates, its deletion and its move.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Object {
     creates: basic::State,
     deleted: basic::State,
+    moved: basic::State,
 }
 
 /// The collection as a basic value: any name.
@@ -74,11 +78,18 @@ impl Object {
         DELETED.apply(&mut self.deleted, write);
     }
 
+    /// Merges one write of where the object moved: a space id moves it,
+    /// `null` takes the move back (RFC 0016, "Formats").
+    pub fn set_moved(&mut self, write: &Write) {
+        self.moved.insert(write);
+    }
+
     /// Merges one operation on the object.
     pub fn apply(&mut self, operation: &ObjectOperation) {
         match operation {
             ObjectOperation::Create(create) => self.create(create),
             ObjectOperation::Delete(write) => self.set_deleted(write),
+            ObjectOperation::Move(write) => self.set_moved(write),
         }
     }
 
