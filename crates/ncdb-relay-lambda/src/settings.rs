@@ -151,6 +151,29 @@ mod tests {
     }
 
     #[test]
+    fn the_admission_keys_read_back_and_none_is_none() {
+        let mut pairs = FULL.to_vec();
+        let keys = format!("{},{}", "cc".repeat(32), "DD".repeat(32));
+        pairs.push(("NCDB_ADMISSION_KEYS", &keys));
+        let settings = Settings::from_vars(vars(&pairs)).unwrap();
+        assert_eq!(
+            settings.admission_keys,
+            BTreeSet::from([[0xcc; 32], [0xdd; 32]])
+        );
+        let settings = Settings::from_vars(vars(&FULL)).unwrap();
+        assert!(settings.admission_keys.is_empty());
+    }
+
+    #[test]
+    fn malformed_admission_keys_are_refused_by_name_only() {
+        let mut pairs = FULL.to_vec();
+        pairs.push(("NCDB_ADMISSION_KEYS", "not-a-key"));
+        let refused = Settings::from_vars(vars(&pairs)).unwrap_err();
+        assert_eq!(refused, Refused("NCDB_ADMISSION_KEYS"));
+        assert!(!refused.to_string().contains("not-a-key"));
+    }
+
+    #[test]
     fn a_missing_or_malformed_variable_is_refused_by_name_only() {
         for (name, bad) in [
             ("NCDB_RELAY_ID", "5e5e"),
