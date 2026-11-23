@@ -12,7 +12,7 @@ import { test } from "node:test";
 import { read, section } from "./lib/rfc-text.mjs";
 
 const VECTORS = "docs/rfc/vectors/0003";
-const SOURCE = "(Carsten, 2026-11-12, NOC-244)";
+const SOURCE = "(2026-11-12, NOC-244)";
 const RFC = {
   "0002": "docs/rfc/0002-change-and-log-format.md",
   "0003": "docs/rfc/0003-keys-and-cryptography.md",
@@ -211,7 +211,7 @@ test("RFC 0009 refuses a write without the person's key with personKeyNotHeld", 
         (l.split("|")[1] ?? "").includes("`personKeyNotHeld`"),
     );
   assert.ok(row, "no personKeyNotHeld row in Errors");
-  assert.match(row, /Carsten, 2026-11-12, NOC-255/);
+  assert.match(row, /2026-11-12, NOC-255/);
   const rust = section(sdk, "the-rust-sdk")
     .split("\n")
     .find((l) => l.startsWith("- **Personal fields.**"));

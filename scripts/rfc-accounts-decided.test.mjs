@@ -10,7 +10,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const MARK = "(Carsten, 2026-11-12, NOC-273)";
+const MARK = "(2026-11-12, NOC-273)";
 const read = (rfc) => readFileSync(join(root, "docs/rfc", rfc), "utf8");
 
 /** The line of `rfc` that starts with `start`. */

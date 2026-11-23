@@ -18,7 +18,7 @@ test("RFC 0010 gives the member fingerprint (NOC-288)", () => {
     /`"nocentraldb\/member-fingerprint"`/,
     /its member id, shown as 60 digits in twelve blocks of five/,
     /`Invitation::fingerprint\(\)` returns it for a version 2 invitation/,
-    /\(Carsten, 2026-11-13, NOC-288\)/,
+    /\(2026-11-13, NOC-288\)/,
   ]) {
     assert.match(text, pattern, `RFC 0010 does not say ${pattern}`);
   }
@@ -30,7 +30,7 @@ test("RFC 0010 keeps the link statement beside the log and defers an agent's (NO
     /keeps it in a store beside its log, written in the same step that completes the pairing/,
     /forgets it only once the relay has confirmed the change that wrote it into the account space's `links`/,
     /not in the view, so that rebuilding the view never drops it/,
-    /\*\*An agent that has an account of its own is not linked in v1\*\* \(Carsten, 2026-11-13, NOC-291\)/,
+    /\*\*An agent that has an account of its own is not linked in v1\*\* \(2026-11-13, NOC-291\)/,
   ]) {
     assert.match(text, pattern, `RFC 0010 does not say ${pattern}`);
   }
@@ -41,7 +41,7 @@ test("RFC 0009 names db.account().recovered() (NOC-289)", () => {
   for (const pattern of [
     /\| `db\.account\(\)\.recovered\(\)` \|/,
     /`AccountRecovered` on the open that recovered the account, else `None`/,
-    /\(Carsten, 2026-11-13, NOC-289\)/,
+    /\(2026-11-13, NOC-289\)/,
   ]) {
     assert.match(text, pattern, `RFC 0009 does not say ${pattern}`);
   }
