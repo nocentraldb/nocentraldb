@@ -31,6 +31,7 @@ use crate::texts;
 /// }
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Kind {
     /// Any Unicode string, stored as written.
     Text,

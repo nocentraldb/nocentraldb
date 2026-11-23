@@ -219,6 +219,7 @@ pub struct Deprecation {
 /// }
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Kind {
     /// `ncdb/string`.
     String,
