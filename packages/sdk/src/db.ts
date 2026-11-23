@@ -348,6 +348,8 @@ interface OpenOptions {
   pairing?: "request";
   /** The twelve words of a recovery code, as the person typed them: recovers the account on a new database (RFC 0010). Never logged. */
   recover?: string;
+  /** Fetches an admission from the app's backend for the account's identity, `db.account.identity`, and answers its text, `ncdb-admit-1:...` (RFC 0015, "In the SDK"). The SDK calls it when the relay refuses a new space, presents the answer and pushes the space again, once; a function that throws leaves the space refused. The app handles a string, never a key. */
+  admission?: (identity: string) => Promise<string>;
 }
 
 /** Opens this member's database in the browser. */
