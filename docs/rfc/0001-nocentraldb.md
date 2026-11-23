@@ -188,10 +188,10 @@ Two forms were not taken. Groups as members of many spaces, as the first draft o
 
 ## Decisions
 
-- **2026-11-11 · A shred is final once a member accepts it; a space with one account erases provisionally for 7 days.** (Carsten, 2026-11-11, NOC-224, NOC-230)
-- **2026-11-11 · No passkey unlocks the browser's wrapping key in v1.** (Carsten, 2026-11-11, NOC-210; [decision](../../factory/decisions/2026-11-11-NOC-175-the-browser-keys-sit-in-indexeddb-under-a-webcrypto-key-and-chromium-tests-them.md))
-- **2026-11-19 · RFC 0001 opens with what the product is for, as the landing page's hero does.** (Carsten, 2026-11-19, NOC-362; [decision](../../factory/decisions/2026-11-19-NOC-362-rfc-0001-opens-with-what-the-product-is-for.md))
-- **2026-11-20 · An erasure stays a work order; 0.1's `Db::erase` is an interim call the work-order RFC will replace.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-erasure-is-a-work-order-0-1-s-db-erase-is-an-interim-call.md))
+- **2026-11-11 · A shred is final once a member accepts it; a space with one account erases provisionally for 7 days.** (NOC-224, NOC-230)
+- **2026-11-11 · No passkey unlocks the browser's wrapping key in v1.** ([decision](../../factory/decisions/2026-11-11-NOC-175-the-browser-keys-sit-in-indexeddb-under-a-webcrypto-key-and-chromium-tests-them.md))
+- **2026-11-19 · RFC 0001 opens with what the product is for, as the landing page's hero does.** ([decision](../../factory/decisions/2026-11-19-NOC-362-rfc-0001-opens-with-what-the-product-is-for.md))
+- **2026-11-20 · An erasure stays a work order; 0.1's `Db::erase` is an interim call the work-order RFC will replace.** ([decision](../../factory/decisions/2026-11-20-NOC-362-erasure-is-a-work-order-0-1-s-db-erase-is-an-interim-call.md))
 
 ## History
 

@@ -278,17 +278,17 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 
 ## Decisions
 
-- **2026-11-11 · An add or a sign-off under an older account key is refused after an account key statement entry.** (Carsten, 2026-11-11, NOC-187)
-- **2026-11-12 · The pairing answer travels as text, `ncdb-pair-1:`.** (Carsten, 2026-11-12, NOC-273)
-- **2026-11-12 · The number of a recovered account key.** (Carsten, 2026-11-12, NOC-285)
-- **2026-11-12 · A device creates the account space with the first app space it creates, and an account-space record's id derives from what it records.** (Carsten, 2026-11-12, NOC-266; [decision](../../factory/decisions/2026-11-12-NOC-266-a-device-creates-the-account-space-with-its-first-app-space.md); [decision](../../factory/decisions/2026-11-12-NOC-266-account-space-records-have-ids-derived-from-what-they-record.md))
-- **2026-11-13 · A member waiting to be paired shows a fingerprint of its own.** (Carsten, 2026-11-13, NOC-288)
-- **2026-11-13 · The joining device keeps a pending link statement until the relay confirms it.** (Carsten, 2026-11-13, NOC-291; [decision](../../factory/decisions/2026-11-13-NOC-267-a-link-statement-is-kept-before-the-key-record-is-saved.md))
-- **2026-11-13 · Other accounts' members do not learn a link in v1.** (Carsten, 2026-11-13, NOC-307; [decision](../../factory/decisions/2026-11-13-NOC-269-members-list-shows-a-linked-account.md))
-- **2026-11-13 · The account space is the one whose genesis creator is the current account.** (pm, 2026-11-13, NOC-310; [decision](../../factory/decisions/2026-11-13-NOC-310-the-account-space-is-the-current-accounts.md))
-- **2026-11-13 · A linked database creates no account space while it keeps its link statement.** (pm, 2026-11-13, NOC-311; [decision](../../factory/decisions/2026-11-13-NOC-311-a-linked-database-creates-no-account-space-while-it-keeps-its-link.md))
-- **2026-11-14 · A paired device keeps that it joined an account in the table `joined`, beside its log.** (Carsten, 2026-11-14, NOC-312 C3, NOC-311; [decision](../../factory/decisions/2026-11-14-NOC-311-a-paired-device-keeps-that-it-joined-beside-its-log.md))
-- **2026-11-22 · The view names the account space's collections `$members`, `$memberships`, `$links`, `$statements` and `$wrappedKeys`.** (pm, 2026-11-22, NOC-379, recording the coding agent's call on NOC-266 as shipped in #280; [decision](../../factory/decisions/2026-11-12-NOC-266-the-view-holds-the-shipped-account-model-under-dollar-names.md))
+- **2026-11-11 · An add or a sign-off under an older account key is refused after an account key statement entry.** (NOC-187)
+- **2026-11-12 · The pairing answer travels as text, `ncdb-pair-1:`.** (NOC-273)
+- **2026-11-12 · The number of a recovered account key.** (NOC-285)
+- **2026-11-12 · A device creates the account space with the first app space it creates, and an account-space record's id derives from what it records.** ([decision](../../factory/decisions/2026-11-12-NOC-266-a-device-creates-the-account-space-with-its-first-app-space.md); [decision](../../factory/decisions/2026-11-12-NOC-266-account-space-records-have-ids-derived-from-what-they-record.md))
+- **2026-11-13 · A member waiting to be paired shows a fingerprint of its own.** (NOC-288)
+- **2026-11-13 · The joining device keeps a pending link statement until the relay confirms it.** ([decision](../../factory/decisions/2026-11-13-NOC-267-a-link-statement-is-kept-before-the-key-record-is-saved.md))
+- **2026-11-13 · Other accounts' members do not learn a link in v1.** ([decision](../../factory/decisions/2026-11-13-NOC-269-members-list-shows-a-linked-account.md))
+- **2026-11-13 · The account space is the one whose genesis creator is the current account.** ([decision](../../factory/decisions/2026-11-13-NOC-310-the-account-space-is-the-current-accounts.md))
+- **2026-11-13 · A linked database creates no account space while it keeps its link statement.** ([decision](../../factory/decisions/2026-11-13-NOC-311-a-linked-database-creates-no-account-space-while-it-keeps-its-link.md))
+- **2026-11-14 · A paired device keeps that it joined an account in the table `joined`, beside its log.** ([decision](../../factory/decisions/2026-11-14-NOC-311-a-paired-device-keeps-that-it-joined-beside-its-log.md))
+- **2026-11-22 · The view names the account space's collections `$members`, `$memberships`, `$links`, `$statements` and `$wrappedKeys`.** ([decision](../../factory/decisions/2026-11-12-NOC-266-the-view-holds-the-shipped-account-model-under-dollar-names.md))
 
 ## History
 

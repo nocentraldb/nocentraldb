@@ -717,14 +717,14 @@ It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership
 
 ## Decisions
 
-- **2026-11-11 · The sign-off compares accounts by account key and every recovery key.** (Carsten, 2026-11-11, NOC-201; [decision](../../factory/decisions/2026-11-11-NOC-196-the-sign-off-reads-every-certificate-for-recovery-keys.md))
-- **2026-11-11 · With one admin account, a writer of another account may sign off an erasure.** (Carsten, 2026-11-11, NOC-228; [decision](../../factory/decisions/2026-11-11-NOC-229-exactly-one-admin-account-is-counted-by-same-account-and-needs-one-admin.md))
-- **2026-11-11 · A shred is final when accepted.** (Carsten, 2026-11-11, NOC-224)
-- **2026-11-11 · The account key statement entry, entry type 7.** (Carsten, 2026-11-11, NOC-187; [decision](../../factory/decisions/2026-11-12-NOC-233-a-statement-entry-rejects-only-concurrent-adds-and-counts-the-adds-own-statement.md))
-- **2026-11-11 · A provisional erasure in a space with one account, and the erasure decision, entry type 8.** (Carsten, 2026-11-11, NOC-230)
-- **2026-11-12 · The first shred that is not taken back takes effect.** (Carsten, 2026-11-12, NOC-242; [decision](../../factory/decisions/2026-11-12-NOC-258-the-first-shred-not-taken-back-takes-effect.md))
-- **2026-11-20 · A member reads a generation with the key its control change confirms.** (Carsten, 2026-11-20, NOC-389; [decision](../../factory/decisions/2026-11-20-NOC-389-a-member-reads-a-generation-with-the-key-its-control-change-confirms.md))
-- **2026-11-20 · A shred over a gap in its causal past is waiting, and the SDK lists it with the state `waiting`.** (Carsten, 2026-11-20, NOC-392)
+- **2026-11-11 · The sign-off compares accounts by account key and every recovery key.** ([decision](../../factory/decisions/2026-11-11-NOC-196-the-sign-off-reads-every-certificate-for-recovery-keys.md))
+- **2026-11-11 · With one admin account, a writer of another account may sign off an erasure.** ([decision](../../factory/decisions/2026-11-11-NOC-229-exactly-one-admin-account-is-counted-by-same-account-and-needs-one-admin.md))
+- **2026-11-11 · A shred is final when accepted.** (NOC-224)
+- **2026-11-11 · The account key statement entry, entry type 7.** ([decision](../../factory/decisions/2026-11-12-NOC-233-a-statement-entry-rejects-only-concurrent-adds-and-counts-the-adds-own-statement.md))
+- **2026-11-11 · A provisional erasure in a space with one account, and the erasure decision, entry type 8.** (NOC-230)
+- **2026-11-12 · The first shred that is not taken back takes effect.** ([decision](../../factory/decisions/2026-11-12-NOC-258-the-first-shred-not-taken-back-takes-effect.md))
+- **2026-11-20 · A member reads a generation with the key its control change confirms.** ([decision](../../factory/decisions/2026-11-20-NOC-389-a-member-reads-a-generation-with-the-key-its-control-change-confirms.md))
+- **2026-11-20 · A shred over a gap in its causal past is waiting, and the SDK lists it with the state `waiting`.** (NOC-392)
 
 ## History
 

@@ -585,18 +585,18 @@ It makes them more precise in these points:
 
 ## Decisions
 
-- **2026-11-11 · No passkey unlocks the browser's wrapping key in v1.** (Carsten, 2026-11-11, NOC-210; [decision](../../factory/decisions/2026-11-11-NOC-175-the-browser-keys-sit-in-indexeddb-under-a-webcrypto-key-and-chromium-tests-them.md))
-- **2026-11-11 · A space with one account erases provisionally for 7 days.** (Carsten, 2026-11-11, NOC-230)
-- **2026-11-20 · A member reads a generation with the key its control change confirms.** (Carsten, 2026-11-20, NOC-389; [decision](../../factory/decisions/2026-11-20-NOC-389-a-member-reads-a-generation-with-the-key-its-control-change-confirms.md))
-- **2026-11-12 · The key record's format 2, the pairing invitation and a recovered key's number.** (Carsten, 2026-11-12, NOC-285)
-- **2026-11-12 · A personal value is sealed under a subkey of the person key.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
-- **2026-11-15 · A sub-agent's invitation is version 3, and its parent signs its certificate.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q1-a-sub-agent-invitation-is-version-3-of-the-invitation.md))
-- **2026-11-15 · An erasure reaches every space of the member's database where it may write.** (Carsten, 2026-11-15, NOC-326; [decision](../../factory/decisions/2026-11-15-NOC-326-q5-a-every-space-of-this-database.md))
-- **2026-11-15 · Local ad-hoc spaces come later; synced ones first.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q3-c-local-ad-hoc-spaces-come-later.md))
-- **2026-11-15 · Personal fields in copies get a person key of the ad-hoc space.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q8-b-personal-copies-get-their-own-person-key.md))
-- **2026-11-15 · A sub-agent's database has no account.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q11-a-sub-agent-s-database-has-no-account.md))
-- **2026-11-20 · An erasure stays a work order; 0.1's `Db::erase` is an interim call the work-order RFC will replace.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-erasure-is-a-work-order-0-1-s-db-erase-is-an-interim-call.md))
-- **2026-11-20 · The notices of moving data between spaces and of invitations come later.** (Carsten, 2026-11-20, NOC-362)
+- **2026-11-11 · No passkey unlocks the browser's wrapping key in v1.** ([decision](../../factory/decisions/2026-11-11-NOC-175-the-browser-keys-sit-in-indexeddb-under-a-webcrypto-key-and-chromium-tests-them.md))
+- **2026-11-11 · A space with one account erases provisionally for 7 days.** (NOC-230)
+- **2026-11-20 · A member reads a generation with the key its control change confirms.** ([decision](../../factory/decisions/2026-11-20-NOC-389-a-member-reads-a-generation-with-the-key-its-control-change-confirms.md))
+- **2026-11-12 · The key record's format 2, the pairing invitation and a recovered key's number.** (NOC-285)
+- **2026-11-12 · A personal value is sealed under a subkey of the person key.** ([decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
+- **2026-11-15 · A sub-agent's invitation is version 3, and its parent signs its certificate.** ([decision](../../factory/decisions/2026-11-15-NOC-320-q1-a-sub-agent-invitation-is-version-3-of-the-invitation.md))
+- **2026-11-15 · An erasure reaches every space of the member's database where it may write.** ([decision](../../factory/decisions/2026-11-15-NOC-326-q5-a-every-space-of-this-database.md))
+- **2026-11-15 · Local ad-hoc spaces come later; synced ones first.** ([decision](../../factory/decisions/2026-11-15-NOC-320-q3-c-local-ad-hoc-spaces-come-later.md))
+- **2026-11-15 · Personal fields in copies get a person key of the ad-hoc space.** ([decision](../../factory/decisions/2026-11-15-NOC-320-q8-b-personal-copies-get-their-own-person-key.md))
+- **2026-11-15 · A sub-agent's database has no account.** ([decision](../../factory/decisions/2026-11-15-NOC-320-q11-a-sub-agent-s-database-has-no-account.md))
+- **2026-11-20 · An erasure stays a work order; 0.1's `Db::erase` is an interim call the work-order RFC will replace.** ([decision](../../factory/decisions/2026-11-20-NOC-362-erasure-is-a-work-order-0-1-s-db-erase-is-an-interim-call.md))
+- **2026-11-20 · The notices of moving data between spaces and of invitations come later.** (NOC-362)
 
 ## History
 

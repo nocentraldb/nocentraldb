@@ -198,8 +198,8 @@ It builds on [RFC 0001](0001-nocentraldb.md), which lets developers add field ty
 
 ## Decisions
 
-- **2026-11-15 · An ad-hoc copy leaves a plugin field unset and counts it.** (pm, 2026-11-15, NOC-318; [decision](../../factory/decisions/2026-11-15-NOC-318-an-ad-hoc-copy-leaves-plugin-fields-unset-and-counts-what-it-left-out.md))
-- **2026-11-20 · `ncdb-harness` is published to crates.io after 0.1.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-ncdb-harness-stays-unpublished-until-after-0-1.md))
+- **2026-11-15 · An ad-hoc copy leaves a plugin field unset and counts it.** ([decision](../../factory/decisions/2026-11-15-NOC-318-an-ad-hoc-copy-leaves-plugin-fields-unset-and-counts-what-it-left-out.md))
+- **2026-11-20 · `ncdb-harness` is published to crates.io after 0.1.** ([decision](../../factory/decisions/2026-11-20-NOC-362-ncdb-harness-stays-unpublished-until-after-0-1.md))
 
 ## History
 

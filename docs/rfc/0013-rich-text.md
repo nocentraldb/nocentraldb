@@ -490,10 +490,10 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 
 ## Decisions
 
-- **2026-11-22 · The binding holds a write while an IME composition is open, until `compositionend` and for at most 2 s.** (Carsten, 2026-11-22, NOC-467; [decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-binding-holds-a-write-during-an-ime-composition-for-at-most-2-s.md))
-- **2026-11-22 · A rebuild waits for `compositionend`, then restores the focus and the selection.** (Carsten, 2026-11-22, NOC-467; [decision](../../factory/decisions/2026-11-22-NOC-467-a-rich-text-editor-rebuild-waits-for-compositionend-and-restores-focus-and-selection.md))
-- **2026-11-22 · One UndoManager per binding outlives the rebuilds, so a rebuild keeps the undo history.** (Carsten, 2026-11-22, NOC-467; [decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-binding-keeps-one-undomanager-across-editor-rebuilds.md))
-- **2026-11-22 · The guard reloads once, then makes the field read-only; an editor without `enableContentCheck` is refused.** (Carsten, 2026-11-22, NOC-467; [decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-guard-reloads-once-then-the-field-is-read-only-and-an-editor-without-the-content-check-is-refused.md))
+- **2026-11-22 · The binding holds a write while an IME composition is open, until `compositionend` and for at most 2 s.** ([decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-binding-holds-a-write-during-an-ime-composition-for-at-most-2-s.md))
+- **2026-11-22 · A rebuild waits for `compositionend`, then restores the focus and the selection.** ([decision](../../factory/decisions/2026-11-22-NOC-467-a-rich-text-editor-rebuild-waits-for-compositionend-and-restores-focus-and-selection.md))
+- **2026-11-22 · One UndoManager per binding outlives the rebuilds, so a rebuild keeps the undo history.** ([decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-binding-keeps-one-undomanager-across-editor-rebuilds.md))
+- **2026-11-22 · The guard reloads once, then makes the field read-only; an editor without `enableContentCheck` is refused.** ([decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-guard-reloads-once-then-the-field-is-read-only-and-an-editor-without-the-content-check-is-refused.md))
 
 ## History
 

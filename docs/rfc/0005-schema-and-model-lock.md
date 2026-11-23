@@ -700,16 +700,16 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 
 ## Decisions
 
-- **2026-11-12 · A plugin field's `config` is part of its merge rule and cannot change.** (Carsten, 2026-11-12, NOC-232; [decision](../../factory/decisions/2026-11-12-NOC-232-a-plugin-field-s-config-is-part-of-its-merge.md))
-- **2026-11-12 · The core keeps the person id in the hidden field `$person`.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
-- **2026-11-20 · A plugin field is Rust only in v1.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-plugin-field-types-are-rust-only-in-v1.md))
-- **2026-11-21 · Two date types, a calendar day and a point in time to the millisecond in UTC, merge as basic values.** (Carsten, 2026-11-21, NOC-412; [decision](../../factory/decisions/2026-11-21-NOC-412-a-calendar-day-and-a-millisecond-point-in-time-in-utc-are-two-basic-value-types.md))
-- **2026-11-21 · A day is `nc.date()` and `ncdb/date`, a point in time `nc.timestamp()` and `ncdb/timestamp`, in Rust `Date` and `Timestamp`.** (Carsten, 2026-11-21, NOC-434, answer 1a; [decision](../../factory/decisions/2026-11-21-NOC-412-day-and-point-in-time-are-nc-date-and-nc-timestamp.md))
-- **2026-11-21 · TypeScript reads and writes a day as a `"YYYY-MM-DD"` string and a point in time as a `Date`.** (Carsten, 2026-11-21, NOC-434, answer 4a; [decision](../../factory/decisions/2026-11-21-NOC-412-typescript-reads-a-day-as-a-string-and-a-point-in-time-as-a-date.md))
-- **2026-11-21 · The Rust SDK has its own `Date` and `Timestamp` types, and a `SystemTime` rounds down to the millisecond.** (Carsten, 2026-11-21, NOC-434, answer 5a; [decision](../../factory/decisions/2026-11-21-NOC-412-the-rust-sdk-has-its-own-date-and-timestamp-types.md))
-- **2026-11-21 · Days and points in time are no set elements in v1.** (Carsten, 2026-11-21, NOC-434, answer 6a; [decision](../../factory/decisions/2026-11-21-NOC-412-days-and-points-in-time-are-no-set-elements-in-v1.md))
-- **2026-11-22 · Every sealed change of a space of another model parks as "another model", whatever its key 64 says.** (pm, 2026-11-22, NOC-379, recording the coding agent's call on NOC-57 as shipped in #215; [decision](../../factory/decisions/2026-11-11-NOC-57-a-space-of-another-model-parks-every-sealed-change.md))
-- **2026-11-22 · A plugin field's `config` that appears or disappears is a changed `config`.** (pm, 2026-11-22, NOC-379, recording the coding agent's call on NOC-251 as shipped in #271; [decision](../../factory/decisions/2026-11-12-NOC-251-a-plugin-config-that-appears-or-disappears-is-a-change.md))
+- **2026-11-12 · A plugin field's `config` is part of its merge rule and cannot change.** ([decision](../../factory/decisions/2026-11-12-NOC-232-a-plugin-field-s-config-is-part-of-its-merge.md))
+- **2026-11-12 · The core keeps the person id in the hidden field `$person`.** ([decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
+- **2026-11-20 · A plugin field is Rust only in v1.** ([decision](../../factory/decisions/2026-11-20-NOC-362-plugin-field-types-are-rust-only-in-v1.md))
+- **2026-11-21 · Two date types, a calendar day and a point in time to the millisecond in UTC, merge as basic values.** ([decision](../../factory/decisions/2026-11-21-NOC-412-a-calendar-day-and-a-millisecond-point-in-time-in-utc-are-two-basic-value-types.md))
+- **2026-11-21 · A day is `nc.date()` and `ncdb/date`, a point in time `nc.timestamp()` and `ncdb/timestamp`, in Rust `Date` and `Timestamp`.** ([decision](../../factory/decisions/2026-11-21-NOC-412-day-and-point-in-time-are-nc-date-and-nc-timestamp.md))
+- **2026-11-21 · TypeScript reads and writes a day as a `"YYYY-MM-DD"` string and a point in time as a `Date`.** ([decision](../../factory/decisions/2026-11-21-NOC-412-typescript-reads-a-day-as-a-string-and-a-point-in-time-as-a-date.md))
+- **2026-11-21 · The Rust SDK has its own `Date` and `Timestamp` types, and a `SystemTime` rounds down to the millisecond.** ([decision](../../factory/decisions/2026-11-21-NOC-412-the-rust-sdk-has-its-own-date-and-timestamp-types.md))
+- **2026-11-21 · Days and points in time are no set elements in v1.** ([decision](../../factory/decisions/2026-11-21-NOC-412-days-and-points-in-time-are-no-set-elements-in-v1.md))
+- **2026-11-22 · Every sealed change of a space of another model parks as "another model", whatever its key 64 says.** ([decision](../../factory/decisions/2026-11-11-NOC-57-a-space-of-another-model-parks-every-sealed-change.md))
+- **2026-11-22 · A plugin field's `config` that appears or disappears is a changed `config`.** ([decision](../../factory/decisions/2026-11-12-NOC-251-a-plugin-config-that-appears-or-disappears-is-a-change.md))
 
 ## History
 
