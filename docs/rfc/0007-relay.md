@@ -6,7 +6,7 @@ This RFC defines the relay: the protocol members use to push and pull a space's 
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and uses the change, the log and the cursor of [RFC 0002](0002-change-and-log-format.md) without redefining them; [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) names the rest.
 
-**Status.** Decided by the owner (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Partly built. The protocol, the relay core and the SQLite backend for local runs are built in `crates/ncdb-relay`. The AWS backend is built in `crates/ncdb-relay-aws` and `crates/ncdb-relay-lambda`, with its infrastructure in `infra/aws`, and deployed in the account NoCentralDb-Prod ([Deploying the relay to AWS](../relay-deploy.md)). The Postgres backend is not built, nor are changes exchanged directly between members in island mode, nor compaction, whose error is only reserved.
 
@@ -721,18 +721,18 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 
 ## Decisions
 
-- **2026-11-11 · The relay refuses an erasure decision that comes too early.** (Carsten, 2026-11-11, NOC-230)
-- **2026-11-12 · The AWS backend's tables and keys.** (Carsten, 2026-11-12, NOC-270, #275; [decision](../../factory/decisions/2026-11-12-NOC-270-the-aws-backend-keeps-uploads-in-a-table-of-its.md); [decision](../../factory/decisions/2026-11-12-NOC-270-s3-keys-and-the-epoch-item-name-ids-in-lowercase-hex.md))
-- **2026-11-12 · An account the relay does not list may create one space, its account space.** (Carsten, 2026-11-12, NOC-286; [decision](../../factory/decisions/2026-11-12-NOC-283-a-guest-accounts-one-space-is-an-effect-of-its-genesis-append.md))
-- **2026-11-12 · The member index is read eventually consistent.** (Carsten, 2026-11-12, NOC-270, #275; [decision](../../factory/decisions/2026-11-12-NOC-270-members-of-reads-the-member-index-eventually-consistent.md))
-- **2026-11-13 · A guest account's one space is an effect of its genesis append.** (Carsten, 2026-11-13, NOC-283, #288; [decision](../../factory/decisions/2026-11-12-NOC-283-a-guest-accounts-one-space-is-an-effect-of-its-genesis-append.md))
-- **2026-11-13 · Token URLs are a second backend trait, and the AWS backend keeps no tokens.** (Carsten, 2026-11-13, NOC-295; [decision](../../factory/decisions/2026-11-13-NOC-303-token-urls-are-a-second-backend-trait-and-the-aws-backend-keeps-no-tokens-table.md))
-- **2026-11-13 · The orphan sweep keeps where it stands in a reserved item.** (Carsten, 2026-11-13, NOC-306; [decision](../../factory/decisions/2026-11-13-NOC-293-the-orphan-sweep-runs-hourly-in-bounded-runs-that-resume-from-a-cursor.md))
-- **2026-11-15 · Every message travels as base64 in one WebSocket text frame.** (Carsten, 2026-11-15, NOC-338; [decision](../../factory/decisions/2026-11-15-NOC-338-every-message-travels-as-base64-in-one-text-frame-of-at-most-32-kb.md))
-- **2026-11-20 · The relay hands a removed member the control change that removes it.** (Carsten, 2026-11-20, NOC-383; [decision](../../factory/decisions/2026-11-20-NOC-383-the-relay-hands-a-removed-member-the-control-change-that-removes-it.md); [decision](../../factory/decisions/2026-11-20-NOC-383-the-error-that-ends-a-removed-member-s-read-carries-its-removal-at-key-5.md))
-- **2026-11-22 · The relay admits by the account's identity, the recovery key, with the account key for an account without one.** (Carsten, 2026-11-22, NOC-429; [decision](../../factory/decisions/2026-11-22-NOC-413-the-relay-admits-by-the-account-s-identity-the-recovery-key.md))
-- **2026-11-23 · A later admission replaces the earlier one and keeps its count of spaces created, and an older admission that has not lapsed can be presented again.** (Carsten, 2026-11-23, NOC-493)
-- **2026-11-23 · `admit` carries an admission's bytes, its refusals are `malformed` and `not_allowed`, and a genesis goes through the allowlist, then an admission, then the guest's one space.** (pm, 2026-11-23, NOC-469; [decision](../../factory/decisions/2026-11-23-NOC-469-admit-carries-an-admission-s-bytes-and-is-refused-with-malformed-or-not-allowed.md))
+- **2026-11-11 · The relay refuses an erasure decision that comes too early.** (NOC-230)
+- **2026-11-12 · The AWS backend's tables and keys.** ([decision](../../factory/decisions/2026-11-12-NOC-270-the-aws-backend-keeps-uploads-in-a-table-of-its.md); [decision](../../factory/decisions/2026-11-12-NOC-270-s3-keys-and-the-epoch-item-name-ids-in-lowercase-hex.md))
+- **2026-11-12 · An account the relay does not list may create one space, its account space.** ([decision](../../factory/decisions/2026-11-12-NOC-283-a-guest-accounts-one-space-is-an-effect-of-its-genesis-append.md))
+- **2026-11-12 · The member index is read eventually consistent.** ([decision](../../factory/decisions/2026-11-12-NOC-270-members-of-reads-the-member-index-eventually-consistent.md))
+- **2026-11-13 · A guest account's one space is an effect of its genesis append.** ([decision](../../factory/decisions/2026-11-12-NOC-283-a-guest-accounts-one-space-is-an-effect-of-its-genesis-append.md))
+- **2026-11-13 · Token URLs are a second backend trait, and the AWS backend keeps no tokens.** ([decision](../../factory/decisions/2026-11-13-NOC-303-token-urls-are-a-second-backend-trait-and-the-aws-backend-keeps-no-tokens-table.md))
+- **2026-11-13 · The orphan sweep keeps where it stands in a reserved item.** ([decision](../../factory/decisions/2026-11-13-NOC-293-the-orphan-sweep-runs-hourly-in-bounded-runs-that-resume-from-a-cursor.md))
+- **2026-11-15 · Every message travels as base64 in one WebSocket text frame.** ([decision](../../factory/decisions/2026-11-15-NOC-338-every-message-travels-as-base64-in-one-text-frame-of-at-most-32-kb.md))
+- **2026-11-20 · The relay hands a removed member the control change that removes it.** ([decision](../../factory/decisions/2026-11-20-NOC-383-the-relay-hands-a-removed-member-the-control-change-that-removes-it.md); [decision](../../factory/decisions/2026-11-20-NOC-383-the-error-that-ends-a-removed-member-s-read-carries-its-removal-at-key-5.md))
+- **2026-11-22 · The relay admits by the account's identity, the recovery key, with the account key for an account without one.** ([decision](../../factory/decisions/2026-11-22-NOC-413-the-relay-admits-by-the-account-s-identity-the-recovery-key.md))
+- **2026-11-23 · A later admission replaces the earlier one and keeps its count of spaces created, and an older admission that has not lapsed can be presented again.** (NOC-493)
+- **2026-11-23 · `admit` carries an admission's bytes, its refusals are `malformed` and `not_allowed`, and a genesis goes through the allowlist, then an admission, then the guest's one space.** ([decision](../../factory/decisions/2026-11-23-NOC-469-admit-carries-an-admission-s-bytes-and-is-refused-with-malformed-or-not-allowed.md))
 
 ## History
 
@@ -753,4 +753,5 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · The error that ends a removed member's pull or subscription carries the control change that removes it, so its own copy folds the removal (NOC-383)
 - 2026-11-22 · The relay admits an account by its identity, keys the guest's one space by it, and refuses a genesis whose statement a newer one superseded, as RFC 0015 decides (NOC-420, #453)
+- 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
 - 2026-11-23 · The relay takes admission tokens with `admit`, and an admitted account creates spaces up to its admission's spaces (NOC-469)

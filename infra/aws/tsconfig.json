@@ -4,5 +4,5 @@
     "lib": ["ES2023", "ESNext.Disposable"],
     "types": ["node"]
   },
-  "include": ["bin", "src", "test"]
+  "include": ["bin", "examples", "src", "test"]
 }

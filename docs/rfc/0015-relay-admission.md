@@ -8,7 +8,7 @@ It builds on [RFC 0007](0007-relay.md), which defines the relay, who may create 
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0015 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Decided. The owner decided this RFC as it stands (Carsten, 2026-11-22). Admission by identity is built: the relay admits an account by its identity, and RFC 0007 says so (NOC-420). The relay takes admission tokens with `admit`, and both SDKs have the `admission` option and `db.account.identity`, as RFC 0007 and RFC 0009 say (NOC-469); the ceiling on spend and the quotas are not built; their [follow-up tickets](#follow-up-tickets) build them.
+**Status.** Decided, 2026-11-22. Admission by identity is built: the relay admits an account by its identity, and RFC 0007 says so (NOC-420). The relay takes admission tokens with `admit`, and both SDKs have the `admission` option and `db.account.identity`, as RFC 0007 and RFC 0009 say (NOC-469); the ceiling on spend and the quotas are not built; their [follow-up tickets](#follow-up-tickets) build them.
 
 **At 0.1.** Not built. Release 0.1 admits the accounts in `NCDB_ALLOWED_ACCOUNTS` by their account key, so a listed account that recovers or answers a lost device is refused with `not_allowed` until the operator lists its new key; NOC-420 fixes that first.
 
@@ -240,3 +240,4 @@ It changes who may create a space in [RFC 0007](0007-relay.md#what-the-relay-che
 ## History
 
 - 2026-11-22 · First published (NOC-413, #423)
+- 2026-11-23 · Its status line names nobody who decided; the decision log records it (NOC-454, #449)

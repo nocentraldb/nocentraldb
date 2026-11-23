@@ -208,3 +208,49 @@ mod browser {
         }
     }
 }
+
+/// The relay URL reaches the relay as the app gave it, query string
+/// included, so an app's authorizer on `$connect` can read a token from it
+/// (NOC-417; docs/relay-deploy.md, "Protect the endpoint"). The browser
+/// build hands the same string to the browser's `WebSocket`.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use tokio::net::TcpListener;
+    use tokio_tungstenite::tungstenite::handshake::server::{
+        Callback, ErrorResponse, Request, Response,
+    };
+
+    /// Records the request target of the handshake it accepts.
+    struct Target<'a>(&'a mut String);
+
+    impl Callback for Target<'_> {
+        fn on_request(
+            self,
+            request: &Request,
+            response: Response,
+        ) -> Result<Response, ErrorResponse> {
+            *self.0 = request.uri().to_string();
+            Ok(response)
+        }
+    }
+
+    #[tokio::test]
+    async fn the_relay_url_reaches_the_relay_with_its_query_string_unchanged() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("a port");
+        let port = listener.local_addr().expect("its address").port();
+        let relay = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("a connection");
+            let mut target = String::new();
+            let _ws = tokio_tungstenite::accept_hdr_async(stream, Target(&mut target))
+                .await
+                .expect("a WebSocket handshake");
+            target
+        });
+
+        let path = "/prod?token=eyJhbGciOi.J9-_~%2B%2F%3D&client=app";
+        let opened = super::connect(&format!("ws://127.0.0.1:{port}{path}")).await;
+
+        assert!(opened.is_some(), "the transport opened the connection");
+        assert_eq!(relay.await.expect("the relay ran"), path);
+    }
+}
