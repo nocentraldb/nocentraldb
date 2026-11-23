@@ -21,6 +21,7 @@ use aws_sdk_s3::primitives::ByteStream;
 use ncdb_core::ids::{ChangeId, SpaceId};
 use ncdb_relay::store::{AppendOutcome, Effect, MemberRecord, NewEntry, Position, StoreError};
 
+use crate::admission;
 use crate::item::{self, ATTEMPTS, b, failed, get_n, n};
 use crate::{Aws, INLINE_LIMIT, frame_key, statement};
 
@@ -78,12 +79,15 @@ struct Writes {
     guest: Option<[u8; 32]>,
     /// The statement numbers to raise, the highest of each identity only.
     statements: Vec<([u8; 32], u64)>,
+    /// The identity whose admission's count the append raises.
+    admitted: Option<[u8; 32]>,
 }
 
 fn writes(effects: Vec<Effect>) -> Writes {
     let mut rows: Vec<MemberRecord> = Vec::new();
     let mut guest = None;
     let mut statements: Vec<([u8; 32], u64)> = Vec::new();
+    let mut admitted = None;
     for effect in effects {
         match effect {
             Effect::Member(record) => {
@@ -91,6 +95,7 @@ fn writes(effects: Vec<Effect>) -> Writes {
                 rows.push(record);
             }
             Effect::GuestSpace(account) => guest = Some(account),
+            Effect::AdmittedSpace(identity) => admitted = Some(identity),
             Effect::Statement { identity, number } => {
                 match statements.iter_mut().find(|(held, _)| *held == identity) {
                     Some((_, held)) => *held = (*held).max(number),
@@ -103,6 +108,7 @@ fn writes(effects: Vec<Effect>) -> Writes {
         rows,
         guest,
         statements,
+        admitted,
     }
 }
 
@@ -117,8 +123,12 @@ pub async fn append(
         rows,
         guest,
         statements,
+        admitted,
     } = writes(effects);
-    let effect_items = rows.len() + usize::from(guest.is_some()) + statements.len();
+    let effect_items = rows.len()
+        + usize::from(guest.is_some())
+        + usize::from(admitted.is_some())
+        + statements.len();
     if 2 * entries.len() + 1 + effect_items > TRANSACTION_ITEMS {
         return Err(StoreError(format!(
             "an append of {} changes and {} member rows is more than one transaction holds",
@@ -148,7 +158,14 @@ pub async fn append(
     if let Some(account) = guest {
         items.push(guest_item(aws, space, account)?);
     }
+    // The admission's count it raises, on the condition that it stays
+    // within the admission's spaces (RFC 0015, "How the relay takes it").
+    let admitted_at = items.len();
+    if let Some(identity) = admitted {
+        items.push(admission::count(aws, identity)?);
+    }
     // The statement numbers it raises (RFC 0015, "The account's identity").
+    // They come last, so dropping one leaves the other positions as they are.
     let statements_at = items.len();
     for (identity, number) in statements {
         items.push(statement::raise(aws, identity, number)?);
@@ -188,6 +205,13 @@ pub async fn append(
                 .is_some_and(|code| code == "ConditionalCheckFailed")
         {
             return Ok(AppendOutcome::GuestSpaceTaken);
+        }
+        if admitted.is_some()
+            && codes
+                .get(admitted_at)
+                .is_some_and(|code| code == "ConditionalCheckFailed")
+        {
+            return Ok(AppendOutcome::AdmissionSpent);
         }
         // An equal or higher number is stored: that update is not needed,
         // and the transaction goes again without it.

@@ -8,6 +8,9 @@
 //!   account's recovery key, or the account key of an account without one
 //!   (RFC 0007, "Who may create a space"; RFC 0015, "The account's
 //!   identity"); empty for none;
+//! - `NCDB_ADMISSION_KEYS`: the public admission keys whose admissions the
+//!   relay takes, one per app, 64 hex digits each, separated by commas
+//!   (RFC 0015, "Admission tokens"); empty for none;
 //! - `NCDB_TABLE_PREFIX`: the prefix of the backend's tables, as
 //!   `ncdb_relay_aws::Names::with_prefix` names them, and of the
 //!   `connections` table;
@@ -30,6 +33,8 @@ pub struct Settings {
     pub relay_id: [u8; 16],
     /// The identities of the accounts whose members may create spaces.
     pub allowed_accounts: BTreeSet<[u8; 32]>,
+    /// The public admission keys whose admissions the relay takes.
+    pub admission_keys: BTreeSet<[u8; 32]>,
     /// The backend's tables and bucket.
     pub names: Names,
     /// The `connections` table.
@@ -66,6 +71,22 @@ fn hex<const N: usize>(text: &str) -> Option<[u8; N]> {
     Some(bytes)
 }
 
+/// The keys of `name`: 64 hex digits each, separated by commas; none when
+/// it is missing or empty.
+fn keys(
+    var: &impl Fn(&str) -> Option<String>,
+    name: &'static str,
+) -> Result<BTreeSet<[u8; 32]>, Refused> {
+    let mut keys = BTreeSet::new();
+    for key in var(name).unwrap_or_default().split(',') {
+        if key.trim().is_empty() {
+            continue;
+        }
+        keys.insert(hex(key).ok_or(Refused(name))?);
+    }
+    Ok(keys)
+}
+
 impl Settings {
     /// The settings `var` gives, such as `|name| std::env::var(name).ok()`.
     pub fn from_vars(var: impl Fn(&str) -> Option<String>) -> Result<Settings, Refused> {
@@ -75,13 +96,8 @@ impl Settings {
                 .ok_or(Refused(name))
         };
         let relay_id = hex(&need("NCDB_RELAY_ID")?).ok_or(Refused("NCDB_RELAY_ID"))?;
-        let mut allowed_accounts = BTreeSet::new();
-        for key in var("NCDB_ALLOWED_ACCOUNTS").unwrap_or_default().split(',') {
-            if key.trim().is_empty() {
-                continue;
-            }
-            allowed_accounts.insert(hex(key).ok_or(Refused("NCDB_ALLOWED_ACCOUNTS"))?);
-        }
+        let allowed_accounts = keys(&var, "NCDB_ALLOWED_ACCOUNTS")?;
+        let admission_keys = keys(&var, "NCDB_ADMISSION_KEYS")?;
         let prefix = need("NCDB_TABLE_PREFIX")?;
         let mut names = Names::with_prefix(prefix.trim());
         names.bucket = need("NCDB_BUCKET")?.trim().to_owned();
@@ -93,6 +109,7 @@ impl Settings {
         Ok(Settings {
             relay_id,
             allowed_accounts,
+            admission_keys,
             names,
             connections,
             connections_url,
@@ -148,6 +165,29 @@ mod tests {
         pairs.retain(|(k, _)| *k != "NCDB_ALLOWED_ACCOUNTS");
         let settings = Settings::from_vars(vars(&pairs)).unwrap();
         assert!(settings.allowed_accounts.is_empty());
+    }
+
+    #[test]
+    fn the_admission_keys_read_back_and_none_is_none() {
+        let mut pairs = FULL.to_vec();
+        let keys = format!("{},{}", "cc".repeat(32), "DD".repeat(32));
+        pairs.push(("NCDB_ADMISSION_KEYS", &keys));
+        let settings = Settings::from_vars(vars(&pairs)).unwrap();
+        assert_eq!(
+            settings.admission_keys,
+            BTreeSet::from([[0xcc; 32], [0xdd; 32]])
+        );
+        let settings = Settings::from_vars(vars(&FULL)).unwrap();
+        assert!(settings.admission_keys.is_empty());
+    }
+
+    #[test]
+    fn malformed_admission_keys_are_refused_by_name_only() {
+        let mut pairs = FULL.to_vec();
+        pairs.push(("NCDB_ADMISSION_KEYS", "not-a-key"));
+        let refused = Settings::from_vars(vars(&pairs)).unwrap_err();
+        assert_eq!(refused, Refused("NCDB_ADMISSION_KEYS"));
+        assert!(!refused.to_string().contains("not-a-key"));
     }
 
     #[test]

@@ -119,7 +119,7 @@ const GATES_ARGV = [
   "--summary",
   "normal",
 ];
-const TIMEOUT_MINUTES = 30;
+const TIMEOUT_MINUTES = 45;
 const CONCURRENCY = {
   group: `ci-${gh("github.event_name == 'pull_request' && github.ref || github.sha")}`,
   "cancel-in-progress": gh("github.event_name == 'pull_request'"),
@@ -360,8 +360,10 @@ const checks = [
     mutants: {
       "drops the timeout": (ctx) =>
         ctx.doc.deleteIn(["jobs", "gates", "timeout-minutes"]),
-      "raises the timeout within the old range": (ctx) =>
-        ctx.doc.setIn(["jobs", "gates", "timeout-minutes"], 45),
+      // 30 minutes cancelled every gate once the rich-text tasks joined it
+      // (NOC-503).
+      "restores the old 30-minute timeout": (ctx) =>
+        ctx.doc.setIn(["jobs", "gates", "timeout-minutes"], 30),
     },
   },
   {

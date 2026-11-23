@@ -1,0 +1,6 @@
+# 2026-11-23 · NOC-469 · `admit` carries an admission's bytes and is refused with malformed or not_allowed, and a genesis goes through the allowlist, then an admission, then the guest's one space
+
+- Decided by: pm, 2026-11-23
+- Why: RFC 0015 names the `admit` request but not its keys, its errors or its place among the relay's other ways to create a space. Every other request carries bytes, so `admit` is `{2 req, 3 admission}` with the admission's canonical CBOR map, and the SDK reads the `ncdb-admit-1:` text and refuses a bad one locally; the relay answers `ok`. Bytes that are no admission's canonical map are `malformed`; an admission for another relay id, by no configured key, or already lapsed is `not_allowed`, the code the SDK already reports for a refused genesis, so no new public code is needed. An admission holds while the relay's clock in milliseconds is below until × 1000. A genesis is checked against the allowlist first, then an admission that holds, whose count rises with the genesis append, then the guest's one space, so a listed account spends nothing of its admission.
+- Instead of: key 3 carrying the text form; a new error code such as `bad_admission`, a new public name; the guest's one space before the admission.
+- Topics: relay, admission, protocol, rfc-0015, rfc-0007

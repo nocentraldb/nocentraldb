@@ -8,11 +8,11 @@ It builds on the object model of [RFC 0002](0002-change-and-log-format.md) and [
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0016 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Decided, 2026-11-22. RFC 0002, RFC 0004, RFC 0005 and RFC 0009 do not describe the move yet; the [follow-up tickets](#follow-up-tickets) rewrite them and build it.
+**Status.** Decided, 2026-11-22. RFC 0002, RFC 0003, RFC 0004, RFC 0005 and RFC 0009 describe the move; the [follow-up tickets](#follow-up-tickets) build it.
 
 **At 0.1.** Not built. Release 0.1 has no call that moves an object; an app copies and deletes.
 
-**Out of scope.** Moving a whole space to another relay. Deleting a space, which the draft RFC 0014 designs. Moving an object between two databases that share no space. Rich text and streams, which carry their state as their RFCs define it; this RFC says only that a move carries a field's current value, whatever its type.
+**Out of scope.** Moving a whole space to another relay. Deleting a space, which the draft RFC 0014 designs. Moving an object between two databases that share no space. Rich text and streams, which carry their state as their RFCs define it; this RFC says only that a move carries a field's current value, whatever its type. A plugin field that holds a value is refused for now ([The SDK call and its notice](#the-sdk-call-and-its-notice)).
 
 ## Summary
 
@@ -113,9 +113,9 @@ So the new space's history starts at the move, and the old space keeps the rest,
 
 Bob's laptop is offline and edits the note while Ana's phone moves it. The laptop's edit reaches the old space after the move, and it is concurrent with it. The SDK refuses to write to an object its copy reads as moved, with the error `moved`, so an honest member writes a later edit only when it had not seen the move.
 
-A later edit is an operation on the moved object, in the old space, that is not in the causal past of the move that wins ([Two moves at once](#two-moves-at-once)). Each member computes this from the old space's changes alone, as it computes a concurrent loser ([RFC 0002, "A late change stays identifiable"](0002-change-and-log-format.md#a-late-change-stays-identifiable)), so every member of the old space finds the same set in any order of arrival. A later edit is kept and folded onto the trace, where `space.inspect` shows it; it never reaches the new space by itself.
+A later edit is an operation on the moved object, in the old space, that is not in the causal past of the move that wins ([Two moves at once](#two-moves-at-once)). Each member computes this from the old space's changes alone, as it computes a concurrent loser ([RFC 0002, "A late change stays identifiable"](0002-change-and-log-format.md#a-late-change-stays-identifiable)), so every member of the old space finds the same set in any order of arrival. A later edit stays in the old space's log, and the SDK computes the later edits from the log when the app asks, so a database reopened from disk lists the same ones; they are not stored on the trace, and they never reach the new space by themselves.
 
-The SDK reports later edits, and the app carries them over: `space.moves.laterEdits()` lists them per moved object, and `space.moves.carryOver(edits)` writes the chosen ones into the new space as one `write`. The app, or a person, decides whether an edit made before Ben's changes still applies, and every write is one the app asked for. The app needs a screen or a rule for it, and a member of both spaces must run it. Nothing is lost silently: the edits stay in the old space, identifiable on every member, and the SDK names them. An automatic carry-over can come later, as an option, once apps show how they use it.
+The SDK reports later edits, and the app carries them over: `space.moves.laterEdits()` lists them per moved object, with the space it moved to, and `space.moves.carryOver(edits)` writes the chosen ones into the new space as one `write`. Each later edit is a set, an add, a remove, a delete or a restore, or one the SDK cannot write again, such as a personal value, a plugin's operation or a create. `carryOver` takes the edits only as names: it finds each among the space's later edits and writes it as the old space holds it. It refuses, writing nothing, an edit that is not a later edit of this space and edits of objects moved to different spaces (`invalidValue`), and an edit it cannot write again (`notAllowed`). The app, or a person, decides whether an edit made before Ben's changes still applies, and every write is one the app asked for. The app needs a screen or a rule for it, and a member of both spaces must run it. Nothing is lost silently: the edits stay in the old space, identifiable on every member, and the SDK names them. An automatic carry-over can come later, as an option, once apps show how they use it.
 
 **Options not taken.**
 
@@ -124,7 +124,7 @@ The SDK reports later edits, and the app carries them over: `space.moves.laterEd
 
 ### Two moves at once
 
-Ana's phone moves the note to space T while her laptop, offline, moves it to space U. The move is a basic value of the object ([Formats](#formats)), so the old space converges on one winner by RFC 0004's rule, and the other move is a conflict that stays readable ([RFC 0004, "Basic values"](0004-merge-rules-basic-types.md#basic-values)). Both T and U hold a live object with the note's id. The SDK lists the lost move and its space in `space.moves.conflicts()`, so a member of both spaces can delete the stray object or move it back. Only members of the old space can see that the two are one note: a member of U alone cannot know that T exists. Principle 3 holds for the old space, where both moves are recorded; it cannot reach members who never held the old space.
+Ana's phone moves the note to space T while her laptop, offline, moves it to space U. The move is a basic value of the object ([Formats](#formats)), so the old space converges on one winner by RFC 0004's rule, and the other move is a conflict that stays readable ([RFC 0004, "Basic values"](0004-merge-rules-basic-types.md#basic-values)). Both T and U hold a live object with the note's id. The SDK lists the object, the space the winning move names and the spaces the lost moves name in `space.moves.conflicts()`, so a member of both spaces can delete the stray object or move it back. Only members of the old space can see that the two are one note: a member of U alone cannot know that T exists. Principle 3 holds for the old space, where both moves are recorded; it cannot reach members who never held the old space.
 
 ## Its links and references
 
@@ -219,14 +219,16 @@ await personal.moves.carryOver(later[0].edits);
 
 - **`space.move(objects, destination)`** takes objects the SDK read, as `createAdHoc` does, all from this space, and a space handle. It writes the new space first, then the old, and resolves once both are folded on this device. A refused change on either side shows in `space.status` and in `db.sync`, as for any write.
 - **It refuses**, with nothing written: an object of another space or one that is already moved (`invalidValue`); a mover that may not write in either space (`notAllowed`, `notMember`); a destination of another model (`spaceOfAnotherModel`); and, for personal fields, `noPerson` and `personKeyNotHeld`.
+- **A plugin field that holds a value is refused for now**, with `notAllowed` and the text `error.movePluginLater`, writing nothing, because a plugin field's read is not a value its plugin's write takes, so the move cannot carry it yet. How such a field moves is open (NOC-489). An object whose plugin fields are unset moves.
 - **The notice `objectMoved`** says what the move does not do, as every call that changes who can read does ([RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys)). It is the notice of moving data between spaces that RFC 0003 says comes later.
 - **A write to a moved object** is refused with `moved`, which names the new space.
 - **A read of the trace** gives `{ $id, $moved: { space } }` and no fields.
-- **In Rust**, the same calls in snake case: `space.move_objects(&objects, &destination)`, since `move` is a Rust keyword.
+- **`space.moves`** gives `laterEdits()`, `carryOver(edits)` and `conflicts()` ([Later edits](#later-edits); [Two moves at once](#two-moves-at-once)).
+- **In Rust**, the same calls in snake case: `space.move_objects(&objects, &destination)`, since `move` is a Rust keyword, and `space.moves()` with `later_edits()`, `carry_over(&edits)` and `conflicts()`.
 
 ## Formats
 
-- **Move, operation 5**, on the object, with no field (key 3 absent), like delete: `{1: object id, 2: collection, 4: 5, 5: {1: destination, 2: replaces}}`. The destination is the new space's 16-byte id, or `null` to take a move back. It merges as a basic value of the object, as delete does ([RFC 0004, "Creating and deleting an object"](0004-merge-rules-basic-types.md#creating-and-deleting-an-object)). It takes the first number of RFC 0004's reserved range 5 to 63 ([RFC 0004, "Operation numbers"](0004-merge-rules-basic-types.md#operation-numbers)); numbers 0, 4 and 5 then belong to the object. An old core parks it as an unknown operation, so it shows the object as live until it upgrades, and its edits there become later edits. A set on a reserved field `$moved` was not taken, for the reason RFC 0004 gives for deletion: a member without the special case would read it as a write to an unknown field.
+- **Move, operation 6**, on the object, with no field (key 3 absent), like delete: `{1: object id, 2: collection, 4: 6, 5: {1: destination, 2: replaces}}`. The destination is the new space's 16-byte id, or `null` to take a move back. It merges as a basic value of the object, as delete does ([RFC 0004, "Creating and deleting an object"](0004-merge-rules-basic-types.md#creating-and-deleting-an-object)). It takes the first free number of RFC 0004's reserved range, since [RFC 0013](0013-rich-text.md) gives 5 to the rich-text update ([RFC 0004, "Operation numbers"](0004-merge-rules-basic-types.md#operation-numbers)); numbers 0, 4 and 6 belong to the object, and 5 is rich text. An old core parks it as an unknown operation, so it shows the object as live until it upgrades, and its edits there become later edits. A set on a reserved field `$moved` was not taken, for the reason RFC 0004 gives for deletion: a member without the special case would read it as a write to an unknown field.
 - **`$movedFrom`**, a hidden field set in the new space's change: `{1: old space id}`, merged as a basic value, as `$person` is ([RFC 0005, "Identifying the person"](0005-schema-and-model-lock.md#identifying-the-person)). It lets a member of both spaces find the history, and tells the new space's members the old space's random id and nothing more. Leaving it out was not taken: the new space would learn nothing of where the note came from, but no member, Ana included, could find its history from the new space.
 - **A move and a delete are independent values.** A trace can also be deleted; a delete written after the move in the old space is a later edit.
 
@@ -258,7 +260,6 @@ It touches GENESIS.md's "every object belongs to exactly one space": the id stay
 
 These tickets build the design:
 
-- **Rewrite the decided RFCs**: operation 5 and the `moved` link status in RFC 0004, `$movedFrom` in RFC 0005, the call, its errors and its notice in RFC 0009, and RFC 0003's sentence on the notice that comes later.
 - **The move in the core and the Rust SDK**, without personal fields: both changes, the pending record, the trace, later edits, two moves at once, links and references; convergence tests in the harness for the move and later edits in any order of arrival.
 - **The move in the TypeScript SDK**, after the Rust SDK.
 - **Personal fields in a move**, with the person-key entry in the new space and the test that one erasure reaches both spaces.
@@ -268,7 +269,13 @@ These tickets build the design:
 
 It adds an operation to [RFC 0002](0002-change-and-log-format.md)'s format and [RFC 0004](0004-merge-rules-basic-types.md)'s table, a link status to RFC 0004's links and a step to its references' resolution, and a hidden field to [RFC 0005](0005-schema-and-model-lock.md); it seals personal values under [RFC 0003](0003-keys-and-cryptography.md)'s person keys and gives the notice RFC 0003 left for later; it checks rights by [RFC 0008](0008-membership.md)'s roles; it keeps the view as [RFC 0006](0006-local-view.md) defines it; and it adds calls to [RFC 0009](0009-sdk-api.md). It serves the user journey of RFC 0015 (#423), which needs a single note shared, and leaves deleting a space to the draft RFC 0014.
 
+## Decisions
+
+- **2026-11-23 · The move is operation 6: numbers 0, 4 and 6 belong to the object, and 5 is the rich-text update of RFC 0013.** (NOC-474)
+- **2026-11-23 · Later edits are computed from the old space's log when the app asks, not stored on the trace.** (NOC-475)
+
 ## History
 
 - 2026-11-22 · First published (NOC-447)
 - 2026-11-23 · Its status line names nobody who decided; the decision log records it (NOC-454, #449)
+- 2026-11-23 · The move is operation 6, later edits are computed from the log, a set plugin field is refused for now, and the decided RFCs describe the move (NOC-474, #474)
