@@ -86,7 +86,10 @@ pub fn an_admitted_space_holds_only_below_spaces<B: Backend>(backend: &B) {
         None
     );
     assert_eq!(
-        block_on(fresh.admission(identity)).unwrap().unwrap().created,
+        block_on(fresh.admission(identity))
+            .unwrap()
+            .unwrap()
+            .created,
         1
     );
 
@@ -123,11 +126,14 @@ pub fn concurrent_admitted_spaces_do_not_exceed_spaces<B: Backend>(backend: &B) 
         .count();
     assert_eq!(held, 1, "{outcomes:?}");
     assert!(
-        outcomes
-            .iter()
-            .all(|o| matches!(o, AppendOutcome::Appended { .. } | AppendOutcome::AdmissionSpent)),
+        outcomes.iter().all(|o| matches!(
+            o,
+            AppendOutcome::Appended { .. } | AppendOutcome::AdmissionSpent
+        )),
         "{outcomes:?}"
     );
-    let record = block_on(backend.connect().admission(identity)).unwrap().unwrap();
+    let record = block_on(backend.connect().admission(identity))
+        .unwrap()
+        .unwrap();
     assert_eq!(record.created, 1);
 }

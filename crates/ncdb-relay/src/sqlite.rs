@@ -4,7 +4,8 @@
 //! position" is a unique index on (space, change id); the one space of an
 //! account the relay does not list is a row of `guest_spaces`, keyed by
 //! the account's identity (RFC 0015, "The account's identity"), in the
-//! same transaction; frames are kept inline; a person-key put is one write transaction that reads each
+//! same transaction; an identity's admission is a row of `admissions`
+//! (RFC 0015, "How the relay takes it"); frames are kept inline; a person-key put is one write transaction that reads each
 //! stored generation before it writes. An upload's frame (RFC 0007, "Large
 //! changes") waits in `uploads` until a push takes it, and is then kept
 //! inline in the log like any other; a download token names a log row.
@@ -30,11 +31,12 @@ use rusqlite::{
 };
 
 use crate::store::{
-    AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry, PersonKeyId, PersonKeyPut,
-    PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError, UPLOAD_KEPT_AFTER_EXPIRY,
-    Upload, UploadId,
+    AdmissionRecord, Admitted, AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry,
+    PersonKeyId, PersonKeyPut, PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError,
+    UPLOAD_KEPT_AFTER_EXPIRY, Upload, UploadId,
 };
 
+mod admission;
 mod schema;
 mod tokens;
 use schema::SCHEMA;
@@ -269,6 +271,11 @@ impl RelayStore for SqliteStore {
                     return Ok(AppendOutcome::GuestSpaceTaken);
                 }
             }
+            if let Effect::AdmittedSpace(identity) = effect
+                && !admission::holds(&tx, *identity)?
+            {
+                return Ok(AppendOutcome::AdmissionSpent);
+            }
         }
         let mut position = head;
         for entry in &entries {
@@ -325,6 +332,7 @@ impl RelayStore for SqliteStore {
                     )
                     .map_err(failed("statement"))?;
                 }
+                Effect::AdmittedSpace(identity) => admission::count(&tx, identity)?,
             }
         }
         tx.commit().map_err(failed("commit"))?;
@@ -442,6 +450,14 @@ impl RelayStore for SqliteStore {
             .optional()
             .map_err(failed("statement"))?;
         Ok(number.map(unsigned))
+    }
+
+    async fn admit(&self, identity: [u8; 32], admitted: Admitted) -> Result<(), StoreError> {
+        admission::admit(&self.connection(), identity, admitted)
+    }
+
+    async fn admission(&self, identity: [u8; 32]) -> Result<Option<AdmissionRecord>, StoreError> {
+        admission::admission(&self.connection(), identity)
     }
 
     async fn members_of(&self, member: MemberId) -> Result<Vec<SpaceId>, StoreError> {

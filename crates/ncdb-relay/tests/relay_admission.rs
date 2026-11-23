@@ -14,11 +14,11 @@ use std::collections::BTreeSet;
 use ed25519_dalek::SigningKey;
 use ncdb_core::admission::Admission;
 use ncdb_core::keys::RecoveryKey;
+use ncdb_relay::conformance::block_on;
 use ncdb_relay::store::RelayStore;
 use ncdb_relay::{ErrorCode, Pushed, Relay};
 use support::genesis;
 use support::space::Who;
-use ncdb_relay::conformance::block_on;
 use support::{TempDir, config, push_one};
 
 /// The relay's id in these tests.
@@ -46,7 +46,14 @@ fn identity() -> [u8; 32] {
 
 /// An admission of the account's identity, by the configured key.
 fn admission(until: u64, spaces: u64) -> Vec<u8> {
-    Admission::sign(&admission_key(), RELAY_ID.to_vec(), identity(), until, spaces).encode()
+    Admission::sign(
+        &admission_key(),
+        RELAY_ID.to_vec(),
+        identity(),
+        until,
+        spaces,
+    )
+    .encode()
 }
 
 /// A genesis of the account's device, its `n`th space.
@@ -194,6 +201,8 @@ fn a_listed_identity_does_not_spend_its_admission() {
     let relay = Relay::new(dir.store(), config);
     admit(&relay, &admission(NOW + 60, 1)).unwrap();
     assert_eq!(push_one(&relay, DEVICE, &genesis(1)), Pushed::Accepted(1));
-    let record = block_on(relay.store().admission(identity())).unwrap().unwrap();
+    let record = block_on(relay.store().admission(identity()))
+        .unwrap()
+        .unwrap();
     assert_eq!(record.created, 0);
 }
