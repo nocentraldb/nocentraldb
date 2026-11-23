@@ -196,8 +196,10 @@ struct Copy(Member, Vec<Vec<u8>>);
 
 impl Default for Copy {
     fn default() -> Copy {
-        let mut m = Member::default();
-        m.control = Control::all();
+        let m = Member {
+            control: Control::all(),
+            ..Member::default()
+        };
         Copy(m, Vec::new())
     }
 }
