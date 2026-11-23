@@ -9,7 +9,7 @@
 
 mod support;
 
-use nocentraldb::{Db, ErrorCode, NoticeCode, Object, ObjectId, OpenOptions, Space, Value};
+use nocentraldb::{Data, Db, ErrorCode, NoticeCode, Object, ObjectId, OpenOptions, Space, Value};
 use support::{LOCK, now};
 
 fn open(lock: &str) -> Db {
@@ -178,4 +178,41 @@ fn an_object_with_a_personal_value_cannot_be_moved_yet() {
     .unwrap_err();
     assert_eq!(refused.code(), ErrorCode::NotAllowed);
     assert!(read(&personal, "tasks", t).moved_to().is_none());
+}
+
+#[test]
+fn an_object_with_a_set_plugin_field_cannot_be_moved_yet() {
+    // A plugin's read is no value its write takes, so the move cannot
+    // carry it; refusing loses nothing (`votes` is of `test/counter`).
+    let lock = LOCK
+        .replacen(
+            r#""estimate": { "rule": 1, "since": 1, "type": "ncdb/float" },"#,
+            r#""estimate": { "rule": 1, "since": 1, "type": "ncdb/float" },
+        "votes": { "rule": 1, "since": 1, "type": "test/counter" },"#,
+            1,
+        )
+        .replacen(
+            r#""plugins": {}"#,
+            r#""plugins": { "test": { "crate": "ncdb-test-counter" } }"#,
+            1,
+        );
+    assert!(lock.contains("test/counter") && lock.contains("ncdb-test-counter"));
+    let db = now(Db::open(
+        OpenOptions::new(&lock)
+            .in_memory()
+            .plugin(ncdb_test_counter::plugin()),
+    ))
+    .unwrap();
+    let personal = now(db.spaces().create()).unwrap();
+    let shared = now(db.spaces().create()).unwrap();
+    let (_, voted) = project_and_task(&personal);
+    let (_, unvoted) = project_and_task(&personal);
+    now(personal.update("tasks", voted, [("votes", Value::from(Data::Integer(3)))])).unwrap();
+
+    let refused =
+        now(personal.move_objects(&[read(&personal, "tasks", voted)], &shared)).unwrap_err();
+    assert_eq!(refused.code(), ErrorCode::NotAllowed);
+    assert!(now(shared.get("tasks", voted)).unwrap().is_none());
+    // An unset plugin field holds nothing to carry.
+    now(personal.move_objects(&[read(&personal, "tasks", unvoted)], &shared)).unwrap();
 }
