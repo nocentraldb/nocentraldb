@@ -15,5 +15,28 @@ tasks:
     deps: ["repo:wasm-runner"]
     env:
       CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "$workspaceRoot/target/tools/bin/wasm-bindgen-test-runner"
+  # Rich text folds only with the compiler cfg `ncdb_rich_text`, which
+  # only these tasks set: the fold stays off in every published build until
+  # its guard is complete (NOC-468). Its code and tests are gated all the
+  # same: lint and the whole suite with the cfg, natively, and the
+  # rich-text tests on wasm32 (C3). They build into a target directory of
+  # their own, so the cfg does not rebuild the other tasks' builds.
+  lint-rich-text:
+    command: "cargo clippy --locked -p $project --all-targets -- -D warnings"
+    env:
+      RUSTFLAGS: "--cfg ncdb_rich_text"
+      CARGO_TARGET_DIR: "$workspaceRoot/target/rich-text"
+  test-rich-text:
+    command: "cargo test --locked -p $project"
+    env:
+      RUSTFLAGS: "--cfg ncdb_rich_text"
+      CARGO_TARGET_DIR: "$workspaceRoot/target/rich-text"
+  test-wasm-rich-text:
+    command: "cargo test --locked -p $project --target wasm32-unknown-unknown --test rich_text_agreement --test rich_text_client_id --test rich_text_contract --test rich_text_fold --test rich_text_lease --test rich_text_update_format --test rich_text_view"
+    deps: ["repo:wasm-runner"]
+    env:
+      RUSTFLAGS: "--cfg ncdb_rich_text"
+      CARGO_TARGET_DIR: "$workspaceRoot/target/rich-text"
+      CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "$workspaceRoot/target/tools/bin/wasm-bindgen-test-runner"
   gates:
-    deps: ["~:build-wasm", "~:test-wasm"]
+    deps: ["~:build-wasm", "~:test-wasm", "~:lint-rich-text", "~:test-rich-text", "~:test-wasm-rich-text"]

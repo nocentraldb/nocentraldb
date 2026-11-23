@@ -16,13 +16,14 @@
 // slower.
 //
 // Not part of `pnpm gates`, which runs without browsers: the task
-// `repo:sdk-browser` and the workflow browser-view.yml run it.
+// `repo:sdk-browser-long` and the long job of browser-view.yml run it
+// (NOC-448).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
-import { build, LOCK, prebuilt } from "./build.mjs";
-import { launch } from "./engine.mjs";
-import { startServer } from "./server.mjs";
+import { build, LOCK, prebuilt } from "../build.mjs";
+import { launch } from "../engine.mjs";
+import { startServer } from "../server.mjs";
 
 let server;
 let browser;

@@ -12,6 +12,8 @@ use rusqlite::types::Value as Sql;
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::Error;
+pub(super) use super::columns::open_personal;
+use super::columns::{column_value, personal_column, reference_column};
 use super::model::{Field, FieldState, Model, RESERVED, reserved_name};
 use super::plugin;
 use super::schema::{STAGING, column, objects_in, rows_in, states_in};
@@ -19,19 +21,14 @@ use super::state::{self, ObjectState};
 use super::trace::out_of_indexes;
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::basic::{BasicValue, Entry};
-use crate::cbor::Value;
 use crate::change::Operation;
-use crate::field::FieldType;
 use crate::field_op::{Encoding, Origin};
 use crate::ids::{ObjectId, SpaceId};
 use crate::keys::PersonKey;
 use crate::log::OperationParkReason;
 use crate::object::ObjectOperation;
-use crate::personal::{self, Place, Sealed};
+use crate::personal::Place;
 use crate::receive::Fold;
-use crate::reference;
-use crate::texts;
 
 /// The person keys of a space, by person-key id.
 pub(super) type PersonKeys = BTreeMap<[u8; 16], PersonKey>;
@@ -65,6 +62,12 @@ pub(super) struct SqlFold<'a> {
     /// fields while they were traces, so the log's fold takes them again
     /// ([`Fold::take_revived`]; RFC 0016, "Moving back, and moving again").
     pub(super) revived: BTreeSet<ObjectId>,
+    /// Whether the rich-text operation just folded is earlier than others
+    /// the field holds that give its ids other content (RFC 0013, "The
+    /// same id twice").
+    displaces: std::cell::Cell<bool>,
+    /// The fields to fold again in stamp order, as the changes name them.
+    refolds: BTreeSet<(ObjectId, String, String)>,
 }
 
 impl<'a> SqlFold<'a> {
@@ -79,6 +82,8 @@ impl<'a> SqlFold<'a> {
             error: None,
             touched: BTreeSet::new(),
             revived: BTreeSet::new(),
+            displaces: std::cell::Cell::new(false),
+            refolds: BTreeSet::new(),
         }
     }
 
@@ -289,6 +294,12 @@ impl<'a> SqlFold<'a> {
             (Field::Plugin(t), FieldState::Plugin(s)) => {
                 plugin::apply(t, &s, operation, origin)?.map(|bytes| (bytes, None))
             }
+            #[cfg(ncdb_rich_text)]
+            (Field::RichText(t), FieldState::RichText(s)) => {
+                let (folded, displaces) = rich_text(t, s, operation, origin);
+                self.displaces.set(displaces);
+                folded.map(|bytes| (bytes, None))
+            }
             _ => unreachable!("a field's state matches its type"),
         };
         // The trace of a moved object keeps no field: the operation is
@@ -376,7 +387,32 @@ pub(super) fn load(
         (Some(bytes), FieldState::Basic(_)) => FieldState::Basic(state::basic(&bytes)?),
         (Some(bytes), FieldState::Set(_)) => FieldState::Set(state::set(&bytes)?),
         (Some(bytes), FieldState::Plugin(_)) => FieldState::Plugin(bytes),
+        #[cfg(ncdb_rich_text)]
+        (Some(bytes), FieldState::RichText(_)) => FieldState::RichText(state::rich_text(&bytes)?),
     })
+}
+
+/// Folds a rich-text operation into `state`: the new state's bytes, or why
+/// it parks, and whether it displaces operations the state holds, which
+/// park when the field is folded again in stamp order.
+#[cfg(ncdb_rich_text)]
+fn rich_text(
+    field_type: &crate::rich_text::RichText,
+    mut state: crate::rich_text::State,
+    operation: &Operation,
+    origin: Origin,
+) -> (Result<Vec<u8>, OperationParkReason>, bool) {
+    use crate::field::FieldType;
+    use crate::rich_text::Fit;
+    let edit = match field_type.decode(operation, origin) {
+        Ok(edit) => edit,
+        Err(reason) => return (Err(reason), false),
+    };
+    let displaces = matches!(field_type.fit(&state, &edit), Fit::Displaces(_));
+    let folded = field_type
+        .try_apply(&mut state, &edit)
+        .map(|()| field_type.state_bytes(&state));
+    (folded, displaces)
 }
 
 /// Decodes `operation` with its field type, applies it to `state`, and
@@ -390,131 +426,6 @@ fn apply<T: Encoding>(
     let op = field_type.decode(operation, origin)?;
     field_type.apply(&mut state, &op);
     Ok((field_type.state_bytes(&state), field_type.read(&state)))
-}
-
-/// The column value of a basic value's or a link's winning write: its
-/// value as the SQLite type the field names, or NULL when no write is
-/// live, the field is cleared, or the value is outside the reader's
-/// schema (it stays readable in the merge state).
-fn column_value(winner: Option<Entry>) -> Sql {
-    match winner.filter(|entry| entry.known) {
-        Some(entry) => sql_value(entry.value),
-        None => Sql::Null,
-    }
-}
-
-/// The column value of a personal field's winning write (RFC 0006, "What
-/// the view stores in plaintext"): its sealed value opened with the person
-/// key it names, at `place`, when `keys` hold that key and the value fits
-/// the field's kind. NULL otherwise: no live write, a clear, a key not
-/// held, an erased person, a value that does not open, or one sealed
-/// under a person key that lost (RFC 0009, "How a personal field reads").
-/// `place.person_key` is ignored; the sealed value names it.
-pub(super) fn personal_column(
-    field_type: &BasicValue,
-    mut place: Place<'_>,
-    winner: Option<Entry>,
-    keys: &PersonKeys,
-) -> Sql {
-    let Some(sealed) = winner.and_then(|entry| Sealed::from_value(&entry.value)) else {
-        return Sql::Null;
-    };
-    let Some(key) = keys.get(&sealed.person_key) else {
-        return Sql::Null;
-    };
-    place.person_key = sealed.person_key;
-    match personal::open(key, &place, &sealed.bytes) {
-        Ok(value) if field_type.kind.allows(&value) => sql_value(value),
-        _ => Sql::Null,
-    }
-}
-
-/// Opens every personal field of `space` again with `keys`, from the merge
-/// state each keeps sealed, into its column of `c_<collection>`: after the
-/// keys the view holds for the space changed.
-pub(super) fn open_personal(
-    conn: &Connection,
-    model: &Model,
-    space: SpaceId,
-    keys: &PersonKeys,
-) -> Result<(), Error> {
-    for (collection, fields) in &model.personal {
-        for name in fields.keys() {
-            let Some(Field::Basic(field_type)) = model.field(collection, name) else {
-                continue;
-            };
-            let mut select = conn.prepare(&format!(
-                "SELECT object_id, state FROM {} WHERE space_id = ?1 AND field = ?2",
-                states_in("", collection)
-            ))?;
-            let rows = select
-                .query_map(params![space.0, name], |r| {
-                    Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, Vec<u8>>(1)?))
-                })?
-                .collect::<Result<Vec<_>, _>>()?;
-            for (object, bytes) in rows {
-                let object = ObjectId(
-                    object
-                        .try_into()
-                        .map_err(|_| Error::Corrupt(texts::UNREADABLE_OBJECT_ID))?,
-                );
-                let winner = field_type.read(&state::basic(&bytes)?).value;
-                let place = Place {
-                    space,
-                    object,
-                    person_key: [0; 16],
-                    collection,
-                    field: name,
-                };
-                conn.execute(
-                    &format!(
-                        "UPDATE {} SET {} = ?3 WHERE space_id = ?1 AND object_id = ?2",
-                        rows_in("", collection),
-                        column(name)
-                    ),
-                    params![
-                        space.0,
-                        object.0,
-                        personal_column(field_type, place, winner, keys)
-                    ],
-                )?;
-            }
-        }
-    }
-    Ok(())
-}
-
-/// The column value of a reference's winning write: the target's space id
-/// followed by its object id, 32 bytes, as stored and whatever its state
-/// (RFC 0006, "Declared indexes"). NULL when no write is live, the reference is
-/// cleared, or its value does not fit (RFC 0004, "The value and its
-/// encoding").
-fn reference_column(winner: Option<Entry>) -> Sql {
-    winner.map_or(Sql::Null, |entry| reference_sql(&entry.value))
-}
-
-/// A reference's value as the SQLite value its column holds: 32 bytes, or
-/// NULL for a value that names no target.
-pub(super) fn reference_sql(value: &Value) -> Sql {
-    match reference::target(value) {
-        Some(target) => Sql::Blob([target.space.0, target.object.0].concat()),
-        None => Sql::Null,
-    }
-}
-
-/// A basic value as the SQLite value its column holds: text as `TEXT`,
-/// an integer and a boolean as `INTEGER`, a float as `REAL`, bytes (an
-/// object id) as `BLOB`, anything else as NULL.
-pub(super) fn sql_value(value: Value) -> Sql {
-    match value {
-        Value::Text(text) => Sql::Text(text),
-        Value::Unsigned(n) => i64::try_from(n).map_or(Sql::Null, Sql::Integer),
-        Value::Negative(n) => i64::try_from(n).map_or(Sql::Null, |n| Sql::Integer(-1 - n)),
-        Value::Float(x) => Sql::Real(x),
-        Value::Bool(b) => Sql::Integer(i64::from(b)),
-        Value::Bytes(bytes) => Sql::Blob(bytes),
-        Value::Null | Value::Array(_) | Value::Map(_) => Sql::Null,
-    }
 }
 
 impl Fold for SqlFold<'_> {
@@ -559,6 +470,7 @@ impl Fold for SqlFold<'_> {
         if self.error.is_some() {
             return Ok(());
         }
+        let original_collection = operation.collection.clone();
         let renamed;
         let operation = match self.name(&operation.collection) {
             Some(name) if name != operation.collection => {
@@ -569,11 +481,19 @@ impl Fold for SqlFold<'_> {
             }
             _ => operation,
         };
+        let named = (
+            operation.object,
+            original_collection.clone(),
+            operation.field.clone().expect("a field operation"),
+        );
         match self.fold_field(origin, operation) {
             Ok(folded) => {
                 if folded.is_ok() {
                     self.touched
                         .insert((operation.collection.clone(), operation.object));
+                }
+                if self.displaces.take() {
+                    self.refolds.insert(named);
                 }
                 folded
             }
@@ -629,6 +549,10 @@ impl Fold for SqlFold<'_> {
 
     fn take_revived(&mut self) -> BTreeSet<ObjectId> {
         std::mem::take(&mut self.revived)
+    }
+
+    fn take_refolds(&mut self) -> Vec<(ObjectId, String, String)> {
+        std::mem::take(&mut self.refolds).into_iter().collect()
     }
 
     fn clear_object(&mut self, object: ObjectId) {

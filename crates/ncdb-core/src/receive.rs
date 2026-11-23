@@ -205,6 +205,14 @@ pub trait Fold {
     fn take_revived(&mut self) -> BTreeSet<ObjectId> {
         BTreeSet::new()
     }
+    /// The fields, each an object, a collection as changes name it and a
+    /// field, to fold again in stamp order since an operation folded into
+    /// them displaced others: a rich-text operation that is earlier than
+    /// operations the field holds that give its ids other content (RFC
+    /// 0013, "The same id twice"). Each is returned once.
+    fn take_refolds(&mut self) -> Vec<(ObjectId, String, String)> {
+        Vec::new()
+    }
 }
 
 /// Why a received frame was not appended.
@@ -254,21 +262,38 @@ impl Log {
         fold: &mut impl Fold,
     ) -> Result<Appended, ReceiveError> {
         let change = Change::decode(bytes).map_err(ReceiveError::Decode)?;
+        self.receive_change(change, checks, fold)
+    }
+
+    /// [`Log::receive`] of a change decoded already. The log keeps the
+    /// change itself, not a copy: a change of megabytes is held once
+    /// (NOC-422).
+    pub fn receive_change(
+        &mut self,
+        change: Change,
+        checks: &mut impl Checks,
+        fold: &mut impl Fold,
+    ) -> Result<Appended, ReceiveError> {
         for control in self.folded_controls() {
             checks.add_control(control);
         }
-        let appended = self.append(change.clone()).map_err(|error| match error {
+        let appended = self.append(change).map_err(|error| match error {
             AppendError::WrongSpace => ReceiveError::WrongSpace,
         })?;
-        if let Appended::New(_) = appended {
-            let (state, opened) = check(&change, checks, fold);
-            let control_passed = is_folded_control(&change, &state);
-            self.set_state_opened(change.id(), state, opened);
+        if let Appended::New(position) = appended {
+            let change = self.get(position).expect("the change was just appended");
+            let (state, opened) = check(change, checks, fold);
+            let control_passed = is_folded_control(change, &state);
+            let id = change.id();
+            self.set_state_opened(id, state, opened);
             if control_passed {
                 self.check_rejected_again(checks, fold);
                 crate::unfold::unfold(self, checks, fold);
             }
+            // A revived field folds first: it can displace operations a
+            // refold then folds again in stamp order.
             crate::unfold::fold_revived(self, checks, fold);
+            crate::unfold::refold_displaced(self, checks, fold);
         }
         Ok(appended)
     }

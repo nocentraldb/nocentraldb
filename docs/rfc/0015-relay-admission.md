@@ -8,7 +8,7 @@ It builds on [RFC 0007](0007-relay.md), which defines the relay, who may create 
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0015 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Decided. The owner decided this RFC as it stands (Carsten, 2026-11-22). Nothing of it is built. RFC 0007 and RFC 0009 still describe the static allowlist of account keys; the [follow-up tickets](#follow-up-tickets) rewrite them and build the design.
+**Status.** Decided. The owner decided this RFC as it stands (Carsten, 2026-11-22). Admission by identity is built: the relay admits an account by its identity, and RFC 0007 says so (NOC-420). Admission tokens, the ceiling on spend and the quotas are not built; their [follow-up tickets](#follow-up-tickets) build them and rewrite RFC 0007 and RFC 0009 for them.
 
 **At 0.1.** Not built. Release 0.1 admits the accounts in `NCDB_ALLOWED_ACCOUNTS` by their account key, so a listed account that recovers or answers a lost device is refused with `not_allowed` until the operator lists its new key; NOC-420 fixes that first.
 
