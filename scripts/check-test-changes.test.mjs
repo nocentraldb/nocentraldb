@@ -234,3 +234,58 @@ test("an assertion only reformatted or moved to another file is not flagged", ()
   );
   assert.equal(status, 0, out);
 });
+
+const REMOVED = [
+  { [RS]: rust(rustTest("keeps"), rustTest("goes")) },
+  { [RS]: rust(rustTest("keeps")) },
+];
+
+test("a flagged pull request passes with a Test-change trailer in one of its commits", () => {
+  const dir = repo(REMOVED[0], [
+    { files: REMOVED[1], message: "NOC-1: drop the goes test\n\nTest-change: goes duplicated keeps since NOC-7" },
+    { files: { "README.md": "later\n" }, message: "NOC-1: docs" },
+  ]);
+  const { status, out } = check(dir);
+  assert.equal(status, 0, out);
+  assert.match(out, /removes the test `goes`/);
+  assert.match(out, /Test-change: goes duplicated keeps since NOC-7 \([0-9a-f]{7}\)/);
+});
+
+test("a flagged pull request without the trailer fails and says how to pass", () => {
+  const { status, out } = pr(...REMOVED, "NOC-1: drop the goes test");
+  assert.equal(status, 1, out);
+  assert.match(out, /Test-change: <reason>/);
+  assert.match(out, /FACTORY\.md/);
+});
+
+test("a trailer that names no reason in words does not count", () => {
+  for (const reason of ["", "-", "n/a", "none", "<reason>", "TODO", "fix", "x y"]) {
+    const message = `NOC-1: drop\n\nTest-change: ${reason}`;
+    const { status, out } = pr(...REMOVED, message);
+    assert.equal(status, 1, `${JSON.stringify(reason)}\n${out}`);
+  }
+});
+
+test("a trailer in a commit of the base branch does not count", () => {
+  const dir = repo(REMOVED[0], [{ files: REMOVED[1], message: "NOC-1: drop" }]);
+  const git = gitIn(dir);
+  git(["checkout", "--quiet", "main"]);
+  git(["commit", "--quiet", "--allow-empty", "-m", "NOC-2: other\n\nTest-change: another pull request's reason"]);
+  git(["checkout", "--quiet", "pr"]);
+  git(["merge", "--quiet", "--no-edit", "main"]);
+  const { status, out } = check(dir);
+  assert.equal(status, 1, out);
+});
+
+test("a pull request that only adds tests passes untouched", () => {
+  const { status, out } = pr(
+    { [RS]: rust(rustTest("one")), [TS]: ts(tsTest("one")) },
+    {
+      [RS]: rust(rustTest("one"), rustTest("two", "assert_eq!(two(), 2);")),
+      [TS]: ts(tsTest("one"), tsTest("two", "expect(two()).toBe(2);")),
+      "crates/a/tests/new.rs": rust(rustTest("three")),
+      "packages/sdk/test/new.test.ts": ts(tsTest("three")),
+    },
+  );
+  assert.deepEqual({ status, out }, { status: 0, out: "" });
+});
