@@ -78,8 +78,9 @@ const SEMVER_ACTION = "obi1kenobi/cargo-semver-checks-action@";
 // The merge ref's first parent, the main the PR is merged into: neither the
 // event's base tip nor the merge base, which miss what main gained since the
 // PR's push (NOC-505).
-const BASELINE_RUN =
-  'git worktree add --detach "$RUNNER_TEMP/baseline" HEAD^1';
+const BASELINE_RUN = `test "$(git rev-parse HEAD^2)" = "$HEAD"
+git worktree add --detach "$RUNNER_TEMP/baseline" HEAD^1
+`;
 const PACKAGES_RUN =
   'node scripts/release/semver-packages.mjs --baseline "$RUNNER_TEMP/baseline" >> "$GITHUB_OUTPUT"';
 const SEMVER_IF = "steps.packages.outputs.any == 'true'";
@@ -253,7 +254,9 @@ const checks = [
         "api runs before pnpm install",
       );
 
-      assert.equal(all[baseline].env, undefined);
+      assert.deepEqual(all[baseline].env, {
+        HEAD: gh("github.event.pull_request.head.sha"),
+      });
       assert.equal(all[baseline].run, BASELINE_RUN);
 
       const sv = all[semver];
@@ -334,6 +337,13 @@ const checks = [
           [...STEPS, baselineStep(ctx), "run"],
           BASELINE_RUN.replace("HEAD^1", "HEAD"),
         ),
+      "the baseline step does not check the merge ref": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, baselineStep(ctx), "run"],
+          BASELINE_RUN.replace(/^test .*\n/, ""),
+        ),
+      "the baseline step has no HEAD": (ctx) =>
+        ctx.doc.deleteIn([...STEPS, baselineStep(ctx), "env", "HEAD"]),
       "the baseline is the merge base of the event's base and head": (ctx) =>
         ctx.doc.setIn(
           [...STEPS, baselineStep(ctx), "run"],
