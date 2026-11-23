@@ -16,10 +16,12 @@
 mod body;
 mod certificate;
 mod current;
+mod extend;
 mod fields;
 mod generations;
 mod genesis;
 mod input;
+mod past;
 mod judge;
 mod key_chain;
 mod person_key;
