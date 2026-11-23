@@ -103,7 +103,11 @@ One write of 40,000 operations makes a change of 15.5 MB, close to the 16 MiB li
 | A device that receives it, natively                                                             |      161 MB |         611 MB |
 | A Chromium tab that writes it (its renderer process, above the 168 MB it held before the write) | 485 MB more |  1,040 MB more |
 
-In the tab, the core's WebAssembly memory took 191 MiB of it, measured once with a worker instrumented to report it; the rest is the page's own records, the request the SDK builds from them, and the browser. WebAssembly memory does not shrink after the write: the tab keeps it until the database closes. A phone was not measured. A change of a few hundred KB takes a few MB in every one of these places.
+In the tab, the core's WebAssembly memory took 191 MiB of it, measured once with a worker instrumented to report it; the rest is the page's own records, the request the SDK builds from them, and the browser. WebAssembly memory does not shrink after the write: the tab keeps it until the database closes. A change of a few hundred KB takes a few MB in every one of these places.
+
+**The budget.** A change at the 16 MiB limit fits in 256 MiB of core memory, natively and in a browser tab's WebAssembly memory. Natively, that is the peak memory of the whole process of a device that writes the change and of one that receives it, SQLite included. In a tab, it is the WebAssembly memory of the core in the tab that writes and in the tab that receives; the page's own records and the browser come on top of it. A phone was not measured. The budget rests on native and Chromium.
+
+A guard test holds the budget: it writes one change just below the limit and has a second device of the account receive it, natively ([crates/nocentraldb/tests/memory_budget.rs](../crates/nocentraldb/tests/memory_budget.rs)) and in Chromium ([scripts/memory-budget/browser.test.mjs](../scripts/memory-budget/browser.test.mjs)), and fails above 256 MiB. It runs only for releases: in the `verify` job of the release workflow ([.github/workflows/release.yml](../.github/workflows/release.yml)) for beta and stable tags, and in the publish dry run. Pull requests do not run it, so a change that breaks the budget shows when a release is cut, not when it merges.
 
 Each device also keeps every change of the spaces it holds in memory, as long as the database is open: about twice the bytes the relay receives, so 63 MB for the 81,000 operations of this guide. That grows with the log, not with the size of a change.
 
