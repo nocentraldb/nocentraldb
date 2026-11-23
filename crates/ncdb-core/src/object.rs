@@ -13,10 +13,15 @@
 //! belong to a later RFC.
 
 use crate::basic::{self, BasicValue, Kind, Values, Write};
-use crate::cbor::Value;
+use crate::cbor::{Key, Value};
 use crate::clock::Hlc;
 use crate::field::FieldType;
 use crate::ids::{MemberId, OperationId, SpaceId};
+
+/// The hidden field the new space's change of a move sets, `{1: old
+/// space id}` (RFC 0016, "Formats"). No model declares it: the core folds
+/// it into the object, beside its creates, deletes and moves.
+pub const MOVED_FROM: &str = "$movedFrom";
 
 /// A create of an object id (RFC 0002's operation 0), as far as RFC 0004
 /// gives it a meaning: it puts the object into a collection.
@@ -43,6 +48,9 @@ pub enum ObjectOperation {
     /// Operation 6: a write of the space the object moved to, or `null`
     /// to take a move back (RFC 0016, "Formats").
     Move(Write),
+    /// A set of the hidden field [`MOVED_FROM`]: the space the object came
+    /// from, as `{1: old space id}`.
+    MovedFrom(Write),
 }
 
 /// One object of a copy: its creates, its deletion and its move.
@@ -51,6 +59,7 @@ pub struct Object {
     creates: basic::State,
     deleted: basic::State,
     moved: basic::State,
+    moved_from: basic::State,
 }
 
 /// The collection as a basic value: any name.
@@ -92,6 +101,7 @@ impl Object {
             ObjectOperation::Create(create) => self.create(create),
             ObjectOperation::Delete(write) => self.set_deleted(write),
             ObjectOperation::Move(write) => self.set_moved(write),
+            ObjectOperation::MovedFrom(write) => self.moved_from.insert(write),
         }
     }
 
@@ -125,6 +135,21 @@ impl Object {
     pub fn moved_to(&self) -> Option<SpaceId> {
         match self.moving().value?.value {
             Value::Bytes(bytes) => bytes.try_into().ok().map(SpaceId),
+            _ => None,
+        }
+    }
+
+    /// The space the object came from: the winning write of
+    /// [`MOVED_FROM`], when it is `{1: a 16-byte space id}`. Anything else
+    /// reads as unset.
+    pub fn moved_from(&self) -> Option<SpaceId> {
+        let Value::Map(map) = Values::ObjectIds.read(&self.moved_from).value?.value else {
+            return None;
+        };
+        match map.get(&Key::Unsigned(1)) {
+            Some(Value::Bytes(bytes)) if map.len() == 1 => {
+                bytes.clone().try_into().ok().map(SpaceId)
+            }
             _ => None,
         }
     }

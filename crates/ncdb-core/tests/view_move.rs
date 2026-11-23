@@ -315,6 +315,11 @@ mod convergence {
             n.clone().prop_map(move_to_new),
             n.clone().prop_map(back),
             n.clone().prop_map(delete),
+            n.clone().prop_map(|n| {
+                let old = [(ncdb_core::cbor::Key::Unsigned(1), Value::Bytes(vec![n; 16]))];
+                let write = write(Value::Map(old.into()), BTreeSet::new());
+                field_op::moved_from(object(n), TASK, &write)
+            }),
             (n.clone(), prop_oneof![Just("a"), Just("b")]).prop_map(|(n, t)| title(n, t)),
             (n, 0..3u64).prop_map(|(n, r)| rank(n, r)),
         ]

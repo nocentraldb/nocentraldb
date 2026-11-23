@@ -24,7 +24,7 @@ use crate::log::{
     AppendError, Appended, Log, OperationParkReason, ParkReason, ParkedOperation, RejectReason,
     State,
 };
-use crate::object::ObjectOperation;
+use crate::object::{MOVED_FROM, ObjectOperation};
 use crate::texts;
 use crate::tips::Opened;
 
@@ -368,17 +368,19 @@ fn check(
     (State::Folded { parked }, Some(opened))
 }
 
-/// Folds one operation the model knows, a create or a delete of its object
-/// or a field operation, through the fold.
+/// Folds one operation the model knows, a create, a delete, a move or a
+/// set of `$movedFrom` of its object, or a field operation, through the
+/// fold.
 pub(crate) fn fold_one(
     operation: &Operation,
     origin: Origin,
     fold: &mut impl Fold,
 ) -> Result<(), OperationParkReason> {
-    if operation.field.is_some() {
-        return fold.fold(origin, operation);
-    }
-    let object = field_op::decode_object(operation, origin)?;
+    let object = match operation.field.as_deref() {
+        Some(MOVED_FROM) => field_op::decode_moved_from(operation, origin)?,
+        Some(_) => return fold.fold(origin, operation),
+        None => field_op::decode_object(operation, origin)?,
+    };
     fold.fold_object(operation.object, &object);
     Ok(())
 }
@@ -393,7 +395,9 @@ pub(crate) fn understand(
     if !fold.knows_collection(&operation.collection) {
         return Err(OperationParkReason::UnknownCollection);
     }
+    // `$movedFrom` is hidden: no model declares it (RFC 0016, "Formats").
     if let Some(field) = &operation.field
+        && field != MOVED_FROM
         && !fold.knows_field(&operation.collection, field)
     {
         return Err(match fold.unregistered(&operation.collection, field) {

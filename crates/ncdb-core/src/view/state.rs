@@ -144,11 +144,13 @@ impl ObjectState {
                         collection,
                     })
                 }
-                (Some(Value::Unsigned(1)), 5) => {
-                    ObjectOperation::Delete(write(fields.try_into().map_err(|_| CORRUPT)?)?)
-                }
-                (Some(Value::Unsigned(2)), 5) => {
-                    ObjectOperation::Move(write(fields.try_into().map_err(|_| CORRUPT)?)?)
+                (Some(Value::Unsigned(kind @ 1..=3)), 5) => {
+                    let write = write(fields.try_into().map_err(|_| CORRUPT)?)?;
+                    match kind {
+                        1 => ObjectOperation::Delete(write),
+                        2 => ObjectOperation::Move(write),
+                        _ => ObjectOperation::MovedFrom(write),
+                    }
                 }
                 _ => return Err(CORRUPT),
             };
@@ -161,15 +163,18 @@ impl ObjectState {
     pub(super) fn insert(&mut self, operation: ObjectOperation) {
         let id = match &operation {
             ObjectOperation::Create(create) => create.id,
-            ObjectOperation::Delete(write) | ObjectOperation::Move(write) => write.id,
+            ObjectOperation::Delete(write)
+            | ObjectOperation::Move(write)
+            | ObjectOperation::MovedFrom(write) => write.id,
         };
         self.0.entry(id).or_insert(operation);
     }
 
     /// The canonical CBOR of every operation, in operation id order: a
     /// create as `[0, id, author, stamp, collection]`, a delete as `[1, id,
-    /// author, stamp, value, [replaced id…]]`, a move as a delete with 2 in
-    /// place of 1. Not a wire format.
+    /// author, stamp, value, [replaced id…]]`, a move and a set of
+    /// `$movedFrom` as a delete with 2 and 3 in place of 1. Not a wire
+    /// format.
     pub(super) fn bytes(&self) -> Vec<u8> {
         let items = self
             .0
@@ -182,18 +187,9 @@ impl ObjectState {
                     Value::Unsigned(c.stamp.0),
                     Value::Text(c.collection.clone()),
                 ]),
-                ObjectOperation::Delete(w) | ObjectOperation::Move(w) => Value::Array(vec![
-                    Value::Unsigned(if matches!(operation, ObjectOperation::Move(_)) {
-                        2
-                    } else {
-                        1
-                    }),
-                    id_value(&w.id),
-                    Value::Bytes(w.author.0.to_vec()),
-                    Value::Unsigned(w.stamp.0),
-                    w.value.clone(),
-                    Value::Array(w.replaces.iter().map(id_value).collect()),
-                ]),
+                ObjectOperation::Delete(w) => write_value(1, w),
+                ObjectOperation::Move(w) => write_value(2, w),
+                ObjectOperation::MovedFrom(w) => write_value(3, w),
             })
             .collect();
         cbor::encode(&Value::Array(items))
@@ -214,4 +210,17 @@ impl ObjectState {
         }
         object
     }
+}
+
+/// A write of an object's value as [`ObjectState::bytes`] keeps it: `[kind,
+/// id, author, stamp, value, [replaced id…]]`.
+fn write_value(kind: u64, w: &Write) -> Value {
+    Value::Array(vec![
+        Value::Unsigned(kind),
+        id_value(&w.id),
+        Value::Bytes(w.author.0.to_vec()),
+        Value::Unsigned(w.stamp.0),
+        w.value.clone(),
+        Value::Array(w.replaces.iter().map(id_value).collect()),
+    ])
 }

@@ -13,7 +13,7 @@ use crate::field::FieldType;
 use crate::ids::{ChangeId, ObjectId, OperationId};
 use crate::link::{Link, Links};
 use crate::log::OperationParkReason;
-use crate::object::{Create, ObjectOperation};
+use crate::object::{Create, MOVED_FROM, ObjectOperation};
 use crate::reference::Reference;
 use crate::set::{Action, Edit, Set};
 
@@ -107,6 +107,29 @@ pub fn delete(object: ObjectId, collection: &str, write: &Write) -> Operation {
 pub fn move_object(object: ObjectId, collection: &str, write: &Write) -> Operation {
     let (_, arguments) = write_arguments(write);
     Operation::new(object, collection.to_owned(), None, MOVE, Some(arguments))
+}
+
+/// The operation map that sets [`MOVED_FROM`] of `object`, the space it
+/// came from, as `write` holds it: `{1: old space id}` (RFC 0016,
+/// "Formats").
+pub fn moved_from(object: ObjectId, collection: &str, write: &Write) -> Operation {
+    let (number, arguments) = write_arguments(write);
+    Operation::new(
+        object,
+        collection.to_owned(),
+        Some(MOVED_FROM.to_owned()),
+        number,
+        Some(arguments),
+    )
+}
+
+/// Reads `operation`, a set of [`MOVED_FROM`], as an operation on its
+/// object, or says why it is parked: it takes only a set.
+pub fn decode_moved_from(
+    operation: &Operation,
+    origin: Origin,
+) -> Result<ObjectOperation, OperationParkReason> {
+    decode_write(operation, origin).map(ObjectOperation::MovedFrom)
 }
 
 /// Reads `operation`, an operation without a field, as a create, a delete
