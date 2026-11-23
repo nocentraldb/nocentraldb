@@ -49,7 +49,12 @@ test("a database whose record and twin are both there opens", async () => {
 
 test("a database recorded outside OPFS but gone from it is refused with storageLost, before the core opens", async () => {
   const open = opened();
-  const refused = guardLoss(markers(["default"], []), "default", undefined, open);
+  const refused = guardLoss(
+    markers(["default"], []),
+    "default",
+    undefined,
+    open,
+  );
   await expect(refused).rejects.toBeInstanceOf(NcError);
   await expect(refused).rejects.toMatchObject({ code: "storageLost" });
   expect(open).not.toHaveBeenCalled();
@@ -77,16 +82,16 @@ test('with ifStorageLost: "open-empty" a lost database opens empty, and the next
     "db",
   );
   expect(open).toHaveBeenCalledTimes(1);
-  await expect(
-    guardLoss(store, "default", undefined, opened()),
-  ).resolves.toBe("db");
+  await expect(guardLoss(store, "default", undefined, opened())).resolves.toBe(
+    "db",
+  );
 });
 
 test("the loss of one database does not touch another", async () => {
   const store = markers(["lost", "kept"], ["kept"]);
-  await expect(
-    guardLoss(store, "kept", undefined, opened()),
-  ).resolves.toBe("db");
+  await expect(guardLoss(store, "kept", undefined, opened())).resolves.toBe(
+    "db",
+  );
   await expect(
     guardLoss(store, "lost", undefined, opened()),
   ).rejects.toMatchObject({ code: "storageLost" });
