@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const RFC = "docs/rfc/0007-relay.md";
-const MARK = "(Carsten, 2026-11-13, #288)";
+const MARK = "(2026-11-13, #288)";
 const lines = () => readFileSync(join(root, RFC), "utf8").split("\n");
 const line = (start) => {
   const found = lines().find((l) => l.startsWith(start));

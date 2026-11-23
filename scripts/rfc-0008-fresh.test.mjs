@@ -235,7 +235,7 @@ test("a shred is final when accepted; waiting until it is stable was not taken",
   holds(
     final,
     [
-      /Carsten, 2026-11-11, NOC-224/,
+      /2026-11-11, NOC-224/,
       /only its causal past/,
       /[Nn]o revocation excludes a shred/,
       /sign-off is the whole defence/,
@@ -318,7 +318,7 @@ test("groups stay out, and compaction keeps every control change", () => {
   holds(
     part("groups"),
     [
-      /withdrawn by the owner \(Carsten, 2026-11-09\)/,
+      /withdrawn by the owner \(2026-11-09\)/,
       /principal with its own control state/,
     ],
     "Groups",
@@ -402,7 +402,7 @@ test("the sign-off: another account's writer when the performer's account is the
     holds(
       part(anchor),
       [
-        /Carsten, 2026-11-11, NOC-228/,
+        /2026-11-11, NOC-228/,
         /exactly one account/,
         /writer member/,
         /[Rr]eaders? may not|not a reader/,

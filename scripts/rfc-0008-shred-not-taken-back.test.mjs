@@ -14,7 +14,7 @@ const RFC = "docs/rfc/0008-membership.md";
 const part = (anchor) => section(read(RFC), anchor);
 
 const RULE = /the first in the order that is not taken back takes effect/;
-const MARK = /Carsten, 2026-11-12, NOC-242/;
+const MARK = /2026-11-12, NOC-242/;
 
 test("the function's rule for the whole set names the first shred not taken back", () => {
   const fn = part("the-function");
