@@ -1,8 +1,9 @@
 //! `ncdb-relay --allow-invitation <ncdb-invite-1:…>` (NOC-257; the owner's
-//! NOC-239 A, Carsten, 2026-11-12): the relay reads the account key from an
-//! invitation's text, RFC 0003's layout ("Invitation"), and lets that
-//! account's members create spaces, as `--allow-account` does with the key
-//! in hex. A developer who uses only the public SDK starts the relay with
+//! NOC-239 A, Carsten, 2026-11-12): the relay reads the account's identity
+//! from an invitation's text, RFC 0003's layout ("Invitation"): the
+//! recovery key of its statement, or its account key when it has none (RFC
+//! 0015, "The account's identity"; NOC-420). It lets that account's members
+//! create spaces, as `--allow-account` does with the key in hex. A developer who uses only the public SDK starts the relay with
 //! their app's invitation. A text that is not an invitation stops the relay
 //! at start, with a message that names the flag and repeats nothing of the
 //! text.
@@ -13,9 +14,15 @@ use std::io::{BufRead, BufReader};
 use std::net::SocketAddr;
 use std::process::{Child, Command, Stdio};
 
+use std::collections::BTreeSet;
+
+use ed25519_dalek::SigningKey;
 use ncdb_core::cbor::Value;
-use ncdb_core::membership::{Certificate, MemberKind};
-use support::space::{Space, account, key};
+use ncdb_core::keys::RecoveryKey;
+use ncdb_core::membership::{
+    self, AccountKeyStatement, Certificate, ControlBody, Entry, Genesis, MemberKind,
+};
+use support::space::{MODEL, Space, account, key, space_key};
 use support::*;
 
 /// The invitation of RFC 0003's vectors: its account is not the simulated
@@ -92,6 +99,32 @@ fn layout(who: u8) -> Vec<u8> {
     bytes
 }
 
+/// RFC 0003's invitation layout of simulated member `who`, certified by
+/// `account` with the statement that names it under `recovery` with
+/// `number`.
+fn layout_with_statement(
+    who: u8,
+    account: &SigningKey,
+    recovery: &RecoveryKey,
+    number: u64,
+) -> Vec<u8> {
+    let member = key(who);
+    let public = member.public();
+    let certificate = Certificate::sign(account, member.id(), MemberKind::Device);
+    let statement = AccountKeyStatement::sign(recovery, account.verifying_key().to_bytes(), number);
+    let mut bytes = vec![1];
+    bytes.extend_from_slice(&public.signing);
+    bytes.extend_from_slice(&public.agreement);
+    bytes.extend_from_slice(&certificate.account_key);
+    bytes.push(1);
+    bytes.extend_from_slice(&certificate.signature);
+    bytes.push(1);
+    bytes.extend_from_slice(&statement.recovery_key);
+    bytes.extend_from_slice(&statement.number.to_be_bytes());
+    bytes.extend_from_slice(&statement.signature);
+    bytes
+}
+
 /// The invitation text of simulated member `who`.
 fn invitation(who: u8) -> String {
     format!("ncdb-invite-1:{}", base64url(&layout(who)))
@@ -165,6 +198,42 @@ async fn invitations_and_account_keys_may_be_given_together_and_more_than_once()
         ],
     );
     assert_eq!(creates_a_space(addr).await, accepted(1));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_invitation_admits_its_account_by_identity_after_a_recovery() {
+    // RFC 0015, "The account's identity" (NOC-420): the invitation names
+    // the account's first key; member 0 is a device recovered from the
+    // code, certified by a new account key under the same recovery key.
+    let recovery = RecoveryKey::from_code(&[0x52; 16]);
+    let first = SigningKey::from_bytes(&[0x71; 32]);
+    let recovered = SigningKey::from_bytes(&[0x72; 32]);
+    let text = format!(
+        "ncdb-invite-1:{}",
+        base64url(&layout_with_statement(7, &first, &recovery, 1))
+    );
+    let dir = TempDir::new();
+    let (_running, addr) = start(&dir, &["--allow-invitation", &text]);
+
+    let creator = key(0);
+    let nonce = [9; 16];
+    let space = membership::space_id(creator.id(), &nonce);
+    let first_generation = membership::generation_id(space, creator.id(), &[]);
+    let statement = AccountKeyStatement::sign(&recovery, recovered.verifying_key().to_bytes(), 2);
+    let genesis = Genesis {
+        nonce,
+        creator: creator.public(),
+        certificate: Certificate::sign(&recovered, creator.id(), MemberKind::Device)
+            .with_statement(statement),
+        first_generation,
+        model_id: membership::seal_model_id(&space_key(), space, creator.id(), MODEL),
+    };
+    let body = ControlBody::new(BTreeSet::new(), Entry::Genesis(genesis));
+    let genesis = membership::write(&creator, space, 1, first_generation, &body);
+
+    let (mut client, _) = Client::member(addr, 0).await;
+    let pushed = client.push(1, space, &[&genesis]).await.remove(0);
+    assert_eq!(pushed, accepted(1));
 }
 
 /// Runs `ncdb-relay --allow-invitation <text>`, which must stop at start:

@@ -8,11 +8,13 @@
 //! It serves plain WebSocket (`ws://`) on `--listen`, by default
 //! `127.0.0.1:7700`, which must be a loopback address; TLS, which RFC 0007
 //! requires on the network, is left to a proxy on the same host. `--allow-account` names, as 64 hex digits,
-//! an account key whose members may create spaces (RFC 0007, "What the
-//! relay checks"). `--allow-invitation` names that account by a member's
-//! invitation text instead, which an app gets from the SDK without ever
-//! seeing a key (NOC-239 A); a text that is not an invitation stops the
-//! relay at start. Both may be given more than once. `--public-url` is where members reach the server's
+//! the identity of an account whose members may create spaces: its
+//! recovery key, or the account key of an account without one (RFC 0007,
+//! "What the relay checks"; RFC 0015, "The account's identity").
+//! `--allow-invitation` names that account by a member's invitation text
+//! instead, which an app gets from the SDK without ever seeing a key
+//! (NOC-239 A), and lists its identity; a text that is not an invitation
+//! stops the relay at start. Both may be given more than once. `--public-url` is where members reach the server's
 //! upload and download URLs for large changes, such as
 //! `https://relay.example.com` behind a TLS proxy; by default `http://` and
 //! the address it listens on.
@@ -63,7 +65,7 @@ fn parse(mut args: impl Iterator<Item = String>) -> Result<Args, Refused> {
                 allowed.insert(account(&value).ok_or(Refused::Usage)?);
             }
             "--allow-invitation" => {
-                allowed.insert(invitation::account_key(&value).map_err(Refused::Invitation)?);
+                allowed.insert(invitation::identity(&value).map_err(Refused::Invitation)?);
             }
             _ => return Err(Refused::Usage),
         }

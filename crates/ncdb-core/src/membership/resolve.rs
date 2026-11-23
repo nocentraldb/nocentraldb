@@ -41,12 +41,12 @@ use super::statement::AccountKeyStatement;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Resolved {
     space: SpaceId,
-    genesis: Option<ChangeId>,
+    pub(super) genesis: Option<ChangeId>,
     first_generation: Option<u64>,
-    members: Members,
-    verdicts: BTreeMap<ChangeId, Verdict>,
-    order: Vec<ChangeId>,
-    seniority: Vec<MemberId>,
+    pub(super) members: Members,
+    pub(super) verdicts: BTreeMap<ChangeId, Verdict>,
+    pub(super) order: Vec<ChangeId>,
+    pub(super) seniority: Vec<MemberId>,
     gaps: BTreeSet<ChangeId>,
     /// For each accepted grant, the accepted revocations of its subject in
     /// its causal past.
@@ -54,7 +54,7 @@ pub struct Resolved {
     generations: Generations,
     heads: BTreeSet<u64>,
     current: Option<u64>,
-    person_keys: PersonKeys,
+    pub(super) person_keys: PersonKeys,
     /// The shreds whose verdict is waiting, by change id.
     waiting_shreds: BTreeMap<ChangeId, WaitingShred>,
     /// The accepted account key statement entries, by change id.
@@ -85,12 +85,11 @@ fn seen(input: &Input, members: &Members) -> BTreeMap<ChangeId, BTreeSet<ChangeI
     let mut seen = BTreeMap::new();
     for state in members.0.values() {
         for grant in &state.grants {
-            let past = input.nodes.get(&grant.change).map(|node| &node.past);
             let revocations = state
                 .revocations
                 .iter()
                 .map(|r| r.change)
-                .filter(|r| past.is_some_and(|past| past.contains(r)));
+                .filter(|r| input.saw(grant.change, *r));
             seen.insert(grant.change, revocations.collect());
         }
     }
@@ -300,9 +299,24 @@ impl Resolved {
     }
 }
 
+/// What step 5's walk through the order leaves behind besides the state,
+/// which a change added after every node of the set reads (NOC-442).
+#[derive(Clone, Default)]
+pub(super) struct Walk {
+    /// The accepted revocations, in the order.
+    pub(super) revocations: Vec<ChangeId>,
+    /// The person keys of the changes the walk accepted, before the rules
+    /// for the whole set.
+    pub(super) keys: PersonKeys,
+    /// The shreds that an accepted take-back names.
+    pub(super) taken_back: BTreeSet<ChangeId>,
+    /// The first accepted shred of each person-key id in the order.
+    pub(super) shreds: BTreeMap<[u8; 16], ChangeId>,
+}
+
 /// Steps 2 to 5 over `set`, a set of nodes closed under dependencies or
-/// all of them.
-pub(super) fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
+/// all of them, with what the walk leaves behind.
+pub(super) fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> (Resolved, Walk) {
     let mut resolved = Resolved {
         space: input.space,
         genesis: None,
@@ -329,7 +343,7 @@ pub(super) fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> 
                 .verdicts
                 .insert(*id, Verdict::Rejected(Rejection::NoGenesis));
         }
-        return resolved;
+        return (resolved, Walk::default());
     };
     for other in others {
         let verdict = Verdict::Rejected(Rejection::EquivocatedGenesis);
@@ -357,10 +371,10 @@ pub(super) fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> 
         .enumerate()
         .map(|(i, m)| (*m, i))
         .collect();
-    let edges = rights::edges(&folded, &input.nodes, judged, &rank);
+    let edges = rights::edges(&folded, input, judged, &rank);
     resolved.order = rights::order(&folded, &edges, &rank);
 
-    let saw = |a: ChangeId, b: ChangeId| input.nodes.get(&a).is_some_and(|n| n.past.contains(&b));
+    let saw = |a: ChangeId, b: ChangeId| input.saw(a, b);
     let creator = Grant {
         change: genesis.id,
         role: Role::Admin,
@@ -382,10 +396,10 @@ pub(super) fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> 
     // applied again with every add found so far rejected, until no new one
     // is found; the set only grows, so this ends.
     let mut superseded: BTreeMap<ChangeId, ChangeId> = BTreeMap::new();
-    let members = loop {
+    let (members, mut walk) = loop {
         resolved.verdicts = before.clone();
         resolved.statements.clear();
-        let members = apply_order(
+        let (members, walk) = apply_order(
             &mut resolved,
             &folded,
             input,
@@ -399,7 +413,7 @@ pub(super) fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> 
             .filter(|(add, _)| !superseded.contains_key(add))
             .collect();
         if new.is_empty() {
-            break members;
+            break (members, walk);
         }
         superseded.extend(new);
     };
@@ -414,7 +428,7 @@ pub(super) fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> 
     reject_duplicate_generations(&mut resolved.verdicts, &folded);
     resolved.heads = current::heads(&resolved.generations, &resolved.verdicts, &folded);
     resolved.current = current::current(&resolved.heads, &resolved.generations, &resolved.order);
-    resolved.person_keys = person_keys::settle(
+    (resolved.person_keys, walk.taken_back, walk.shreds) = person_keys::settle(
         &resolved.order,
         &folded,
         &mut resolved.verdicts,
@@ -422,13 +436,14 @@ pub(super) fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> 
         |id| judged.provisional(id),
         |id| judged.past_members(id),
     );
-    resolved
+    (resolved, walk)
 }
 
 /// Step 5's walk through the order, from `members`, the state after the
 /// genesis: each change accepted or rejected, the accepted ones applied.
 /// An add in `superseded` is rejected, naming the statement entry that
-/// supersedes it.
+/// supersedes it. Returns the members, and the accepted revocations and
+/// person keys of the walk.
 fn apply_order(
     resolved: &mut Resolved,
     folded: &BTreeMap<ChangeId, &Node>,
@@ -436,8 +451,8 @@ fn apply_order(
     judged: &Judged,
     superseded: &BTreeMap<ChangeId, ChangeId>,
     mut members: Members,
-) -> Members {
-    let saw = |a: ChangeId, b: ChangeId| input.nodes.get(&a).is_some_and(|n| n.past.contains(&b));
+) -> (Members, Walk) {
+    let saw = |a: ChangeId, b: ChangeId| input.saw(a, b);
     let genesis = resolved.genesis;
     let mut accepted_revocations: Vec<ChangeId> = Vec::new();
     let mut keys = PersonKeys::default();
@@ -468,7 +483,7 @@ fn apply_order(
         } else if let Some(by) = accepted_revocations
             .iter()
             .filter(|_| !final_when_valid(node))
-            .find(|r| rights::excludes(folded[r], node, &input.nodes, judged))
+            .find(|r| rights::excludes(folded[r], node, input, judged))
         {
             // Reported before a missing right, which the exclusion explains.
             Verdict::Rejected(Rejection::Excluded(*by))
@@ -499,7 +514,12 @@ fn apply_order(
         };
         resolved.verdicts.insert(node.id, verdict);
     }
-    members
+    let walk = Walk {
+        revocations: accepted_revocations,
+        keys,
+        ..Walk::default()
+    };
+    (members, walk)
 }
 
 /// The accepted adds concurrent with an accepted account key statement
@@ -514,7 +534,7 @@ fn concurrent_adds(
     folded: &BTreeMap<ChangeId, &Node>,
     input: &Input,
 ) -> Vec<(ChangeId, ChangeId)> {
-    let saw = |a: ChangeId, b: ChangeId| input.nodes.get(&a).is_some_and(|n| n.past.contains(&b));
+    let saw = |a: ChangeId, b: ChangeId| input.saw(a, b);
     let certified = members
         .0
         .values()
