@@ -20,7 +20,10 @@ function appStack(): Stack {
   return new Stack(new App({ context: flags() }), "AppStack");
 }
 
-function relayIn(stack: Stack, settings = { relayId, allowedAccounts: [account] }) {
+function relayIn(
+  stack: Stack,
+  settings = { relayId, allowedAccounts: [account] },
+) {
   return new Relay(stack, "Relay", {
     stage: "beta",
     settings,
