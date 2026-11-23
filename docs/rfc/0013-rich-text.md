@@ -50,7 +50,7 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operations carry a
 
 - [RFC 0001, "Field types we ship"](0001-nocentraldb.md#field-types-we-ship) lists rich text as planned: built on Yjs, with Yrs in the core, edited in TipTap, read by agents as Markdown and changed with anchored edits that turn into minimal operations.
 - [RFC 0002, "Operations: object, field and value"](0002-change-and-log-format.md#operations-object-field-and-value) leaves room for it: the value of an operation is a byte string holding a Yrs update. Members fold changes as they arrive, without waiting for gaps ([Dependencies](0002-change-and-log-format.md#dependencies)).
-- [RFC 0004, "Operation numbers"](0004-merge-rules-basic-types.md#operation-numbers) reserves the numbers 5 to 63 for later built-in types, rich text among them, and [The plugin contract](0004-merge-rules-basic-types.md#the-plugin-contract) holds every field type, built in or not, to C1 to C7.
+- [RFC 0004, "Operation numbers"](0004-merge-rules-basic-types.md#operation-numbers) gives number 5 to this RFC's rich-text update and reserves 7 to 63 for later built-in types, and [The plugin contract](0004-merge-rules-basic-types.md#the-plugin-contract) holds every field type, built in or not, to C1 to C7.
 - [RFC 0005, "Field types"](0005-schema-and-model-lock.md#field-types) reserves `nc.richText()` and leaves its entry in the lock to this RFC. Its section [Personal data in free text](0005-schema-and-model-lock.md#personal-data-in-free-text) leaves what a mention token looks like to this RFC.
 - [RFC 0006, "Where the view lives"](0006-local-view.md#where-the-view-lives) gives a rich-text field no column, since its value cannot be sorted, and keeps its state in `fs_<collection>`.
 - [RFC 0009](0009-sdk-api.md#what-this-rfc-does-not-cover) leaves the write and read calls of rich text to this RFC.
@@ -500,3 +500,4 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 - 2026-11-22 · First published (NOC-411, #422)
 - 2026-11-22 · The binding's example rebuilds from `onContentError`; a composition holds the write and a rebuild; one UndoManager outlives rebuilds; the guard reloads once, as the owner decided after the browser spike (NOC-455, NOC-467, #454)
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
+- 2026-11-23 · RFC 0004 gives number 5 to the rich-text update and reserves 7 to 63 (NOC-474, #474)
