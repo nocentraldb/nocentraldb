@@ -73,7 +73,7 @@ const FRAGMENTS_ENV = {
   ),
 };
 const FRAGMENTS_RUN =
-  'node scripts/release/check-fragments.mjs --base HEAD^1 --head HEAD $SKIP $BREAKING';
+  "node scripts/release/check-fragments.mjs --base HEAD^1 --head HEAD $SKIP $BREAKING";
 const SEMVER_ACTION = "obi1kenobi/cargo-semver-checks-action@";
 // The merge ref's first parent, the main the PR is merged into: neither the
 // event's base tip nor the merge base, which miss what main gained since the
