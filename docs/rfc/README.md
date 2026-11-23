@@ -19,6 +19,7 @@ NoCentralDB is designed in the open. Each RFC here describes one part of the des
 | [0013](0013-rich-text.md) | Rich text as a field type: Yjs updates in a change, TipTap, anchored edits |
 | [0015](0015-relay-admission.md) | Who may create spaces on a relay, without a redeploy |
 | [0016](0016-moving-an-object.md) | Moving an object to another space, so a single note can be shared |
+| [0017](0017-mcp-server.md) | The ncdb MCP server: an agent's own member for Claude Code, Codex and agent frameworks (draft) |
 
 ## Giving feedback
 
