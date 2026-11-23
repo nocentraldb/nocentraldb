@@ -94,3 +94,36 @@ async fn a_pulled_change_reaches_the_fold_feed_as_remote() {
     assert_eq!(changes[0].ids, vec![ObjectId(SECOND)]);
     assert_eq!(changes[0].origin, crate::subscribe::Origin::Remote);
 }
+
+// db.changes().subscribe() (RFC 0009, "Subscribe"): a change that sync
+// folds yields an item with the origin `Origin::Remote`.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pulled_change_yields_a_remote_change() {
+    let relay = LocalRelay::start().await;
+    let (mut space, mut client) = shared(&relay).await;
+    let db = open(ME, &relay.url()).await;
+    eventually("the first task", || holds(&db, &space, FIRST)).await;
+    let mut changes = db.changes().subscribe();
+
+    let later = space.sealed(ADMIN, vec![field_op::create(SECOND, "tasks")]);
+    push(&mut client, &[&later]).await;
+
+    let next = async {
+        loop {
+            let change = std::future::poll_fn(|cx| {
+                futures_core::Stream::poll_next(std::pin::Pin::new(&mut changes), cx)
+            })
+            .await
+            .expect("the stream goes on");
+            if change.space.0 == space.space {
+                return change;
+            }
+        }
+    };
+    let change = tokio::time::timeout(std::time::Duration::from_secs(10), next)
+        .await
+        .expect("the pulled change within 10 s");
+    assert_eq!(change.collection, "tasks");
+    assert_eq!(change.ids, vec![ObjectId(SECOND)]);
+    assert_eq!(change.origin, crate::Origin::Remote);
+}
