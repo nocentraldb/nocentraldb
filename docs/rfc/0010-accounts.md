@@ -100,11 +100,11 @@ RFC 0003 defines the certificate's bytes and RFC 0008 where it stands. This is w
 
 ## The recovery code
 
-The recovery code is made when the account is created, on its first device. The SDK hands it to the app once, for the person to write down or store in a password manager, as an object whose string, JSON and debug forms are redacted so that it never reaches a log ([GENESIS.md, "What it must never do"](../../factory/GENESIS.md#what-it-must-never-do)). The app shows the words and calls `confirm()`. Apps own their screens, so the SDK does not ship its own screen, which would be a user interface on every platform; and the SDK does not store the code in the platform's password manager itself, because that would put it on the devices it is meant to outlive. It is the one way a private key leaves a device that RFC 0003 allows: "the account recovery flow, which a person runs, not an app".
+The recovery code is made when the account is created, on its first device. The SDK hands it to the app once, for the person to write down or store in a password manager, as an object whose string, JSON and debug forms are redacted so that it never reaches a log ([GENESIS.md, "What it must never do"](../../factory/GENESIS.md#what-it-must-never-do)). The app shows the words, and once the person says they stored them, asks for two of them back: `challenge()` names two positions the SDK picked at random, and `confirm(answers)` takes the words the person typed at them, in any letter case and spacing, as recovering does. Only when both match does the device forget the code. A wrong word fails with `invalidValue`, which names its position and never a word, and the code stays (2026-11-23, NOC-502). Forgetting the code cannot be undone, and with one tap a person who never wrote the words down would learn it only once every device is lost. The SDK does not judge where the person stored the words. Not taken: offering the check beside a bare `confirm()` that an app could still call with one tap, and leaving the check to the guides alone. Apps own their screens, so the SDK does not ship its own screen, which would be a user interface on every platform; and the SDK does not store the code in the platform's password manager itself, because that would put it on the devices it is meant to outlive. It is the one way a private key leaves a device that RFC 0003 allows: "the account recovery flow, which a person runs, not an app".
 
 **Its form** is twelve words from the BIP-39 English word list. They encode 128 random bits and a 4-bit checksum. The words are only an encoding: BIP-39's step that stretches the words with PBKDF2 into a wallet seed is not used. The recovery key derives from the 128 bits with HKDF-SHA256 under its own context string, `"nocentraldb/recovery-key"`, as RFC 0003 derives its other subkeys. 128 bits match the strength of Ed25519 itself, twelve words are copied by hand with fewer mistakes than twenty-four words or 26 characters in Crockford's base32, and people recognise the word list. Twenty-four words could encode the 32-byte Ed25519 seed itself, but would only make the code longer to copy for no strength the key has.
 
-**What the device keeps.** The device forgets the recovery code once the app confirms that the person stored it, and keeps only the recovery key's public half. A stolen device therefore holds no recovery code.
+**What the device keeps.** The device forgets the recovery code once the person typed two of its words back, and keeps only the recovery key's public half. A stolen device therefore holds no recovery code.
 
 **Recovering.** On a new device, the person enters the code. The SDK derives the recovery key, draws a new account key, signs its statement with the next number, certifies the new device's member key and forgets the recovery key again. The account comes back with its fingerprint unchanged.
 
@@ -288,6 +288,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - **2026-11-13 · The account space is the one whose genesis creator is the current account.** ([decision](../../factory/decisions/2026-11-13-NOC-310-the-account-space-is-the-current-accounts.md))
 - **2026-11-13 · A linked database creates no account space while it keeps its link statement.** ([decision](../../factory/decisions/2026-11-13-NOC-311-a-linked-database-creates-no-account-space-while-it-keeps-its-link.md))
 - **2026-11-14 · A paired device keeps that it joined an account in the table `joined`, beside its log.** ([decision](../../factory/decisions/2026-11-14-NOC-311-a-paired-device-keeps-that-it-joined-beside-its-log.md))
+- **2026-11-23 · Confirming the recovery code asks for two of its words back, at positions the SDK picks at random.** ([decision](../../factory/decisions/2026-11-23-NOC-502-confirming-the-recovery-code-asks-for-two-of-its-words-back.md))
 - **2026-11-22 · The view names the account space's collections `$members`, `$memberships`, `$links`, `$statements` and `$wrappedKeys`.** ([decision](../../factory/decisions/2026-11-12-NOC-266-the-view-holds-the-shipped-account-model-under-dollar-names.md))
 
 ## History
@@ -306,6 +307,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - 2026-11-22 · The account space says when a device creates it, which one is the account's, how its records' ids and indexes work, and what the table `joined` keeps (NOC-379, NOC-266, NOC-310, NOC-311, #449)
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
 - 2026-11-23 · Inline attributions keep the date and the ticket and name nobody who decided; the decision log records it (NOC-481, #475)
+- 2026-11-23 · Confirming the recovery code asks for two of its words back (NOC-502)
 
 ## How this RFC is tested
 

@@ -569,8 +569,9 @@ test("db.durability counts an unconfirmed write, requestPersistent answers a boo
 
 // NOC-316 slice 1: the recovery code and recovering an account (RFC 0009,
 // "Accounts and devices"). The code sits in the browser's sealed key record
-// until confirm(), so it survives a reopen; another database recovers the
-// account from its words.
+// until two of its words come back to confirm() (NOC-502), so it survives a
+// reopen and a wrong word; another database recovers the account from its
+// words.
 test("the recovery code is shown until confirmed, survives a reopen, and recovers the account elsewhere", async () => {
   const { page: opened, errors } = await page();
   const result = await opened.evaluate(
@@ -585,7 +586,17 @@ test("the recovery code is shown until confirmed, survives a reopen, and recover
       await db.close();
       db = await nc.open({ model, lock, name: "account-a" });
       const again = [...(await db.account.recoveryCode()).words()];
-      await (await db.account.recoveryCode()).confirm();
+      const shown = await db.account.recoveryCode();
+      const [first, second] = shown.challenge();
+      const other = words[second - 1] === "zoo" ? "abandon" : "zoo";
+      const wrong = await shown
+        .confirm([words[first - 1], other])
+        .then(() => "confirmed", (error) => error.code);
+      const keptAfterWrong = (await db.account.recoveryCode()) !== null;
+      await shown.confirm([
+        words[first - 1].toUpperCase(),
+        ` ${words[second - 1]} `,
+      ]);
       await db.close();
       db = await nc.open({ model, lock, name: "account-a" });
       const afterConfirm = await db.account.recoveryCode();
@@ -598,7 +609,16 @@ test("the recovery code is shown until confirmed, survives a reopen, and recover
       });
       const recovered = await back.account.recovered();
       await back.close();
-      return { words, forms, recoveredFirst, again, afterConfirm, recovered };
+      return {
+        words,
+        forms,
+        recoveredFirst,
+        again,
+        wrong,
+        keptAfterWrong,
+        afterConfirm,
+        recovered,
+      };
     },
     { lock, MODEL },
   );
@@ -608,6 +628,8 @@ test("the recovery code is shown until confirmed, survives a reopen, and recover
     '{"code":"RecoveryCode(redacted)"}',
   ]);
   assert.equal(result.recoveredFirst, null);
+  assert.equal(result.wrong, "invalidValue");
+  assert.equal(result.keptAfterWrong, true);
   assert.deepEqual(result.again, result.words);
   assert.equal(result.afterConfirm, null);
   assert.equal(result.recovered.code, "accountRecovered");

@@ -601,7 +601,29 @@ The laptop adds the new device to every space where it is an admin, each with it
 
 ## 16. Remove a lost device
 
-The first open of an account creates its recovery code: twelve words, which `db.account.recoveryCode()` gives your app until the person confirms they stored them with `confirm()`. When a device is lost, another device of the account removes it with those words. That removes it from every space this device administers and gives the account a new account key, so the lost device's is no longer accepted:
+The first open of an account creates its recovery code: twelve words, which `db.account.recoveryCode()` gives your app until the person proves they stored them by typing two of them back. `challenge()` names the two positions, which the SDK picked at random, and `confirm()` takes the words typed there:
+
+```ts
+import { nc } from "@nocentraldb/sdk";
+import { model } from "../model.ts";
+
+const lock: unknown = await (await fetch("/model.lock.json")).json();
+const db = await nc.open({ model, lock, name: "laptop" });
+
+const code = await db.account.recoveryCode(); // null once confirmed
+if (code) {
+  alert(`Write these words down: ${code.words().join(" ")}`);
+  const [first, second] = code.challenge();
+  await code.confirm([
+    prompt(`Word ${first} of your recovery code`) ?? "",
+    prompt(`Word ${second} of your recovery code`) ?? "",
+  ]);
+}
+```
+
+Letter case and spacing do not matter. A word that does not match fails with `invalidValue`, which names its position but never a word, and the SDK keeps the code, so the person can look again and retry.
+
+When a device is lost, another device of the account removes it with those words. That removes it from every space this device administers and gives the account a new account key, so the lost device's is no longer accepted:
 
 ```ts
 import { nc } from "@nocentraldb/sdk";
