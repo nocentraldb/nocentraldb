@@ -1,6 +1,6 @@
 ---
 type: fix
-tickets: [NOC-427]
+tickets: [NOC-427, NOC-492]
 introduced: cycle
 components: [relay]
 ---
@@ -18,4 +18,4 @@ The relay is stateless between requests, so each of these requests read every co
 
 ## Fix
 
-A warm relay process, such as a Lambda instance between invocations, now remembers each space's control changes and their resolve. It reads only the control changes appended since, and judges only those with the resolver the members use, which returns exactly `resolve`'s state. A new relay epoch, or a log that no longer holds the last entry it read, makes it read the space from the start. It remembers at most 16 spaces, up to a memory budget of about one space of 1,200 control changes, and forgets the least recently used first. A cold start, or a space too large for the budget, resolves the space from scratch once per request instead of up to twice. At 800 persons a new person now costs about 7 ms for the push and 7 ms for the put on a warm instance, where it cost 1,970 ms and 1,009 ms, and about 1,040 ms for both on a cold instance. The relay stores nothing new.
+A warm relay process, such as a Lambda instance between invocations, now remembers each space's control changes and their resolve. It reads only the control changes appended since, and judges only those with the resolver the members use, which returns exactly `resolve`'s state. A new relay epoch, or a log that no longer holds the last entry it read, makes it read the space from the start. It remembers at most 16 spaces, up to a memory budget of 10,240 control changes over all of them, about one space of 10,000 persons and 80 MB, and forgets the least recently used first. A cold start, or a space too large for the budget, resolves the space from scratch once per request instead of up to twice. At 800 persons a new person now costs about 7 ms for the push and 7 ms for the put on a warm instance, where it cost 1,970 ms and 1,009 ms, and about 1,040 ms for both on a cold instance. The relay stores nothing new.
