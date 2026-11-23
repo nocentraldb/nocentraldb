@@ -222,7 +222,7 @@ member → (url)   PUT the frame bytes
 member → relay   push      {req, space, frames: [{upload: id}]}
 ```
 
-The relay reads the uploaded bytes and checks them like any other frame. On a pull, a large entry carries a short-lived download URL instead of the frame. The largest frame the relay accepts is a protocol limit too: 16 MiB, large enough for rich-text pastes with images inlined, small enough that one change cannot block a member's pull. Files are a later RFC. 4 MiB was not taken, nor no limit with multipart uploads.
+The relay reads the uploaded bytes and checks them like any other frame. On a pull, a large entry carries a short-lived download URL instead of the frame. The largest frame the relay accepts is a protocol limit too: 16 MiB, large enough for rich-text pastes with images inlined, small enough that one change cannot block a member's pull. A change at the 16 MiB limit fits in 256 MiB of core memory, natively and in a browser tab's WebAssembly memory. Files are a later RFC. 4 MiB was not taken, nor no limit with multipart uploads.
 
 The upload and download URLs answer CORS for any origin, the browser's preflight of the `PUT` included, so an app in a browser reaches them with `fetch()`. A URL is a one-time capability, valid for minutes, and carries no cookie, so an origin gains nothing by it that the URL's holder did not already have. Refusing large changes in the browser was not taken: a large paste would then sync from every device but a browser.
 
@@ -705,6 +705,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - **2026-11-15 · Every message travels as base64 in one WebSocket text frame.** (Carsten, 2026-11-15, NOC-338; [decision](../../factory/decisions/2026-11-15-NOC-338-every-message-travels-as-base64-in-one-text-frame-of-at-most-32-kb.md))
 - **2026-11-20 · The relay hands a removed member the control change that removes it.** (Carsten, 2026-11-20, NOC-383; [decision](../../factory/decisions/2026-11-20-NOC-383-the-relay-hands-a-removed-member-the-control-change-that-removes-it.md); [decision](../../factory/decisions/2026-11-20-NOC-383-the-error-that-ends-a-removed-member-s-read-carries-its-removal-at-key-5.md))
 - **2026-11-22 · The relay admits by the account's identity, the recovery key, with the account key for an account without one.** (Carsten, 2026-11-22, NOC-429; [decision](../../factory/decisions/2026-11-22-NOC-413-the-relay-admits-by-the-account-s-identity-the-recovery-key.md))
+- **2026-11-23 · A change at the 16 MiB limit fits in 256 MiB of core memory, natively and in a browser tab's WebAssembly memory; a phone was not measured.** (Carsten, 2026-11-23, NOC-451, NOC-479; [decision](../../factory/decisions/2026-11-23-NOC-479-a-change-at-the-16-mib-limit-fits-in-256-mib-of-core-memory.md))
 
 ## History
 
@@ -725,3 +726,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · The error that ends a removed member's pull or subscription carries the control change that removes it, so its own copy folds the removal (NOC-383)
 - 2026-11-22 · The relay admits an account by its identity, keys the guest's one space by it, and refuses a genesis whose statement a newer one superseded, as RFC 0015 decides (NOC-420, #453)
+- 2026-11-23 · Large changes states the memory budget of a change at the 16 MiB limit, 256 MiB, which a release-only guard test holds (NOC-479)
