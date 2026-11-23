@@ -344,6 +344,8 @@ interface OpenOptions {
   name?: string;
   /** `"on-open"`, the default: ask the browser for persistent storage on open, without waiting; `"on-request"`: only when the app calls `db.durability.requestPersistent()` (RFC 0006). */
   persistentStorage?: "on-open" | "on-request";
+  /** What `nc.open` does when this browser had the database open before and the browser has since dropped its files, as Chromium does with a private window's OPFS after ten minutes with no database open: `"refuse"`, the default, fails with `storageLost`; `"open-empty"` opens an empty copy under the same member keys (RFC 0006, NOC-445). */
+  ifStorageLost?: "refuse" | "open-empty";
   /** `"request"`: open a new database to be paired to an account; its invitation carries no certificate yet (RFC 0010). */
   pairing?: "request";
   /** The twelve words of a recovery code, as the person typed them: recovers the account on a new database (RFC 0010). Never logged. */
