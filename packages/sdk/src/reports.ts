@@ -5,7 +5,14 @@
 import type { SpaceStatus } from "./status.ts";
 import type { SyncStatus } from "./sync.ts";
 
-/** The sync status the core sent, with the relay that serves the database. */
+/**
+ * The relay's URL as the SDK shows it: without its query string and
+ * fragment, which may carry a token for the relay's authorizer (NOC-495).
+ * The core still connects with the whole URL.
+ */
+const shownRelay = (url: string): string => url.split(/[?#]/, 1)[0] ?? url;
+
+/** The sync status the core sent, with the relay that serves the database, shown by `shownRelay`. */
 export const syncStatusOf = (
   raw: unknown,
   relay: string | undefined,
@@ -13,7 +20,7 @@ export const syncStatusOf = (
   const given = (raw ?? {}) as Partial<Record<keyof SyncStatus, unknown>>;
   return {
     connection: (given.connection ?? "none") as SyncStatus["connection"],
-    ...(relay === undefined ? {} : { relay }),
+    ...(relay === undefined ? {} : { relay: shownRelay(relay) }),
     unconfirmed: Number(given.unconfirmed ?? 0),
     refused: Number(given.refused ?? 0),
     epochChanged: given.epochChanged === true,

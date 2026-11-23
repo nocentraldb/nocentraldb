@@ -11,7 +11,7 @@ export interface SyncStatus {
     | "offline"
     | "paused"
     | "none";
-  /** The relay `nc.open` named; absent without one. */
+  /** The relay `nc.open` named, without its query string and fragment; absent without one. */
   readonly relay?: string;
   /** This member's changes the relay has not confirmed. */
   readonly unconfirmed: number;
