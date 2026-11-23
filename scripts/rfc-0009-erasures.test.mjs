@@ -33,7 +33,7 @@ test("Spaces and members has Erasures, the audit as a list call per space", () =
     /`"takenBack"`/,
     /`"waiting"`/,
     /no timeout/,
-    /Carsten, 2026-11-20, NOC-392/,
+    /2026-11-20, NOC-392/,
     /`performer`/,
     /`signOff`/,
     /`current`/,
@@ -42,7 +42,7 @@ test("Spaces and members has Erasures, the audit as a list call per space", () =
     /`"missing"`/,
     /causal past/,
     /a reader too|readers? too/,
-    /Carsten, 2026-11-12, NOC-246/,
+    /2026-11-12, NOC-246/,
   ]) {
     assert.match(erasures, pattern, `Erasures does not say ${pattern}`);
   }

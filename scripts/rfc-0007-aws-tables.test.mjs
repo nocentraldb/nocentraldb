@@ -15,8 +15,8 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const RFC = "docs/rfc/0007-relay.md";
-const MARK = "(Carsten, 2026-11-12, #275)";
-const NO_TOKENS = "(Carsten, 2026-11-13, NOC-295; NOC-303)";
+const MARK = "(2026-11-12, #275)";
+const NO_TOKENS = "(2026-11-13, NOC-295; NOC-303)";
 const read = () => readFileSync(join(root, RFC), "utf8");
 
 /** The text under the heading `### title`, up to the next `##` heading. */

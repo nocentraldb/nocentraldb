@@ -27,7 +27,7 @@ test("Spaces has db.spaces.subscribe, the space list as a stream", () => {
     /db\.spaces\.subscribe\(/,
     /current list at once/,
     /added, left or removed, or (?:its|the member's) role changes/,
-    /Carsten, 2026-11-12, NOC-241/,
+    /2026-11-12, NOC-241/,
   ])
     assert.match(spaces, pattern);
 });
@@ -42,7 +42,7 @@ test("the Rust SDK names Spaces::subscribe as a stream of Vec<SpaceInfo>", () =>
     bullet,
     /`Spaces::subscribe\(\) -> impl Stream<Item = Vec<SpaceInfo>>`/,
   );
-  assert.match(bullet, /Carsten, 2026-11-12, NOC-241/);
+  assert.match(bullet, /2026-11-12, NOC-241/);
 });
 
 test("Public names list the stream in both languages", () => {
@@ -60,7 +60,7 @@ test("personKeyNotHeld stands next to noPerson wherever errors are listed", () =
     /does not hold yet/,
     /retr(?:y|ies)/,
     /sync/,
-    /Carsten, 2026-11-12, NOC-255/,
+    /2026-11-12, NOC-255/,
   ])
     assert.match(errorRow, pattern);
 
