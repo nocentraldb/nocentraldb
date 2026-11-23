@@ -157,6 +157,12 @@ pub(crate) const OPEN_ALREADY: &str =
 pub(crate) const OPEN_TAKES_IN_MEMORY_OR_NAME: &str =
     "open takes inMemory: true, or a name in the browser";
 
+/// `bridgeRecoveryAnswers` (invalidValue): The bridge, on a request from the
+/// TypeScript SDK: account.confirmRecoveryCode (code.confirm) given answers
+/// that are not two words at two different positions from 1 to 12.
+pub(crate) const RECOVERY_ANSWERS: &str =
+    "confirming the recovery code takes two of its words, at two different positions from 1 to 12";
+
 /// `bridgeRoleIsText` (invalidValue): The bridge, on a request from the
 /// TypeScript SDK: members.add or members.setRole given a role that is not
 /// text.

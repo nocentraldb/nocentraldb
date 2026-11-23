@@ -89,7 +89,11 @@ fn a_wrong_word_is_refused_and_the_code_stays() {
     let mut bridge = opened();
     let shown = words(&mut bridge).expect("a code");
     let [a, b] = challenge(&mut bridge);
-    let wrong = if shown[b - 1] == "zoo" { "abandon" } else { "zoo" };
+    let wrong = if shown[b - 1] == "zoo" {
+        "abandon"
+    } else {
+        "zoo"
+    };
     let answer = send(
         &mut bridge,
         3,

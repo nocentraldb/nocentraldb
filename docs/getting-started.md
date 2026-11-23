@@ -371,7 +371,7 @@ The laptop adds the new device to every space where it is an admin. `paired.ask_
 
 ## 10. Keep the recovery code
 
-The first open of an account creates its recovery code: twelve words. They restore the account if every device is lost. The SDK hands them to your app until the person confirms they stored them, then forgets them for good:
+The first open of an account creates its recovery code: twelve words. They restore the account if every device is lost. The SDK hands them to your app until the person proves they stored them, by typing two of the words back, then forgets them for good. `challenge()` names the two positions, which the SDK picked at random:
 
 ```rust no_run
 use nocentraldb::{Db, OpenOptions};
@@ -382,12 +382,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = Db::open(OpenOptions::new(&lock).path("laptop")).await?;
     if let Some(code) = db.account().recovery_code().await? {
         println!("Write these words down: {}", code.words().join(" "));
-        // Only after the person said they stored them.
-        code.confirm().await?;
+        // Later, once the words are hidden: ask for two of them back.
+        let [first, second] = code.challenge();
+        let mut typed = [String::new(), String::new()];
+        for (position, answer) in [first, second].iter().zip(typed.iter_mut()) {
+            println!("Word {position} of your recovery code:");
+            std::io::stdin().read_line(answer)?;
+        }
+        code.confirm([&typed[0], &typed[1]]).await?;
     }
     Ok(())
 }
 ```
+
+Letter case and spacing do not matter. A word that does not match fails with `InvalidValue`, which names its position but never a word. The SDK keeps the code, so the person can look again and retry.
 
 The code prints as `RecoveryCode(redacted)`, so it never reaches a log by accident. On a new device, open a new database with `.recover("twelve words …")`. It keeps the account's fingerprint, and the other members add the device to their spaces again.
 

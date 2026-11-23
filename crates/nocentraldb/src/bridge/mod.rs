@@ -89,8 +89,10 @@
 //!
 //! The calls of NOC-316, slice 1 (RFC 0009, "Accounts and devices"), in
 //! `account.rs`: `open` also takes `"pairing": true` and `"recover":
-//! words`; `account.recoveryCode` `{}` answers `{"words": [text]}` or
-//! `null`; `account.confirmRecoveryCode` `{}` forgets the code;
+//! words`; `account.recoveryCode` `{}` answers `{"words": [text],
+//! "challenge": [n, n]}` or `null`; `account.confirmRecoveryCode`
+//! `{"answers": [{"position": n, "word": text}]}` forgets the code when
+//! both words match (NOC-502);
 //! `account.recovered` `{}` answers a notice or `null`.
 //!
 //! For RFC 0015's `admission` option (NOC-469), `open` takes
@@ -285,7 +287,7 @@ impl Bridge {
             "space.sourceOf" => ad_hoc::source_of(&db, args).await,
             "space.copyOf" => ad_hoc::copy_of(&db, args).await,
             "account.recoveryCode" => account::recovery_code(&db).await,
-            "account.confirmRecoveryCode" => account::confirm_recovery_code(&db).await,
+            "account.confirmRecoveryCode" => account::confirm_recovery_code(&db, args).await,
             "account.recovered" => account::recovered(&db).await,
             "account.pair" => account::pair(&db, args).await,
             "account.completePairing" => account::complete_pairing(&db, args).await,

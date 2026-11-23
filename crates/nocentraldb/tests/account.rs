@@ -1,7 +1,8 @@
 //! Accounts in the Rust SDK (RFC 0010, "The recovery code" and "Adding a
 //! device or an agent to an account"; RFC 0009, "Accounts and devices";
 //! the owner's NOC-273 A, Carsten, 2026-11-12): the account's first open
-//! hands the app its recovery code until `confirm()`, and a device of the
+//! hands the app its recovery code until two of its words come back to
+//! `confirm` (NOC-502), and a device of the
 //! account pairs a new device or an agent by text, with `pair` and
 //! `complete_pairing`.
 
@@ -23,6 +24,13 @@ fn open(options: OpenOptions) -> Db {
 
 fn code(db: &Db) -> Option<RecoveryCode> {
     now(db.account().recovery_code()).unwrap()
+}
+
+/// The words of `code` at the positions of its challenge, as the person
+/// types them back.
+fn answers(code: &RecoveryCode) -> [&'static str; 2] {
+    let words = code.words();
+    code.challenge().map(|position| words[position - 1])
 }
 
 /// Pairs `new` with the account of `device` by text, as kind `kind`, and
@@ -50,15 +58,15 @@ fn the_first_open_hands_the_recovery_code_until_it_is_confirmed() {
     };
     // Every open shows it again until the person confirms they stored it.
     let db = open(at(&dir, "laptop"));
-    let code = code(&db).expect("the code stays until confirm()");
+    let code = code(&db).expect("the code stays until it is confirmed");
     assert_eq!(code.words(), words);
-    now(code.confirm()).unwrap();
+    now(code.confirm(answers(&code))).unwrap();
     assert!(self::code(&db).is_none());
     drop(db);
     let db = open(at(&dir, "laptop"));
     assert!(
         self::code(&db).is_none(),
-        "confirm() forgets the code for good"
+        "confirming forgets the code for good"
     );
     // The key file no longer holds the words, and never held them as text.
     let keys = std::fs::read(dir.join("laptop.keys")).unwrap();
@@ -237,7 +245,8 @@ fn recovery_on_a_third_device_keeps_the_fingerprint_and_joins_no_space() {
     let dir = TempDir::new("recover");
     let laptop = open(at(&dir, "laptop"));
     let words = words(&laptop);
-    now(code(&laptop).unwrap().confirm()).unwrap();
+    let shown = code(&laptop).unwrap();
+    now(shown.confirm(answers(&shown))).unwrap();
     now(laptop.spaces().create()).unwrap();
 
     let third = open(at(&dir, "third").recover(&words));

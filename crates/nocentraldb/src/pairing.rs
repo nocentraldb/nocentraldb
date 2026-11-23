@@ -22,6 +22,7 @@ use std::sync::{Arc, Mutex};
 use ncdb_core::membership::{Certificate, MemberKind, Role as CoreRole};
 use ncdb_core::pairing::{self as core, CheckError, LinkStatement};
 use ncdb_core::recovery::{RecoveryCode as CoreCode, WORD_LIST};
+use zeroize::Zeroizing;
 
 use crate::db::{Db, Inner, lock};
 use crate::error::{Error, ErrorCode, storage};
@@ -54,10 +55,10 @@ impl Account<'_> {
     /// pairing has none.
     pub async fn recovery_code(&self) -> Result<Option<RecoveryCode>, Error> {
         let inner = self.db.lock();
-        Ok(inner.code.clone().map(|code| RecoveryCode {
-            code,
-            db: Some(self.db.inner.clone()),
-        }))
+        Ok(inner
+            .code
+            .clone()
+            .map(|code| RecoveryCode::new(code, Some(self.db.inner.clone()))))
     }
 
     /// `AccountRecovered` when this open recovered the account from its
@@ -429,18 +430,46 @@ pub(crate) fn check_error(why: CheckError) -> Error {
 /// 0010, "The recovery code"). `Display` and `Debug` print
 /// `RecoveryCode(redacted)`, and it implements no serde trait, so no
 /// serializer can put it into a log. [`RecoveryCode::words`] is the one way
-/// to read it.
+/// to read it. Before the database forgets it, the person types two of its
+/// words back, at the positions of [`RecoveryCode::challenge`] (NOC-502).
 pub struct RecoveryCode {
     code: CoreCode,
+    /// The two positions, counted from 1, whose words `confirm` asks for.
+    challenge: [usize; 2],
     /// The database that keeps the code, which `confirm` tells to forget
     /// it.
     db: Option<Arc<Mutex<Inner>>>,
 }
 
+/// Two different positions from 1 to 12, in order, picked uniformly from
+/// the platform's secure random generator.
+///
+/// # Panics
+///
+/// When the platform has no secure generator, as making the code does.
+fn pick_challenge() -> [usize; 2] {
+    let mut picked = Vec::with_capacity(2);
+    while picked.len() < 2 {
+        let mut byte = [0u8; 1];
+        getrandom::fill(&mut byte).expect("the platform's secure random generator failed");
+        // The low four bits, kept only below 12, so that every position is
+        // as likely.
+        let position = usize::from(byte[0] & 0x0f) + 1;
+        if position <= 12 && !picked.contains(&position) {
+            picked.push(position);
+        }
+    }
+    picked.sort_unstable();
+    [picked[0], picked[1]]
+}
+
 impl RecoveryCode {
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub(crate) fn new(code: CoreCode) -> RecoveryCode {
-        RecoveryCode { code, db: None }
+    pub(crate) fn new(code: CoreCode, db: Option<Arc<Mutex<Inner>>>) -> RecoveryCode {
+        RecoveryCode {
+            code,
+            challenge: pick_challenge(),
+            db,
+        }
     }
 
     /// The twelve words, from the BIP-39 English list, for the person to
@@ -457,15 +486,49 @@ impl RecoveryCode {
         out
     }
 
-    /// Confirms that the person stored the code: the database forgets it
-    /// and keeps only the recovery key's public half, in its statement
-    /// (RFC 0010, "The recovery code"). Every later open returns no code.
-    pub async fn confirm(self) -> Result<(), Error> {
-        let Some(db) = self.db else {
+    /// The two positions, counted from 1 and in order, whose words the
+    /// person types back to [`RecoveryCode::confirm`]. The SDK picks them at
+    /// random when it hands out the code, so they stay the same for this
+    /// object, and the next `recovery_code()` picks new ones.
+    pub fn challenge(&self) -> [usize; 2] {
+        self.challenge
+    }
+
+    /// Confirms that the person stored the code, with the words they typed
+    /// back at the positions of [`RecoveryCode::challenge`], in that order.
+    /// Letter case and the spacing around a word do not matter, as for
+    /// [`OpenOptions::recover`](crate::OpenOptions::recover). When both
+    /// match, the database forgets the code and keeps only the recovery
+    /// key's public half, in its statement (RFC 0010, "The recovery code"),
+    /// and every later open returns no code. A word that does not match
+    /// fails with `InvalidValue`, naming its position, never a word, and the
+    /// database keeps the code, so the person may try again.
+    pub async fn confirm(&self, answers: [&str; 2]) -> Result<(), Error> {
+        let [first, second] = self.challenge;
+        self.confirm_at([(first, answers[0]), (second, answers[1])])
+            .await
+    }
+
+    /// [`RecoveryCode::confirm`] with the positions given beside the
+    /// words, as the bridge receives them; each position counts from 1.
+    pub(crate) async fn confirm_at(&self, answers: [(usize, &str); 2]) -> Result<(), Error> {
+        let words = self.code.words();
+        let words: Vec<&str> = words.split(' ').collect();
+        for (position, answer) in answers {
+            let typed = Zeroizing::new(answer.trim().to_lowercase());
+            let expected = position.checked_sub(1).and_then(|i| words.get(i));
+            if expected != Some(&typed.as_str()) {
+                return Err(Error::new(
+                    ErrorCode::InvalidValue,
+                    crate::texts::error::recovery_word_wrong(position),
+                ));
+            }
+        }
+        let Some(db) = &self.db else {
             return Ok(());
         };
         let (keys, home) = {
-            let inner = lock(&db);
+            let inner = lock(db);
             let keys = Keys {
                 member: inner.member.clone(),
                 account: inner.account.clone(),
@@ -475,7 +538,7 @@ impl RecoveryCode {
             (keys, inner.home.clone())
         };
         home.save(&keys).await?;
-        lock(&db).code = None;
+        lock(db).code = None;
         Ok(())
     }
 }

@@ -9,34 +9,70 @@ use std::str::FromStr;
 use ncdb_core::cbor::Value;
 
 use super::members::{member_id, notice_of};
-use super::{Failed, entries, invalid, text};
+use super::{Failed, entries, get, invalid, text};
 use crate::db::Db;
 use crate::id::SpaceId;
 use crate::members::{Invitation, Notice};
 use crate::pairing::{PairKind, PairingAnswer};
 
-/// `account.recoveryCode` `{}`: `{"words": [text; 12]}` while the person
-/// has not confirmed they stored the code, else `null`.
+/// `account.recoveryCode` `{}`: `{"words": [text; 12], "challenge": [n,
+/// n]}` while the person has not confirmed they stored the code, else
+/// `null`. `challenge` holds the two positions, counted from 1 and in
+/// order, whose words the person types back (NOC-502).
 pub(super) async fn recovery_code(db: &Db) -> Result<Value, Failed> {
     Ok(match db.account().recovery_code().await? {
-        Some(code) => entries([(
-            "words",
-            Value::Array(
-                code.words()
-                    .iter()
-                    .map(|word| Value::Text((*word).into()))
-                    .collect(),
+        Some(code) => entries([
+            (
+                "words",
+                Value::Array(
+                    code.words()
+                        .iter()
+                        .map(|word| Value::Text((*word).into()))
+                        .collect(),
+                ),
             ),
-        )]),
+            (
+                "challenge",
+                Value::Array(
+                    code.challenge()
+                        .iter()
+                        .map(|position| Value::Unsigned(*position as u64))
+                        .collect(),
+                ),
+            ),
+        ]),
         None => Value::Null,
     })
 }
 
-/// `account.confirmRecoveryCode` `{}`: the database forgets the code.
-/// Answers `null`, also when there is none left to confirm.
-pub(super) async fn confirm_recovery_code(db: &Db) -> Result<Value, Failed> {
+/// `account.confirmRecoveryCode` `{"answers": [{"position": n, "word":
+/// text}; 2]}`: when both words match the code at their positions, the
+/// database forgets the code (NOC-502). Answers `null`, also when there is
+/// none left to confirm. Answers that are not two words at two different
+/// positions from 1 to 12 are `invalidValue`, and so is a word that does not
+/// match, which names its position, never a word.
+pub(super) async fn confirm_recovery_code(db: &Db, args: &Value) -> Result<Value, Failed> {
+    let given = match get(args, "answers") {
+        Some(Value::Array(given)) if given.len() == 2 => given,
+        _ => return Err(invalid(crate::texts::bridge::RECOVERY_ANSWERS)),
+    };
+    let mut answers = [(0usize, ""); 2];
+    for (slot, answer) in answers.iter_mut().zip(given) {
+        let position = match get(answer, "position") {
+            Some(Value::Unsigned(n)) if (1..=12).contains(n) => *n as usize,
+            _ => return Err(invalid(crate::texts::bridge::RECOVERY_ANSWERS)),
+        };
+        let word = match get(answer, "word") {
+            Some(Value::Text(word)) => word.as_str(),
+            _ => return Err(invalid(crate::texts::bridge::RECOVERY_ANSWERS)),
+        };
+        *slot = (position, word);
+    }
+    if answers[0].0 == answers[1].0 {
+        return Err(invalid(crate::texts::bridge::RECOVERY_ANSWERS));
+    }
     if let Some(code) = db.account().recovery_code().await? {
-        code.confirm().await?;
+        code.confirm_at(answers).await?;
     }
     Ok(Value::Null)
 }
