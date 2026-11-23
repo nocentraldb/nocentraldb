@@ -1,20 +1,22 @@
 //! What a copy knows of one object, as far as links need it to resolve
 //! (RFC 0004, "Links"): whether any create of its id has arrived, its
-//! collection, and whether it is deleted. Both are basic values, so two
-//! creates of one id and a deletion converge by the rule of basic values.
+//! collection, whether it is deleted, and where it moved. All three are
+//! basic values, so two creates of one id, a deletion and two moves at
+//! once converge by the rule of basic values.
 //!
 //! Whether an object is deleted is a boolean basic value (RFC 0004,
-//! "Creating and deleting an object"). Creates (operation 0) and deletes (operation 4) reach it as
-//! [`ObjectOperation`]s, which `field_op` decodes and the fold of
-//! `receive` applies (RFC 0004, "Creating and deleting an
-//! object"). Who may delete, and what a deleted object shows, belong to a
-//! later RFC.
+//! "Creating and deleting an object"); where it moved is a basic value of
+//! space ids, independent of the deletion (RFC 0016, "Formats"). Creates
+//! (operation 0), deletes (operation 4) and moves (operation 6) reach it
+//! as [`ObjectOperation`]s, which `field_op` decodes and the fold of
+//! `receive` applies. Who may delete, and what a deleted object shows,
+//! belong to a later RFC.
 
-use crate::basic::{self, BasicValue, Kind, Write};
+use crate::basic::{self, BasicValue, Kind, Values, Write};
 use crate::cbor::Value;
 use crate::clock::Hlc;
 use crate::field::FieldType;
-use crate::ids::{MemberId, OperationId};
+use crate::ids::{MemberId, OperationId, SpaceId};
 
 /// A create of an object id (RFC 0002's operation 0), as far as RFC 0004
 /// gives it a meaning: it puts the object into a collection.
@@ -108,6 +110,23 @@ impl Object {
     /// member that deletes or restores the object replaces what it holds.
     pub fn deletion(&self) -> &basic::State {
         &self.deleted
+    }
+
+    /// The object's move, as a basic value of space ids: the winning
+    /// write is where it went, and a losing concurrent move stays a
+    /// conflict (RFC 0016, "Two moves at once").
+    pub fn moving(&self) -> basic::Read {
+        Values::ObjectIds.read(&self.moved)
+    }
+
+    /// The space the object moved to: the winning write of its move, when
+    /// that names a 16-byte space id. `null`, a take-back, and a value of
+    /// any other kind read as not moved.
+    pub fn moved_to(&self) -> Option<SpaceId> {
+        match self.moving().value?.value {
+            Value::Bytes(bytes) => bytes.try_into().ok().map(SpaceId),
+            _ => None,
+        }
     }
 
     /// Whether the object is deleted: the winning write of its deletion is
