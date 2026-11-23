@@ -865,3 +865,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set 
 - 2026-11-20 · A plain introduction to the ideas behind it, and its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-21 · Days and points in time, two basic value types, as the owner answered (NOC-412, NOC-434, #430)
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
+- 2026-11-23 · Inline attributions keep the date and the ticket and name nobody who decided; the decision log records it (NOC-481, #475)

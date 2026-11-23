@@ -724,3 +724,4 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 - 2026-11-21 · Days and points in time: `nc.date()` and `nc.timestamp()`, as the owner answered (NOC-412, NOC-434, #430)
 - 2026-11-22 · Every sealed change of a space of another model parks, and a plugin field's `config` that appears or disappears is refused as a change (NOC-379, NOC-57, NOC-251, #449)
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
+- 2026-11-23 · Inline attributions keep the date and the ticket and name nobody who decided; the decision log records it (NOC-481, #475)

@@ -741,3 +741,4 @@ It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership
 - 2026-11-20 · A shred over a gap in its causal past is waiting until the gap fills, and the SDK lists it as `waiting` (NOC-401)
 - 2026-11-21 · The TypeScript SDK erases a person and takes a provisional erasure back, so the status line names both SDKs (NOC-406)
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
+- 2026-11-23 · Inline attributions keep the date and the ticket and name nobody who decided; the decision log records it (NOC-481, #475)
