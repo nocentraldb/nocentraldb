@@ -286,6 +286,19 @@ test("a follower's open names the owner's relay, which serves every tab, and the
   });
 });
 
+test("a follower's open names the relay the owner's relay function last gave (NOC-496)", async () => {
+  const { tab } = origin();
+  const first = await tab();
+  await ask(first.core, "open", { lock: LOCK, relay: true });
+  await ask(first.core, "relay.answer", {
+    request: 1,
+    relay: "wss://owner/prod?token=t1",
+  });
+  const second = await tab();
+  const answer = await ask(second.core, "open", { lock: LOCK });
+  expect(answer.ok).toMatchObject({ relay: "wss://owner/prod?token=t1" });
+});
+
 // NOC-332: a phone freezes a hidden tab but leaves it the lock, so the
 // owner gives up the database when its page is hidden, and the visible tab
 // takes over.
