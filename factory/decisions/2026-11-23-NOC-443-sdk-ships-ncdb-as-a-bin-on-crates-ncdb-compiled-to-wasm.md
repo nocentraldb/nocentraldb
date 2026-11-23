@@ -1,0 +1,6 @@
+# 2026-11-23 · NOC-443 · `@nocentraldb/sdk` ships `ncdb` as its bin, on `crates/ncdb` compiled to wasm
+
+- Decided by: Carsten, 2026-11-23, on NOC-443 (option A)
+- Why: `ncdb model build` already needs Node.js 24 and the SDK, since it runs the TypeScript schema, so a JS app only lacked the Rust toolchain. A bin in the SDK adds about 1 MB unpacked (0.44 MB gzipped), needs no change to `release.yml`, no new package name, no new trusted publisher and no extra npm approval per release, and keeps the lock builder at the SDK's version. The arguments, the schema run, the lock and every message stay in `crates/ncdb`, which the bin runs through the crate `ncdb-wasm` (`publish = false`) on a host its Node.js script provides, so `npx ncdb` cannot drift from `cargo install ncdb`.
+- Instead of: a separate package `@nocentraldb/cli` with the same wasm (B), which costs a public name, a placeholder, a trusted publisher and an approval per release; native binaries per platform in optionalDependencies (C), 7 to 9 packages and macOS and Windows release runners, for no gain while Node.js is needed anyway; the lock functions exported from the SDK's worker module (A2), which ties the CLI to the browser glue.
+- Topics: cli, sdk-ts, release, npm, wasm
