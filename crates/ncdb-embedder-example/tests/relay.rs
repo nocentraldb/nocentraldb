@@ -16,8 +16,8 @@ use std::pin::Pin;
 use std::time::Duration;
 
 use futures_core::Stream;
-use nocentraldb::{AddMember, Connection, Db, OpenOptions, Role, Value};
 use ncdb_relay_server::local::{Options, TestRelay};
+use nocentraldb::{AddMember, Connection, Db, OpenOptions, Role, Value};
 
 /// The model of the example task list, `apps/tasks-rust/model.ts`.
 const LOCK: &str = include_str!("../../../apps/tasks-rust/model.lock.json");
@@ -35,10 +35,8 @@ impl TempDir {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!(
-            "ncdb-embedder-{}-{nanos}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("ncdb-embedder-{}-{nanos}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("a temporary directory");
         TempDir(dir)
     }
@@ -113,7 +111,10 @@ async fn a_write_on_one_member_reaches_another_after_sync() {
         .write(|tx| {
             tx.create(
                 "tasks",
-                [("title", Value::from("buy milk")), ("status", "open".into())],
+                [
+                    ("title", Value::from("buy milk")),
+                    ("status", "open".into()),
+                ],
             )?;
             Ok(())
         })
