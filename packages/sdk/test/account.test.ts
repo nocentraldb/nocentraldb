@@ -61,7 +61,14 @@ const fake = (code: string[] | null = WORDS, recovered: unknown = null) => {
           });
         case "account.confirmRecoveryCode": {
           const answers = args.answers as { position: number; word: string }[];
-          if (answers.some(({ position, word }) => word !== WORDS[position - 1])) {
+          const wrong = ({
+            position,
+            word,
+          }: {
+            position: number;
+            word: string;
+          }) => word.trim().toLowerCase() !== WORDS[position - 1];
+          if (answers.some(wrong)) {
             return encode({
               id,
               error: {
@@ -100,12 +107,12 @@ test("recoveryCode() gives the twelve words until two of them come back, then nu
   const code = (await db.account.recoveryCode()) as RecoveryCode;
   expect(code.words()).toEqual(WORDS);
   expect(code.challenge()).toEqual([4, 9]);
-  await code.confirm(["Wave ", "legal"]);
+  await code.confirm(["Year ", "legal"]);
   expect(calls.at(-1)).toEqual({
     call: "account.confirmRecoveryCode",
     args: {
       answers: [
-        { position: 4, word: "Wave " },
+        { position: 4, word: "Year " },
         { position: 9, word: "legal" },
       ],
     },
@@ -117,11 +124,11 @@ test("a wrong word fails with invalidValue and the code stays", async () => {
   const { core } = fake();
   const db = await connect(core, { model, lock });
   const code = (await db.account.recoveryCode()) as RecoveryCode;
-  await expect(code.confirm(["wave", "zoo"])).rejects.toMatchObject({
+  await expect(code.confirm(["year", "zoo"])).rejects.toMatchObject({
     code: "invalidValue",
   });
   expect((await db.account.recoveryCode())?.words()).toEqual(WORDS);
-  await code.confirm(["wave", "legal"]);
+  await code.confirm(["year", "legal"]);
   expect(await db.account.recoveryCode()).toBeNull();
 });
 
