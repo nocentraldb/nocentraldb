@@ -23,6 +23,7 @@ mod erase_agents;
 mod erasures;
 mod fake;
 mod follow;
+pub(crate) mod gate;
 mod large;
 mod late_removal;
 mod list;
