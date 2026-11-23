@@ -1,7 +1,8 @@
 //! A relay URL may carry a token in its query string, checked by the
 //! relay's `$connect` authorizer (NOC-417, NOC-495). The SDK connects with
 //! the whole URL but never shows its query string or fragment: not in the
-//! sync status, not in an error, not in `Debug`.
+//! sync status, not in an error, not in `Debug`; nor the user and password
+//! before its host.
 
 use super::fake::{FakeRelay, Trouble};
 use super::support::*;
@@ -34,7 +35,7 @@ async fn a_token_in_the_relay_url_never_shows_in_the_sync_status() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_token_in_a_refused_relay_url_never_shows_in_the_error() {
-    let url = format!("https://relay.example.com/prod?token={TOKEN}#{TOKEN}");
+    let url = format!("https://app:{TOKEN}@relay.example.com/prod?token={TOKEN}#{TOKEN}");
     let options = OpenOptions::new(LOCK).in_memory().relay(&url);
     let error = Db::open_as(options, [ME; 32], [ME ^ 0x80; 32], account())
         .await

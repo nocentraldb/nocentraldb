@@ -258,3 +258,21 @@ test("in a tab that reaches another tab's database, the owner's token does not s
   const db = await connect(reached, { model, lock, relay });
   expect(db.sync.current().relay).toBe("wss://relay.example.com/prod");
 });
+
+test("the status names the relay without the user and password in its URL, and the core gets the whole URL", async () => {
+  const given = `wss://app:${TOKEN}@relay.example.com/prod?token=${TOKEN}`;
+  const { core, calls } = fake();
+  const db = await connect(core, { model, lock, relay: given });
+  expect(calls[0]?.args.relay).toBe(given);
+  expect(db.sync.current().relay).toBe("wss://relay.example.com/prod");
+});
+
+test("an @ in the path is no user", async () => {
+  const { core } = fake();
+  const db = await connect(core, {
+    model,
+    lock,
+    relay: "wss://relay.example.com/team@prod",
+  });
+  expect(db.sync.current().relay).toBe("wss://relay.example.com/team@prod");
+});
