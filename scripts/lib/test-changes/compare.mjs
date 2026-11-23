@@ -34,14 +34,19 @@ function lost(base, head) {
  */
 export function compare(base, head) {
   const findings = [];
-  const tests = (s) => s.tests;
+  const counts = (pick, key) => [tally(base, pick, key), tally(head, pick, key)];
   const name = (t) => t.name;
-  for (const t of lost(tally(base, tests, name), tally(head, tests, name))) {
-    findings.push({
-      path: t.path,
-      line: t.line,
-      text: `removes the test \`${t.name}\``,
-    });
+  const [testsBefore, testsAfter] = counts((s) => s.tests, name);
+  for (const t of lost(testsBefore, testsAfter)) {
+    findings.push({ ...t, text: `removes the test \`${t.name}\`` });
+  }
+  const [ignoredBefore, ignoredAfter] = counts((s) => s.ignored, name);
+  for (const t of lost(ignoredAfter, ignoredBefore)) {
+    findings.push({ ...t, text: `ignores the test \`${t.name}\`` });
+  }
+  const [markersBefore, markersAfter] = counts((s) => s.markers, (m) => m.key);
+  for (const m of lost(markersAfter, markersBefore)) {
+    findings.push({ ...m, text: `adds \`${m.key}\`` });
   }
   return findings;
 }
