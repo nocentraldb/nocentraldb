@@ -1,14 +1,14 @@
-# RFC 0017: The ncdb MCP server, an agent's own member for Claude Code, Codex and agent frameworks
+# RFC 0017: The ncdb MCP server, an agent's own member serving the tools an app declares
 
 REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-485
 
-This RFC designs `ncdb-mcp`, a server that speaks the Model Context Protocol (MCP) and lets an agent that NoCentralDB's SDKs cannot reach, such as a person's own Claude Code or Codex on their subscription, read and write their spaces. The server is not a gateway to someone else's data: it is itself the agent's member, with its own key and its own full copy, and its tools see only that member's spaces ([The problem](#the-problem)).
+This RFC designs `ncdb-mcp`, a server that speaks the Model Context Protocol (MCP) and lets an agent that NoCentralDB's SDKs cannot reach, such as a person's own Claude Code or Codex on their subscription, read and write their spaces. The server is not a gateway to someone else's data: it is itself the agent's member, with its own key and its own full copy, and its tools see only that member's spaces. Its tools are the ones the app declares in its model, such as "open tasks" or "close a task", so one generic binary serves every app with that app's own tools ([The problem](#the-problem)).
 
 It builds on the Rust SDK of [RFC 0009](0009-sdk-api.md) and on the agents and pairing of [RFC 0010](0010-accounts.md); [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) names the rest.
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0017 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Draft. Nothing of it is built. Its tool names, its command names and the way it ships are public names and wait for a decision before anything is built.
+**Status.** Decided, 2026-11-23. Nothing of it is built, and its build is not scheduled yet. The names that declared tools add to the schema and the lock are proposed in [Declared tools](#declared-tools), and [Open questions](#open-questions) holds their alternatives until they are decided.
 
 **At 0.1.** Not built. Release 0.1 has no MCP server; an agent reaches its data only through the Rust SDK or the TypeScript SDK in a browser.
 
@@ -23,8 +23,8 @@ It builds on the Rust SDK of [RFC 0009](0009-sdk-api.md) and on the agents and p
 | How do clients reach it? | Over stdio, which Claude Code, Codex and Claude Desktop start themselves, and over Streamable HTTP on the loopback interface, with a bearer token and no browser origin. |
 | Which process holds the copy? | Exactly one process per data directory, the **host**. `ncdb-mcp serve` is a host that runs until it is stopped, and an app such as a Tauri app can start it. `ncdb-mcp stdio` forwards to a running host, or becomes the host itself and runs until its last client has gone. |
 | How current is the copy? | The host syncs in the background for as long as it runs. Reads never wait for the network; every tool result says when the copy was last known to be current, per space. A read may ask to wait for the sync, up to 20 s. |
-| Which tools? | `list_spaces`, `describe_model`, `find`, `get`, `inspect`, `write`, `read_rich_text` and `edit_rich_text`, the last two once RFC 0013's agent edits are built. Results are structured JSON with a schema. |
-| What does the model see? | Data: the fields of the objects it reads. Never a key, an invitation, a pairing answer or an SDK cursor. Everything a tool returns goes to the model's provider. |
+| Which tools? | The tools the app declares in its model: finds over its declared indexes, gets of one object, and actions, each a fixed set of creates, updates and deletes made from the tool's parameters, all with the app's names and descriptions. `ncdb model build` checks them and writes them into the lock. `list_spaces` is always there. Seven generic tools, such as `find` and `write` over any collection, are listed only with the developer flag `--generic-tools`. Results are structured JSON with a schema. |
+| What does the model see? | Data: the fields the app's tools name, of the objects it reads. Never a key, an invitation, a pairing answer or an SDK cursor. Everything a tool returns goes to the model's provider. |
 | How does it ship? | As a binary per platform on each GitHub release, built and attested by the release workflow, and as the crate `ncdb-mcp` on crates.io for `cargo install`. An app can bundle the binary as a sidecar. |
 
 ## The problem
@@ -36,6 +36,8 @@ GENESIS.md asks for data close to the agent, and for MCP not to be the only way 
 
 Without a server of our own, the only path for both would be a remote MCP service that holds the data for them. That service would read content it does not need to read, and would be the hidden reader GENESIS.md rules out. A local server that is itself the member keeps both rules: the copy sits next to the agent, and whatever reads the content is a member with its own key, in the member list.
 
+**Which tools such a server offers is the app's to say.** A server NoCentralDB ships knows only the lock: on its own it could offer generic tools, such as a find over any index and a write into any collection, and leave the model to work out the app's schema and its rules. The app knows its domain, and a model uses "close this task" or "the open tasks of a project" far more reliably than a generic write it has to compose. What only NoCentralDB can do, and every app would otherwise build again, is the rest: the agent as its own member, its key, pairing, the full copy and its sync, the host, the loopback transport, and the rule that no key reaches the model. So the app declares its tools in its model, `ncdb model build` checks them, and the one binary serves exactly those ([Declared tools](#declared-tools)).
+
 ## Terms
 
 | Term | Meaning in this RFC |
@@ -46,20 +48,23 @@ Without a server of our own, the only path for both would be a remote MCP servic
 | Data directory | The directory the server's database lives in, as the Rust SDK's `path` names it. One data directory is one member. |
 | Host | The one process that has opened a data directory's database and syncs it. |
 | Tool, tool result | MCP's names for a call the client makes and what it gets back. |
+| Declared tool | A tool the app declares in its schema module: a find, a get or an action. |
+| Action | A declared tool that writes: a fixed list of creates, updates and deletes, filled from the tool's parameters, written as one change. |
+| Generic tools | The seven tools over any collection that the server lists only with `--generic-tools`. |
 
 ## What the server is
 
 `ncdb-mcp` is a Rust binary on the Rust SDK, in a crate of its own, `crates/ncdb-mcp`. It opens one database with `Db::open(OpenOptions::new(lock).path(dir).agent())`, so its member is certified as an agent ([RFC 0009, "The Rust SDK"](0009-sdk-api.md#the-rust-sdk)), and serves MCP with rmcp, the official Rust SDK for MCP, at the protocol's current version, 2026-07-28, and its predecessor 2025-11-25, which rmcp both speaks.
 
 - **One data directory, one member, one host.** Everything the server does is that member's doing: its writes carry that member's signature, and the member list shows it as an agent of the account that paired it.
-- **The lock is read at run time.** The server is generic: it takes the path of an app's `model.lock.json` and reads and writes fields by name, as the Rust SDK does for every lock ([RFC 0009, "The Rust SDK"](0009-sdk-api.md#the-rust-sdk)). The same binary serves every NoCentralDB app. A newer lock is checked on the device as `Db::open` checks it, and a lock the database refuses stops the server with `modelRefused`.
+- **The lock is read at run time.** The binary is the same for every app: it takes the path of an app's `model.lock.json`, lists the tools the lock declares, and reads and writes fields by name, as the Rust SDK does for every lock ([RFC 0009, "The Rust SDK"](0009-sdk-api.md#the-rust-sdk)). It runs no code of the app. A newer lock is checked on the device as `Db::open` checks it, and a lock the database refuses stops the server with `modelRefused`.
 - **Keys stay in the SDK.** The member key lives in the platform keystore, one entry per database, or in a key file the person names with `--key-file` for a machine without a keystore ([RFC 0009, "Open and close"](0009-sdk-api.md#open-and-close)). The server never reads a key; no tool returns one.
 
 ### Options not taken
 
 - **A subcommand of `ncdb`**, as `ncdb mcp`. `ncdb` builds and checks the lock, and ships through npm as a WebAssembly module inside `@nocentraldb/sdk` (NOC-443). The server needs the platform keystore, SQLite on disk, the relay connection and a long-running process, which a WebAssembly module cannot have, and would make every developer who only builds a lock download all of it.
 - **A server in TypeScript on the browser's core.** It would need a Node.js SDK, which is planned for later, and would still be a long-running process with a key; Rust is the SDK that runs there today.
-- **One server per app, with the app's own tools**, such as a "weekly review". The generic server reads every lock; an app adds its own tools in its own MCP server, which can be a client of nothing but its own copy. A server per app would put the identity rules below into every app's hands.
+- **A crate each app builds its own server on.** NoCentralDB would ship the host, the membership, the sync and the transports as a Rust library, and each app would write its own MCP server with its own tools. The tools would be as good as with declared tools, but every app would need Rust and a server of its own to build, ship and sign, and the identity rules below would be in every app's hands. An app in TypeScript could not do it before a Node.js SDK exists.
 
 ## Becoming a member
 
@@ -138,7 +143,7 @@ The host syncs as the Rust SDK does: one connection to the relay, pulling and pu
 - `current` is true while the host holds everything the relay has for the space: connected, the first pull of this run complete, and no position the host has heard of but not folded (`initial_sync_complete` and `behind == 0` in the space's `SpaceStatus`).
 - `syncedAt` is the last moment `current` was true in this host's run, as a point in time in UTC; it is now while `current` is true. It is `null` until the space is current for the first time in this run, which tells the model that the copy may be as old as the last session. A result over several spaces, such as `find`, carries `sync` per space.
 
-**Waiting for the sync.** `find`, `get`, `inspect` and `read_rich_text` take `waitForSync`, a number of milliseconds from 0 to 20000, 0 by default. With it, the host waits until the space is `current` or the time is up, and then reads; the result's `sync` says which. The wait is the host's, not the read's: the read still reads only the local view. 20 s keeps a call well inside Codex's limit of 60 s per tool call.
+**Waiting for the sync.** Every tool that reads, declared or generic, takes `waitForSync`, a number of milliseconds from 0 to 20000, 0 by default. With it, the host waits until the space is `current` or the time is up, and then reads; the result's `sync` says which. The wait is the host's, not the read's: the read still reads only the local view. 20 s keeps a call well inside Codex's limit of 60 s per tool call.
 
 **What the clients' limits mean.** Codex gives a server 10 s to start and 60 s per tool call by default (`startup_timeout_sec`, `tool_timeout_sec`); Claude Code gives it 30 s to start (`MCP_TIMEOUT`) and about 28 hours per call ([Codex, MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli); [Claude Code, MCP](https://code.claude.com/docs/en/mcp)). So the host answers MCP's `initialize` and `tools/list` at once, from the lock alone, and opens the database meanwhile: opening may wait for the keystore, which can ask the person, or start a rebuild ([RFC 0009, "Open and close"](0009-sdk-api.md#open-and-close)). A tool call that arrives before the database is open waits for it, within the call's own deadline. Every call has a deadline of 30 s in the host, and a call that runs over returns the error `timeout`; a write is one change, committed whole or not at all, so no call leaves half a write behind.
 
@@ -150,13 +155,130 @@ The host syncs as the Rust SDK does: one connection to the relay, pulling and pu
 - **Keeping `syncedAt` across runs** in the data directory. It would say when the last run was current, which the model cannot tell apart from a current copy unless it reads the date; `null` says plainly that this run has not caught up yet.
 - **MCP resources with subscriptions**, so the client hears of new data. No client this RFC is for documents subscriptions a model acts on, and a resource per object or per query would duplicate the tools.
 
+## Declared tools
+
+The app declares its agent tools in its schema module, next to its model. `ncdb model build` checks them against the model and writes them into the lock, and `ncdb-mcp` serves them. A declared tool is data, not code: the binary never runs the app's TypeScript, so a tool can only read through a declared index or by id, and write a fixed list of operations filled from its parameters. The names in this section are the ones proposed; [Open questions](#open-questions) holds their alternatives.
+
+### In the schema
+
+```ts
+import { nc } from "@nocentraldb/sdk";
+
+export const model = nc.model({ /* the task board of RFC 0005 */ });
+
+export const tools = nc.tools(model, {
+  openTasks: nc.tool.find(model.tasks.indexes.byStatusPriority, {
+    description: "Open tasks across the person's projects, most urgent first.",
+    equal: ["open"],
+    fields: ["title", "priority", "assignee", "body"],
+  }),
+  task: nc.tool.get(model.tasks, {
+    description: "One task with its notes.",
+    fields: ["title", "status", "priority", "body", "dependsOn"],
+  }),
+  closeTask: nc.tool.action({
+    description: "Mark a task as done.",
+    params: { task: nc.param.object(model.tasks).describe("The task to close.") },
+    write: (p) => [nc.op.update(p.task, { status: "done" })],
+  }),
+  addTask: nc.tool.action({
+    description: "Add an open task.",
+    params: {
+      title: nc.string().describe("One line; what has to be done."),
+      priority: nc.int().optional(),
+      tag: nc.string().optional(),
+    },
+    write: (p) => [nc.op.create(model.tasks, { title: p.title, priority: p.priority, status: "open", tags: nc.add(p.tag) })],
+  }),
+  editTaskNotes: nc.tool.action({
+    description: "Change part of a task's notes by quoting the text to replace.",
+    params: { task: nc.param.object(model.tasks), edits: nc.param.textEdits() },
+    write: (p) => [nc.op.update(p.task, { body: p.edits })],
+  }),
+});
+```
+
+- **`nc.tools(model, { name: tool })`** takes the model and the tools by name. The schema module exports it as `tools`, beside `model`; `ncdb model build` reads both. A module without `tools` declares none.
+- **`nc.tool.find(index, { description, equal, fields, take })`** reads a page of a declared index, as `db.find` does. `equal` fixes some of the index's leading fields to constants; the leading fields the index's `equal` asks for and the tool does not fix become the tool's parameters, typed as their fields. An index with `scope: "space"` adds a `space` parameter. The model passes `take`, up to the tool's `take`, 20 by default and at most 100, and `after`, a cursor handle.
+- **`nc.tool.get(collection, { description, fields })`** reads one object, as `space.get` does. Its parameters are `space` and `id`.
+- **`fields`** names the fields a find or a get returns, and nothing else is returned. The app chooses what the model sees: a personal field reaches the model only when a tool names it. A rich-text field reads as `{ markdown, version }`, the version an action's text edits name ([RFC 0013, "An agent: anchored edits"](0013-rich-text.md#an-agent-anchored-edits)).
+- **`nc.tool.action({ description, params, write })`** writes. `params` takes field functions, `nc.string()`, `nc.int()`, `nc.oneOf([...])`, `nc.date()` and the other basic types of [RFC 0005](0005-schema-and-model-lock.md#field-types), with `.describe(text)` and `.optional()`, and two kinds of its own: `nc.param.object(collection)`, an object of that collection in the action's space, and `nc.param.textEdits()`, quoted edits of a rich-text field. `write` is a function the build calls once with placeholders for the parameters, and it returns the operations: `nc.op.create(collection, values)`, `nc.op.update(object, values)` and `nc.op.delete(object)`. A value is a constant, a parameter, or `nc.add` and `nc.remove` of either, as in [RFC 0009, "Field operations per field type"](0009-sdk-api.md#field-operations-per-field-type). An object created by an earlier operation can be the target or a link value of a later one, as in `space.write`.
+- **Every action has a `space` parameter,** and writes into that space only: an action is one `write`, one change in one space, like every write ([RFC 0009, "One write, one change"](0009-sdk-api.md#one-write-one-change)). The model takes the space from an object it read, whose `$space` names it.
+- **`description`** is required on every tool and every parameter that is not a field of the model, which carries its own `.describe()`. The model reads only these texts to choose a tool.
+
+### In the lock
+
+`ncdb model build` writes the tools under `tools`, beside `collections`, in the lock's canonical form ([RFC 0005, "Canonical form"](0005-schema-and-model-lock.md#canonical-form)):
+
+```json
+{
+  "tools": {
+    "closeTask": {
+      "description": "Mark a task as done.",
+      "kind": "action",
+      "params": {
+        "task": { "collection": "tasks", "description": "The task to close.", "type": "object" }
+      },
+      "write": [
+        { "op": "update", "target": { "param": "task" }, "values": { "status": { "value": "done" } } }
+      ]
+    },
+    "openTasks": {
+      "collection": "tasks",
+      "description": "Open tasks across the person's projects, most urgent first.",
+      "equal": [{ "value": "open" }],
+      "fields": ["assignee", "body", "priority", "title"],
+      "index": "byStatusPriority",
+      "kind": "find",
+      "take": 20
+    }
+  }
+}
+```
+
+A tool changes no data and never travels in a change, as an index does not. So adding, changing or removing a tool is always accepted by the additive-change rule, and leaves the model version and `model.hash` as they are, as a description does ([RFC 0005, "The additive-change rule"](0005-schema-and-model-lock.md#the-additive-change-rule)). `ncdb model check` compares the bytes of the whole lock, tools included, so a lock whose tools are out of date fails in CI.
+
+### What the build checks
+
+`ncdb model build` refuses a declared tool, naming it and what is wrong, when:
+
+- its name does not match `^[a-z][A-Za-z0-9_]{0,63}$`, two names differ only in case, or it takes the name of a generic tool or of `list_spaces`;
+- it has no description, or a parameter that is not a field of the model has none;
+- a find names no declared index, fixes more fields than the index's `equal`, fixes one with a constant of the wrong type, or sets `take` above 100;
+- a find or a get names a field the collection does not have, a deprecated field, or a computed field;
+- an action writes into a deprecated collection or field, writes a value whose type does not fit the field (a parameter's type is checked against the field it fills, as a value of `space.write` is), uses `nc.add` or `nc.remove` on a field that is not a set or many links, fills a rich-text field from anything but `nc.param.textEdits()`, targets an object that is not an object parameter or an earlier create, or declares a parameter it never uses;
+- an action has no operation, or more than 50.
+
+The rules live in Rust, in the code `ncdb model build` already runs as WebAssembly (NOC-443), and `ncdb-mcp` runs the same check when it opens a lock: a lock whose tools fail it, such as one edited by hand, stops the server with `toolsRefused`, which names each refused tool.
+
+### How a declared tool runs
+
+- **A find** fills the index's equality values from the constants and the parameters, reads the page with `db.find`, or `space.find` for an index per space, and returns `{ items, cursor, hasMore, sync }`, each item with the tool's `fields`, `$id`, `$space`, and `$conflicts` for those fields.
+- **A get** reads the object with `space.get` and returns the tool's `fields` with `$id`, `$space`, `$deleted` and `$conflicts`, or `null`.
+- **An action** checks the parameters against their types, opens one `space.write` in the given space, and runs the operations in order: a create with its values, an update of the target with its values, a delete of the target. A parameter left out leaves its field unchanged in an update and unset in a create; `nc.add` and `nc.remove` of a left-out parameter do nothing. An object parameter that names no object of its collection in the space fails with `notFound`, before anything is written. Text edits apply as RFC 0013's anchored edits, at the version the model read. The action returns `{ change, ids, sync }`, the ids of the objects it created by their order.
+
+Every refusal of the core applies as to any write: a member added as a reader is refused with `notAllowed`, and the change is written whole or not at all.
+
+**What the server lists for a tool.** Each declared tool becomes an MCP tool under its name, with its description, an `inputSchema` built from its parameters and their descriptions, and an `outputSchema` built from its fields. Finds and gets carry `readOnlyHint`. An action carries `destructiveHint` when it updates or deletes, and `destructiveHint: false` when it only creates. Every tool carries `openWorldHint: false`.
+
+### Options not taken
+
+- **Only generic tools,** as `find` and `write` over the lock. They work with every app on the first day, but leave the model to learn the app's schema and its rules from `describe_model`, and to compose writes the app never meant. They stay, behind `--generic-tools`, for developers.
+- **Tools as code,** a function in the app that the server calls. The binary would have to run the app's TypeScript, or every app would write Rust; a declared tool is data the binary interprets, and the build can check it.
+- **A query language in a tool,** such as a filter on any field. A query runs only through a declared index ([GENESIS.md, principle 6](../../factory/GENESIS.md#principles-in-priority-order)); a tool that needs another order declares another index.
+- **Returning every field.** The app would not choose what reaches the model's provider; naming the fields keeps personal fields out unless a tool asks for them, and keeps results small.
+- **Tools in a file of their own, apart from the schema module.** They name the model's collections, fields and indexes, and the build checks them against the model; written beside it, TypeScript checks the names as the developer types them.
+
 ## The tools
 
-The tool names, their arguments and their results are public API, as the SDK's names are. They follow the SDK's calls: one tool per call an agent needs, under the SDK's name where it has one, in snake case as MCP's tools usually are. A client shows them under the server's name, such as `mcp__ncdb__find` in Claude Code.
+The server lists, for each session:
 
-| Tool | Does | Annotations |
+- **The declared tools** of the lock, as [Declared tools](#declared-tools) describes.
+- **`list_spaces`,** always: the member's spaces, with each one's id, the member's role, whether the space is of the lock's model, `sync`, and the counts of its parked and rejected changes and its gaps. It belongs to the member, not to the app, and tells the model where it can act and how fresh each space is.
+- **The generic tools,** only with `--generic-tools`, for a developer who builds or tests an app's tools: `describe_model`, `find`, `get`, `inspect`, `write`, `read_rich_text` and `edit_rich_text`, which follow the SDK's calls of the same names over any collection and index of the lock.
+
+| Generic tool | Does | Annotations |
 | --- | --- | --- |
-| `list_spaces` | The member's spaces: id, role, whether the space is of the lock's model, `sync`, and the counts of its parked and rejected changes and its gaps. | read-only |
 | `describe_model` | The lock as the model needs it: each collection with its fields, their types and whether they are personal, and its indexes with the fields they fix and the order they sort by. | read-only |
 | `find` | A page of a declared index, as `db.find`, or of one space, as `space.find`: `collection`, `index`, `equal`, `take`, `after`, optionally `space`. | read-only |
 | `get` | One object, as `space.get`: `space`, `collection`, `id`. | read-only |
@@ -165,43 +287,28 @@ The tool names, their arguments and their results are public API, as the SDK's n
 | `read_rich_text` | A rich-text field as Markdown, and its version, as RFC 0013's `readRichText`. | read-only |
 | `edit_rich_text` | Quoted edits of a rich-text field at a version, as RFC 0013's anchored edits. | destructive |
 
-Every tool sets MCP's annotations: `readOnlyHint` on the reads, `destructiveHint` on `write` and `edit_rich_text`, and `openWorldHint: false` on all of them, since a tool touches only the member's copy. A client may use them to ask the person before a write; MCP asks clients not to rely on them, so they are a hint, and the member's role and `--read-only` are the limit.
+The generic tools return every field, personal fields included, and write any field; that is why they wait behind a flag a developer sets. A client shows every tool under the server's name, such as `mcp__ncdb__closeTask` in Claude Code.
 
-**`ncdb-mcp serve --read-only`** and `stdio --read-only` list only the read-only tools. A member added as a reader is refused every write by the core anyway; the option keeps a writer's tools out of the model's reach for a session that should only read.
+MCP's annotations are a hint: MCP asks clients not to rely on them. The member's role and `--read-only` are the limit. **`--read-only`** lists only the tools that read: the declared finds and gets, `list_spaces`, and the generic reads. A member added as a reader is refused every write by the core anyway; the option keeps a writer's actions out of the model's reach for a session that should only read.
 
 ### Results
 
 Each result is MCP structured content, a JSON object that matches the tool's `outputSchema`, with the same JSON as text beside it for clients that read only text.
 
-- **An object** reads as RFC 0009's read object in TypeScript: its fields by name, `$id`, `$space`, `$deleted`, `$conflicts` and `$raw`. A day is `"YYYY-MM-DD"`, a point in time an RFC 3339 string in UTC, a set an array, a link an object id, a reference `{ "space", "id" }`, and an int outside −(2^53 − 1) to 2^53 − 1 a decimal string. A rich-text field reads as its Markdown, as `space.get` returns it ([RFC 0013, "Reading"](0013-rich-text.md#reading)). An erased field is left out and named in `$erased`.
-- **A page** is `{ items, cursor, hasMore, sync }`. `take` is 20 by default and at most 100, fewer than the SDK's 1000, because every item becomes part of the model's context: Claude Code warns at 10,000 tokens of a tool's output and moves output over 25,000 tokens into a file.
+- **An object** reads as RFC 0009's read object in TypeScript, limited to the tool's fields: its fields by name, `$id`, `$space`, `$deleted`, `$conflicts` and `$raw`. A day is `"YYYY-MM-DD"`, a point in time an RFC 3339 string in UTC, a set an array, a link an object id, a reference `{ "space", "id" }`, and an int outside −(2^53 − 1) to 2^53 − 1 a decimal string. An erased field is left out and named in `$erased`.
+- **A page** is `{ items, cursor, hasMore, sync }`. `take` is at most 100, fewer than the SDK's 1000, because every item becomes part of the model's context: Claude Code warns at 10,000 tokens of a tool's output and moves output over 25,000 tokens into a file.
 - **A cursor** is an opaque handle the host draws and maps to the SDK's cursor in memory, for one hour or until the host ends. An SDK cursor holds plaintext field values and never leaves the device ([RFC 0009, "Queries and indexes"](0009-sdk-api.md#queries-and-indexes)); the handle carries none. A handle that has run out fails with `cursorExpired`, and the model starts from the first page.
 - **A write** returns `{ change, ids, sync }`: the change id and the ids of created objects. It resolves when the change is in the local log and folded, as `write` does; `sync.connection` says whether the relay can hear of it yet.
 
-### Writing values
-
-`write` takes a space and a list of operations, applied in order in one change:
-
-```json
-{
-  "space": "5f0c…",
-  "operations": [
-    { "create": "tasks", "values": { "title": "Draft the review", "status": "open", "priority": 2 } },
-    { "update": "tasks", "id": "9a41…", "values": { "status": "done", "tags": { "add": ["review"] } } },
-    { "delete": "tasks", "id": "77b2…" }
-  ]
-}
-```
-
-Values take the JSON of the results, and the operations of [RFC 0009, "Field operations per field type"](0009-sdk-api.md#field-operations-per-field-type): `null` clears a field, `{ "add": [...] }` and `{ "remove": [...] }` change a set or many links. A rich-text field is refused in `write` with `invalidValue`: it changes only through `edit_rich_text`, so the model never writes a whole document ([GENESIS.md, "What it must never do"](../../factory/GENESIS.md#what-it-must-never-do)). A personal field of a new object of a person who has objects in another space takes `samePersonAs`, the id and space of one of them.
+Values a tool takes use the JSON of the results. In the generic `write`, `null` clears a field, and `{ "add": [...] }` and `{ "remove": [...] }` change a set or many links, as in [RFC 0009, "Field operations per field type"](0009-sdk-api.md#field-operations-per-field-type). A rich-text field changes only through text edits, never through a whole value, so the model never writes a whole document ([GENESIS.md, "What it must never do"](../../factory/GENESIS.md#what-it-must-never-do)).
 
 ### Errors
 
-A tool that fails returns a result with `isError` and `{ "code", "message" }`. The code is the SDK's error code as TypeScript names it, such as `notAllowed`, `invalidValue` or `anchorNotFound`, plus `timeout` and `cursorExpired` of this RFC. The message says what to do next, such as "quote more of the text", because the model reads it. An error never carries a key, and carries content only where the call itself sent it.
+A tool that fails returns a result with `isError` and `{ "code", "message" }`. The code is the SDK's error code as TypeScript names it, such as `notAllowed`, `invalidValue`, `notFound` or `anchorNotFound`, plus `timeout` and `cursorExpired` of this RFC. The message says what to do next, such as "quote more of the text", because the model reads it. An error never carries a key, and carries content only where the call itself sent it.
 
 ### What the tools leave out
 
-- **Creating spaces, adding and removing members, changing roles, pairing.** These change who can read, which GENESIS.md asks the SDK to make plain to the developer; the person does them through their app.
+- **Creating spaces, adding and removing members, changing roles, pairing.** These change who can read, which GENESIS.md asks the SDK to make plain to the developer; the person does them through their app. No declared tool can do them either: an action writes only objects of the model.
 - **Erasures and moves.** An erasure needs a sign-off by a second account, and a move changes which members see an object ([RFC 0016](0016-moving-an-object.md)). Both are rare, carry notices the person should read, and come later if agents need them.
 - **Ad-hoc spaces for sub-agents.** They need a sub-agent that opens a database of its own, which a client's sub-agents do not; they come when a client can start one.
 - **Subscriptions.** A model reads when it acts; the client has no channel to wake it on a change.
@@ -209,7 +316,8 @@ A tool that fails returns a result with `isError` and `{ "code", "message" }`. T
 ### Options not taken
 
 - **One generic tool,** `call`, taking an SDK call by name. It saves tool definitions but gives the model no schema per call, and annotations would not tell a read from a write.
-- **A tool per collection,** such as `find_tasks`. The tools would follow the lock, change with every model and grow with the app; `describe_model` gives the same knowledge in one place.
+- **A tool per collection,** such as `find_tasks`, made from the lock without the app's say. The tools would follow the lock's structure, not the app's tasks, and would carry no description of what they are for.
+- **The generic tools always listed** beside the declared ones. The model would choose between `closeTask` and a generic `write` that can do the same and more, and personal fields the app keeps out of its tools would be one call away.
 - **Text only, without structured content.** Clients and frameworks that check results against a schema could not, and a model gets nothing it does not get from the text beside it.
 - **MCP resources for objects.** The clients' support for resources differs (Claude Code offers them as @-mentions, Codex as tools of its own), and a resource names a fixed object; the tools serve every client the same way.
 
@@ -231,7 +339,8 @@ The server keeps GENESIS.md's rules on members and agents by construction:
 ## What this does not do
 
 - **It does not keep data from the model's provider.** Everything a tool returns goes into the model's context, and so to the company that runs the model, under the terms of the person's subscription or API contract. The relay still reads nothing; the model's provider reads what the agent reads. A person adds the agent to a space knowing this, and the member list shows that the agent is there.
-- **It does not stop prompt injection.** An object's text can hold instructions, and a model may follow them: write into a space, or pass what it read to another tool, such as one that fetches a web page. MCP does not cause this; every agent that reads data and can act has it. The server limits what is at stake, not whether it happens: the agent sees only its spaces, `--read-only` takes its writes away, a reader role makes the core refuse them, and the client may ask the person before each write. Small spaces keep what one agent can leak small.
+- **It does not stop prompt injection.** An object's text can hold instructions, and a model may follow them: write into a space, or pass what it read to another tool, such as one that fetches a web page. MCP does not cause this; every agent that reads data and can act has it. The server limits what is at stake, not whether it happens: the agent sees only its spaces and only the fields the app's tools name, its actions write only what the app declared, `--read-only` takes them away, a reader role makes the core refuse them, and the client may ask the person before each write. Small spaces keep what one agent can leak small.
+- **It does not judge the app's tools.** The build checks that a declared tool fits the model, not that it is wise: an action that deletes whatever object the model names does exactly that.
 - **It does not replace the SDKs.** An app's own agent loop links the Rust SDK and reads its copy without a server between. MCP is one more way in, not the only one.
 - **It does not serve claude.ai's custom connectors.** Anthropic's cloud calls a custom connector over the internet, from every Claude app, and the host listens only on the loopback interface. Claude Desktop reaches it as a local server, as Claude Code does. An agent in the cloud is a member of its own, designed with attested agent members (NOC-482).
 - **It does not keep a process from reading the database.** A process running as the same user can read the data directory and the token, as for every app on the device.
@@ -244,7 +353,7 @@ The server is a native binary that runs for a long time and holds a key in the p
 - **On each GitHub release, a binary per platform:** macOS on Apple silicon and Intel, Linux on x86-64 and ARM64, statically linked against musl, and Windows on x86-64, each with a SHA-256 checksum and a build provenance attestation from the release workflow, so a person can check that the binary came from this repository's workflow.
 - **On crates.io, the crate `ncdb-mcp`,** published by the registry job that publishes `nocentraldb`, so `cargo install ncdb-mcp` builds it from source.
 - **Bundled by an app.** A Tauri app adds the binary as a sidecar and starts `ncdb-mcp serve` with the app's data directory for the agent. The app then guides the person through pairing and adding the agent.
-- **Signed binaries.** The macOS binaries are signed with a Developer ID and notarized, and the Windows binary signed, so the keystore and the operating system's checks accept them without warnings. Each needs a paid certificate.
+- **Signed binaries.** The macOS binaries are signed with a Developer ID and notarized, and the Windows binary signed, so the keystore and the operating system's checks accept them without warnings. The macOS signing uses an Apple developer membership that is already paid for; the Windows certificate and the macOS and Windows runners for release builds are paid.
 
 Alphas carry no binaries; betas and releases do, as they carry the crates.
 
@@ -264,26 +373,47 @@ Alphas carry no binaries; betas and releases do, as they carry the crates.
 | Never give an agent more than its spaces | The host holds only its member's copy, and no tool widens it. |
 | The relay never reads content | Unchanged: the server syncs as any member does. |
 | Never write content, keys or personal fields into logs | The host logs counts, codes and timings only; no tool returns a key or a token. |
-| Never overwrite more than you change | Rich text changes only through quoted edits; `write` refuses a rich-text field. |
+| Never overwrite more than you change | Rich text changes only through quoted edits, in a declared action or the generic `edit_rich_text`; no tool writes a whole document. |
+| Apps read from a computed result, through declared indexes | A declared find reads only through a declared index; no tool scans. |
 | Never put the network on the read path | Reads read the local view; `waitForSync` waits for the background sync, and reads only the view. |
 | Say plainly what it does not do | [What this does not do](#what-this-does-not-do): the model's provider sees what the agent reads, prompt injection, the user's own processes. |
 | A developer doesn't need to care about keys | The keys stay in the SDK's keystore or key file; the person pairs once. |
 
 ## Follow-up tickets
 
-These tickets build the design, once it is decided:
+These tickets build the design. None is scheduled yet, and the declared tools wait for the answers to [Open questions](#open-questions):
 
+- **Declared tools in the schema and the lock**: `nc.tools` and its parts in the TypeScript SDK, the build's check in Rust, the lock's `tools` and RFC 0005's text on them, with a test per refusal of [What the build checks](#what-the-build-checks).
 - **The server's skeleton**: the crate `ncdb-mcp`, `init`, `pair`, `token`, the host with its lock file, `stdio` that forwards or hosts, and `serve`, with tests that two `stdio` commands share one host and that the last client's exit ends a host `stdio` started.
 - **The loopback transport and its checks**: the bearer token, the refused `Origin`, the `Host` check, and the refusal of any other address, each with a test that a request without them is refused.
-- **The read tools**: `list_spaces`, `describe_model`, `find`, `get`, `inspect`, with `sync`, `waitForSync`, cursor handles and the result schemas.
-- **The `write` tool**, with the JSON of values and its errors, and `--read-only`.
-- **The rich-text tools**, after RFC 0013's anchored edits are built.
+- **Serving the declared tools**: `list_spaces`, finds, gets and actions with their schemas, `sync`, `waitForSync`, cursor handles, `--read-only` and `toolsRefused`.
+- **The generic tools** behind `--generic-tools`.
+- **Text edits** in actions and the generic rich-text tools, after RFC 0013's anchored edits are built.
 - **Shipping**: the binaries, checksums and attestations in the release workflow, signing and notarization, and `ncdb-mcp` on crates.io.
-- **The docs**: a page that sets the server up for Claude Code and Codex, and says what it does not do.
+- **The docs**: a page on declaring tools, and one that sets the server up for Claude Code and Codex and says what it does not do.
+
+## Open questions
+
+The design above uses the first option of each question. Each is a public name or format, and is settled before the declared tools are built.
+
+1. **Where the declarations live.**
+   - *In `model.lock.json`, under `tools`, with the lock's `format` raised to 2 for a lock that declares tools.* One file for the build to write, for CI to check and for `ncdb-mcp` to read. Cost: every SDK must read format 2 and ignore `tools`, and an SDK that reads only format 1 refuses a lock with tools, so an app that declares tools needs a current SDK.
+   - *In a file of their own, `model.tools.json`, beside the lock.* The lock's format stays as it is. Cost: a second generated file to commit and to check, and a second path for `ncdb-mcp` to take and keep in step with the lock.
+   - *In `model.lock.json` under `tools`, with format 1.* Nothing new to pass around. Cost: every reader of format 1 must ignore a top-level key it does not know, which format 1 does not promise today, so each SDK's reader must be checked and its tests extended.
+2. **The names in the schema.**
+   - *`nc.tools`, `nc.tool.find`, `nc.tool.get`, `nc.tool.action`, `nc.param.object`, `nc.param.textEdits`, and `nc.op.create`, `nc.op.update`, `nc.op.delete`, with the error `toolsRefused`.* Short, and each says what it is. Cost: three new namespaces under `nc`.
+   - *One namespace, `nc.agent`: `nc.agent.tools`, `nc.agent.find`, `nc.agent.get`, `nc.agent.action`, `nc.agent.object`, `nc.agent.textEdits`, `nc.agent.create`, `nc.agent.update`, `nc.agent.delete`, with the same error.* Everything for agents in one place a developer finds. Cost: longer names, and `nc.agent.create` reads like creating an agent.
+3. **The tool names the model sees.**
+   - *The keys of `nc.tools` as written,* such as `closeTask`, in the case the app chose. What the developer types is what the model sees. Cost: tools in camel case, where most MCP servers use snake case.
+   - *Converted to snake case,* `close_task`. The usual form in MCP. Cost: the model and the logs show a name the developer never typed, and two keys could convert to one name, which the build then refuses.
+4. **The developer flag and what stays without it.**
+   - *`--generic-tools`, with `list_spaces` always listed.* The flag says what it adds. Cost: one tool beside the app's that the app did not declare.
+   - *`--generic-tools`, with `list_spaces` only behind it too.* Only the app's tools without the flag. Cost: the model learns spaces and their freshness only from the `$space` and `sync` of what it reads, and an app that wants a list declares nothing that gives one.
+   - *`--dev`.* Short. Cost: says nothing of what it turns on, and may later be wanted for something else.
 
 ## How this RFC relates to the others
 
-It builds a member on the Rust SDK of [RFC 0009](0009-sdk-api.md) and pairs it as an agent of [RFC 0010](0010-accounts.md); it reads the lock of [RFC 0005](0005-schema-and-model-lock.md) at run time, reads the view of [RFC 0006](0006-local-view.md) and syncs through the relay of [RFC 0007](0007-relay.md) as any member does; it keeps the keys as [RFC 0003](0003-keys-and-cryptography.md) keeps them; and it exposes the anchored edits of [RFC 0013](0013-rich-text.md). It changes none of them.
+It builds a member on the Rust SDK of [RFC 0009](0009-sdk-api.md) and pairs it as an agent of [RFC 0010](0010-accounts.md); it adds declared tools to the schema and the lock of [RFC 0005](0005-schema-and-model-lock.md), which the follow-up ticket writes into RFC 0005's text; it reads the view of [RFC 0006](0006-local-view.md) and syncs through the relay of [RFC 0007](0007-relay.md) as any member does; it keeps the keys as [RFC 0003](0003-keys-and-cryptography.md) keeps them; and it exposes the anchored edits of [RFC 0013](0013-rich-text.md).
 
 ## History
 
