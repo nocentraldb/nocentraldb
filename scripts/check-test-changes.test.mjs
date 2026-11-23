@@ -323,3 +323,26 @@ test("an assertion with a bracket in a string is read to its real end", () => {
   assert.ok(out.includes('`expect(f(")")).toBe(1)` became `expect(f(")")).toBe(2)`'), out);
   assert.doesNotMatch(out, /g\(\)/);
 });
+
+test("without --base it compares with origin/main, as pnpm gates runs it", () => {
+  const dir = repo(...REMOVED.map((files, i) => (i ? [{ files, message: "NOC-1: drop" }] : files)));
+  gitIn(dir)(["update-ref", "refs/remotes/origin/main", "main"]);
+  const { status, out } = check(dir, []);
+  assert.equal(status, 1, out);
+  assert.match(out, /removes the test `goes`/);
+});
+
+test("without --base and without origin/main it says it compared nothing, and passes", () => {
+  const dir = repo(...REMOVED.map((files, i) => (i ? [{ files, message: "NOC-1: drop" }] : files)));
+  const { status, out } = check(dir, []);
+  assert.equal(status, 0, out);
+  assert.match(out, /no origin\/main/);
+  assert.match(out, /the `changes` check/);
+});
+
+test("a --base that does not exist is an error, never a pass", () => {
+  const dir = repo(...REMOVED.map((files, i) => (i ? [{ files, message: "NOC-1: drop" }] : files)));
+  const { status, out } = check(dir, ["--base", "nowhere"]);
+  assert.equal(status, 1, out);
+  assert.match(out, /nowhere/);
+});
