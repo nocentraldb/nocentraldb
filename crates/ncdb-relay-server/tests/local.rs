@@ -5,6 +5,7 @@
 
 mod support;
 
+use std::future::Future;
 use std::net::SocketAddr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -100,4 +101,38 @@ fn it_starts_and_stops_outside_any_runtime() {
     let url = relay.url();
     drop(relay);
     assert!(std::net::TcpStream::connect(addr(&url)).is_err());
+}
+
+/// What `admissions` answers for `identity`, at once.
+fn admission_for(relay: &TestRelay, identity: &str) -> std::io::Result<String> {
+    let fetch = relay.admissions();
+    let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+    match std::pin::pin!(fetch(identity.to_owned())).poll(&mut cx) {
+        std::task::Poll::Ready(answer) => answer,
+        std::task::Poll::Pending => panic!("the admission waits"),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn admitting_any_account_it_signs_an_admission_that_lets_an_unlisted_account_create_a_space()
+{
+    let relay = TestRelay::start(Options::new().admit_any()).expect("the relay starts");
+    let text = admission_for(&relay, &account_hex()).expect("an admission");
+    let admission: Admission = text.parse().expect("an admission's text");
+    assert_eq!(admission.relay_id, relay.relay_id().to_vec());
+
+    let (mut member, _) = Client::member(addr(&relay.url()), 0).await;
+    let admit = message("admit", Some(1), &[(3, Value::Bytes(admission.encode()))]);
+    assert_eq!(member.ask(&admit).await, message("ok", Some(1), &[]));
+    let space = Space::new(0);
+    let pushed = member.push(2, space.space, &[&space.genesis]).await;
+    assert_eq!(pushed, [accepted(1)]);
+}
+
+#[test]
+fn without_admit_any_or_for_a_malformed_identity_there_is_no_admission() {
+    let closed = TestRelay::start(Options::new()).expect("the relay starts");
+    assert!(admission_for(&closed, &account_hex()).is_err());
+    let open = TestRelay::start(Options::new().admit_any()).expect("the relay starts");
+    assert!(admission_for(&open, "00").is_err());
 }
