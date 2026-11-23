@@ -13,6 +13,12 @@ pub(crate) const ADD_TAKES_AN_INVITATION: &str =
 pub(crate) const ADD_TAKES_INVITATIONS: &str =
     "members.add takes invitations";
 
+/// `bridgeAdmissionAnswerTakesARequest` (invalidValue): The bridge, on a
+/// request from the TypeScript SDK: admission.answer without its request
+/// number, or with an admission that is not text or null.
+pub(crate) const ADMISSION_ANSWER_TAKES_AREQUEST: &str =
+    "admission.answer takes a request number and an admission text or null";
+
 /// `bridgeAfterIsACursor` (invalidValue): The bridge, on a request from the
 /// TypeScript SDK: find given an after that is not a cursor.
 pub(crate) const AFTER_IS_ACURSOR: &str =

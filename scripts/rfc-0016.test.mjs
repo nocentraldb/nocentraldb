@@ -2,8 +2,10 @@
 // that a single note can be shared. It is decided and published as a fresh
 // text, as docs/rfc/README.md asks of a newly published RFC: each section
 // states what the design does and why, then the options not taken, in plain
-// words. It has no list of decisions, no option labels to decode and no
-// Decisions section; who decided each choice stays in factory/decisions/.
+// words. It has no list of decisions and no option labels to decode; who
+// decided each choice stays in factory/decisions/. Its Decisions section
+// records only what was decided after its publication, as every decided RFC's
+// does (NOC-474).
 // It names the GENESIS principles it serves and touches. These tests check
 // that each part is there; whether the design is right was the owner's
 // review.
@@ -39,11 +41,7 @@ test("RFC 0016 is decided and is about moving an object", () => {
 
 test("RFC 0016 states its design directly, with no list of decisions", () => {
   const found = headings(text());
-  for (const heading of [
-    "What the owner decided",
-    "Questions to the owner",
-    "Decisions",
-  ]) {
+  for (const heading of ["What the owner decided", "Questions to the owner"]) {
     assert.ok(!found.includes(heading), `it has a section "${heading}"`);
   }
   const body = prose();

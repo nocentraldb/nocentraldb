@@ -8,6 +8,7 @@
 
 import { accountOf } from "./accountCalls.ts";
 import { createAdHoc, lookupsOf, readObjects } from "./adHoc.ts";
+import { admissionOf } from "./admission.ts";
 import { type Cbor, decode, encode } from "./cbor.ts";
 import {
   type Change,
@@ -142,6 +143,7 @@ export const connect = async (
       relay: options.relay,
       pairing: options.pairing === "request" ? true : undefined,
       recover: options.recover,
+      admission: options.admission ? true : undefined,
     });
   } catch (error) {
     core.terminate();
@@ -211,6 +213,7 @@ export const connect = async (
     return space(id);
   };
 
+  const admitted = admissionOf(ask, options.admission);
   // The identity of this database, which its cursors carry.
   const identity = {};
   const subscriptions = new Set<Subscription>();
@@ -227,6 +230,7 @@ export const connect = async (
       synced(message.status);
       return;
     }
+    if (message.event === "admission") return admitted(message);
     if (message.event === "durability") {
       reports.durabilityChanged(
         (message as { durability?: unknown }).durability,
@@ -644,7 +648,7 @@ export const connect = async (
         }
       },
     },
-    account: { ...accountOf(ask), signOff: signOffOf(ask) },
+    account: Object.assign(accountOf(ask, opened), { signOff: signOffOf(ask) }),
     ...erasureCallsOf(ask, read),
     durability: reports.durability,
     view: reports.view,
