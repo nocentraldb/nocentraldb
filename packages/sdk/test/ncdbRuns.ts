@@ -1,3 +1,4 @@
+/// <reference types="node" />
 // Runs `ncdb` both ways on the same project (NOC-415): the native binary
 // that `cargo install ncdb` installs, and the bin @nocentraldb/sdk ships,
 // which runs crates/ncdb compiled to wasm. The tests compare what both say

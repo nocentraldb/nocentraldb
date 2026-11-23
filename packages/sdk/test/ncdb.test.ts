@@ -67,10 +67,14 @@ beforeAll(() => {
   lockV1 = first.lock;
 }, 600_000);
 
-/** `run` with the random model id of a first build replaced by `<id>`. */
+/**
+ * `run` with the random model id of a first build replaced by `<id>`; a
+ * lock that started from lockV1 keeps its id.
+ */
 const withoutModelId = (run: Run): Run => {
   if (run.lock === null) return run;
   const id: string = JSON.parse(run.lock).model.id;
+  if (lockV1.includes(id)) return run;
   return {
     ...run,
     stdout: run.stdout.replaceAll(id, "<id>"),
@@ -168,7 +172,7 @@ describe("npx ncdb model build writes what the native ncdb writes", () => {
   });
 
   test("for a lock edited by hand, which it refuses", () => {
-    const edited = lockV1.replace("One line;", "Two lines;");
+    const edited = lockV1.replace('"ncdb/int"', '"ncdb/float"');
     const run = same({ "model.ts": V1, "model.lock.json": edited }, [
       "model",
       "build",

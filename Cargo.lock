@@ -2249,6 +2249,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ncdb-wasm"
+version = "0.2.0"
+dependencies = [
+ "js-sys",
+ "ncdb",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "nocentraldb"
 version = "0.2.0"
 dependencies = [
