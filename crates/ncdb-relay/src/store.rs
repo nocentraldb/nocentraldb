@@ -127,13 +127,25 @@ pub enum Effect {
     /// Writes a member's row of the space's membership table, replacing the
     /// row it had.
     Member(MemberRecord),
-    /// Records that the account, by its account key, created this space as
-    /// the one space an account the relay does not list may create (RFC
-    /// 0007, "Who may create a space"; Carsten, 2026-11-12, NOC-286). It
+    /// Records that the account, by its identity (the recovery key, or the
+    /// account key of an account without one; RFC 0015, "The account's
+    /// identity"), created this space as the one space an account the
+    /// relay does not list may create (RFC 0007, "Who may create a space";
+    /// Carsten, 2026-11-12, NOC-286). It
     /// holds only if the account has no such space yet; otherwise nothing
     /// of the append is applied, and the append is
     /// [`AppendOutcome::GuestSpaceTaken`].
     GuestSpace([u8; 32]),
+    /// Raises the highest account key statement number the relay has seen
+    /// for the identity, the recovery key, to `number` (RFC 0015, "The
+    /// account's identity"). It never lowers the stored number and never
+    /// keeps the append from holding.
+    Statement {
+        /// The recovery key the statement names.
+        identity: [u8; 32],
+        /// The statement's number.
+        number: u64,
+    },
 }
 
 /// A person-key record (RFC 0003, "Person-key record"): opaque wrapped bytes and the
@@ -284,6 +296,14 @@ pub trait RelayStore: Send + Sync {
         space: SpaceId,
         member: MemberId,
     ) -> impl Future<Output = Result<Option<MemberRecord>, StoreError>> + Send;
+
+    /// The highest account key statement number the relay has seen for
+    /// the identity, the recovery key, if any (RFC 0015, "The account's
+    /// identity"). Written only through [`Effect::Statement`].
+    fn statement(
+        &self,
+        identity: [u8; 32],
+    ) -> impl Future<Output = Result<Option<u64>, StoreError>> + Send;
 
     /// The spaces the member currently belongs to, in id order.
     fn members_of(
@@ -496,6 +516,11 @@ mod debug {
                     f.write_str("GuestSpace(")?;
                     hex(f, account)?;
                     f.write_str(")")
+                }
+                Effect::Statement { identity, number } => {
+                    f.write_str("Statement(")?;
+                    hex(f, identity)?;
+                    write!(f, ", {number})")
                 }
             }
         }
