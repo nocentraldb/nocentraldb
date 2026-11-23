@@ -61,6 +61,10 @@ test("RFC 0004 lists 5 as the rich-text update, 6 as the move, and reserves 7 to
   assert.match(table, /^\| 6 +\| \*\*move\*\* /m);
   assert.match(table, /^\| 7 to 63 +\| reserved /m);
   assert.match(table, /\*\*Numbers 0, 4 and 6 belong to the object\*\*/);
+  assert.match(
+    read("docs/rfc/0013-rich-text.md"),
+    /gives number 5 to this RFC's rich-text update and reserves 7 to 63/,
+  );
   assert.match(section(rfc, "resolution"), /\| \*\*moved\*\* /);
   assert.match(
     section(rfc, "how-a-reference-resolves"),
