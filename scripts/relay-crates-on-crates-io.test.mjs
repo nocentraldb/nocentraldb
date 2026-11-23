@@ -44,7 +44,7 @@ test("each relay crate carries crates.io's metadata and both license texts", () 
     const pkg = manifest(name).package;
     assert.equal(pkg.publish ?? true, true, name);
     for (const key of ["license", "repository", "homepage", "readme"])
-      assert.deepEqual(pkg[key], { workspace: true }, `${name}: ${key}`);
+      assert.equal(pkg[key]?.workspace, true, `${name}: ${key}`);
     assert.ok(pkg.description?.length > 20, `${name}: description`);
     assert.ok(pkg.keywords?.length > 0, `${name}: keywords`);
     assert.ok(pkg.categories?.length > 0, `${name}: categories`);

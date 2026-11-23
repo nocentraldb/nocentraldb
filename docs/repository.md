@@ -12,7 +12,8 @@ crates/ncdb-test-counter/  a plugin for the tests, test/counter (RFC 0011); not 
 crates/ncdb/          the command line ncdb: ncdb model build and ncdb model check (RFC 0005)
 crates/ncdb-wasm/     the command line ncdb compiled to WebAssembly, the core of @nocentraldb/sdk's ncdb bin; not published
 crates/ncdb-relay/    the relay core: RFC 0007's checks, the backend interface, its conformance suite and the SQLite backend
-crates/ncdb-relay-server/  the relay server: RFC 0007's WebSocket protocol over the relay core, and the ncdb-relay binary that runs it locally on SQLite
+crates/ncdb-relay-server/  the relay server: RFC 0007's WebSocket protocol over the relay core, the ncdb-relay binary that runs it locally on SQLite, and the test relay an app starts in its own tests (local::TestRelay)
+crates/ncdb-embedder-example/  an app's own tests against the test relay, through the public SDK alone (NOC-507); not published
 crates/ncdb-relay-aws/     the relay's AWS backend on DynamoDB and S3, and the check of what the AWS Emulator covers (docs/aws-emulator.md)
 crates/ncdb-relay-lambda/  the relay as one Lambda function behind API Gateway's WebSocket API, on the AWS backend, and a local stand-in for API Gateway to test it
 infra/aws/            the relay's AWS infrastructure as a CDK app in TypeScript (RFC 0007, "The AWS backend"); its tests synthesize it with no AWS credentials
@@ -101,7 +102,8 @@ What each project's `gates` task runs:
 | Rust command line (`ncdb`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests run `ncdb model build` and `ncdb model check` on TypeScript schemas, so they need Node.js 24 on PATH); `ncdb-wasm` builds its library for wasm32, so it has no wasm tasks of its own |
 | The `ncdb` bin's core (`ncdb-wasm`) | `format-check`, `lint` and `test` as for `ncdb-core`, and `build-wasm`: the crate runs `ncdb` on the host of `@nocentraldb/sdk`'s bin (NOC-415); the SDK's `test` runs what it builds against the native `ncdb` |
 | Rust relay core (`ncdb-relay`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests run the backend conformance suite against SQLite in temporary directories); the relay runs natively only, so it has no wasm tasks |
-| Rust relay server (`ncdb-relay-server`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests start the server, and the `ncdb-relay` binary, on SQLite in temporary directories and talk to it over local WebSocket connections); it runs natively only, so it has no wasm tasks |
+| Rust relay server (`ncdb-relay-server`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests start the server, the `ncdb-relay` binary and the test relay, on SQLite in temporary directories or in memory, and talk to it over local WebSocket connections); it runs natively only, so it has no wasm tasks |
+| Embedder example (`ncdb-embedder-example`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests open two databases of the Rust SDK and sync them through the test relay); native only, so it has no wasm tasks |
 | Rust relay Lambda function (`ncdb-relay-lambda`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests drive the handler with recorded API Gateway events, and through the local stand-in for API Gateway over WebSocket, on SQLite in temporary directories); plus `test-sdk-sync`, the Rust SDK's sync suite run through that stand-in (`NCDB_TEST_RELAY=lambda`); native only, so it has no wasm tasks |
 | Rust relay AWS backend (`ncdb-relay-aws`) | `format-check`, `lint` and `test` as for `ncdb-core`; its unit tests run as any crate's; its tests against the AWS Emulator (the coverage check, the conformance suite and the backend's own) are ignored unless an emulator runs (`docs/aws-emulator.md`), and the CI job `aws-emulator` runs them; native only, so it has no wasm tasks |
 | Rust SDK (`nocentraldb`) | `format-check`, `lint`, `test`, `build-wasm` and `test-wasm` as for `ncdb-core`, except that `test-wasm` runs only the library's in-memory tests (`--lib`): its sync, relay, keystore and reopen tests need sockets, threads, a file system or a keystore and stay native (NOC-175) |
@@ -148,6 +150,9 @@ moon run ncdb-relay:test --force
 moon run ncdb-relay-server:format-check --force
 moon run ncdb-relay-server:lint --force
 moon run ncdb-relay-server:test --force
+moon run ncdb-embedder-example:format-check --force
+moon run ncdb-embedder-example:lint --force
+moon run ncdb-embedder-example:test --force
 moon run ncdb-relay-aws:format-check --force
 moon run ncdb-relay-aws:lint --force
 moon run ncdb-relay-aws:test --force

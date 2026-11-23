@@ -4,8 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false
-description = "The NoCentralDB relay server: RFC 0007's WebSocket protocol over the relay core, on the SQLite backend."
+homepage.workspace = true
+readme.workspace = true
+description = "The relay server of NoCentralDB, a local-first database: RFC 0007's WebSocket protocol over the relay core, on the SQLite backend, as the ncdb-relay binary and as a test relay an app starts in its own tests."
+keywords = ["local-first", "relay", "sync", "websocket", "testing"]
+categories = ["database", "network-programming", "development-tools::testing"]
 
 [[bin]]
 name = "ncdb-relay"
