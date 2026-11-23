@@ -213,6 +213,13 @@ pub trait Fold {
     fn take_refolds(&mut self) -> Vec<(ObjectId, String, String)> {
         Vec::new()
     }
+    /// The field, an object, a collection as changes name it and a field,
+    /// that a refold in stamp order folds from now on, or `None` once it
+    /// is done. A fold that keeps no state of a moved object's fields
+    /// keeps the field's state while the refold runs, so that each of its
+    /// operations parks as on the live object, and forgets it after
+    /// (RFC 0016; RFC 0013, "The same id twice").
+    fn refolding(&mut self, _field: Option<(ObjectId, &str, &str)>) {}
 }
 
 /// Why a received frame was not appended.

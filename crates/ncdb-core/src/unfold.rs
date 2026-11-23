@@ -100,23 +100,30 @@ pub(crate) fn unfold(log: &mut Log, checks: &impl Checks, fold: &mut impl Fold) 
     }
 }
 
-/// Folds again the field operations of the objects whose move was taken
-/// back ([`Fold::take_revived`]), from every change still folded: the
-/// fold kept none of their fields while they were traces (RFC 0016).
-pub(crate) fn fold_revived(log: &Log, checks: &impl Checks, fold: &mut impl Fold) {
+/// Folds again each field of the objects whose move was taken back
+/// ([`Fold::take_revived`]): the fold kept none of their fields while
+/// they were traces (RFC 0016). Each field is folded again in stamp order,
+/// as [`refold_displaced`] does, so that an operation that parks for an
+/// earlier one, as a rich-text operation can, is recorded as parked on
+/// every copy, whatever arrived while the object was a trace.
+pub(crate) fn fold_revived(log: &mut Log, checks: &impl Checks, fold: &mut impl Fold) {
     let revived = fold.take_revived();
     if revived.is_empty() {
         return;
     }
-    for (change, parked) in log.folded_sealed() {
-        for (origin, operation) in folded_operations(&change, &parked, checks) {
+    let mut fields = BTreeSet::new();
+    for (change, _) in log.folded_sealed() {
+        let Ok(payload) = checks.open_folded(&change) else {
+            continue;
+        };
+        for operation in payload.operations {
             if operation.field.is_some() && revived.contains(&operation.object) {
-                // It folded before and the model has not changed, so it
-                // folds again.
-                let _ =
-                    understand(&operation, fold).and_then(|()| fold_one(&operation, origin, fold));
+                fields.insert(Target::of(&operation));
             }
         }
+    }
+    for target in &fields {
+        refold(log, checks, fold, target);
     }
 }
 
@@ -175,6 +182,7 @@ fn refold(log: &mut Log, checks: &impl Checks, fold: &mut impl Fold, target: &Ta
         }
     }
     operations.sort_by_key(|(origin, _)| (origin.stamp, origin.author, origin.id));
+    fold.refolding(Some((*object, collection, field)));
     fold.clear_field(*object, collection, field);
     let mut parked_now: BTreeMap<ChangeId, BTreeMap<u64, OperationParkReason>> = BTreeMap::new();
     for (origin, operation) in &operations {
@@ -184,6 +192,7 @@ fn refold(log: &mut Log, checks: &impl Checks, fold: &mut impl Fold, target: &Ta
             positions.insert(origin.id.position, reason);
         }
     }
+    fold.refolding(None);
     let ours: BTreeSet<(ChangeId, u64)> = operations
         .iter()
         .map(|(origin, _)| (origin.id.change, origin.id.position))

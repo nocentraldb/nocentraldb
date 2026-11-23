@@ -68,6 +68,10 @@ pub(super) struct SqlFold<'a> {
     displaces: std::cell::Cell<bool>,
     /// The fields to fold again in stamp order, as the changes name them.
     refolds: BTreeSet<(ObjectId, String, String)>,
+    /// The field a refold in stamp order folds now, by object and field
+    /// name, whose state the fold keeps while it runs even on a trace
+    /// ([`Fold::refolding`]).
+    refolding: Option<(ObjectId, String)>,
 }
 
 impl<'a> SqlFold<'a> {
@@ -84,6 +88,7 @@ impl<'a> SqlFold<'a> {
             revived: BTreeSet::new(),
             displaces: std::cell::Cell::new(false),
             refolds: BTreeSet::new(),
+            refolding: None,
         }
     }
 
@@ -304,8 +309,15 @@ impl<'a> SqlFold<'a> {
         };
         // The trace of a moved object keeps no field: the operation is
         // decoded and folded, so that it parks as on every copy, but the
-        // view keeps nothing of it (RFC 0016).
-        let trace = self.object(operation.object)?.object().moved_to().is_some();
+        // view keeps nothing of it (RFC 0016). Whether a rich-text
+        // operation parks depends on the field's state, so a refold in
+        // stamp order decides it, keeping the state while it runs.
+        let trace = self.object(operation.object)?.object().moved_to().is_some()
+            && self.refolding != Some((operation.object, name.to_owned()));
+        #[cfg(ncdb_rich_text)]
+        if trace && matches!(field, Field::RichText(_)) {
+            self.displaces.set(true);
+        }
         Ok(match folded {
             Ok(_) if trace => Ok(()),
             Ok((bytes, read)) => {
@@ -553,6 +565,35 @@ impl Fold for SqlFold<'_> {
 
     fn take_refolds(&mut self) -> Vec<(ObjectId, String, String)> {
         std::mem::take(&mut self.refolds).into_iter().collect()
+    }
+
+    fn refolding(&mut self, field: Option<(ObjectId, &str, &str)>) {
+        if let Some((object, _, name)) = field {
+            self.refolding = Some((object, name.to_owned()));
+            return;
+        }
+        // Done: a trace's field state, kept for the refold, goes again.
+        let Some((object, name)) = self.refolding.take() else {
+            return;
+        };
+        let trace = self
+            .object(object)
+            .map(|state| state.object().moved_to().is_some());
+        match trace {
+            Ok(true) => {
+                // The view's name of the collection, which the states of
+                // its fields are kept under.
+                if let Some(collection) = self.collection_of(object) {
+                    let cleared = self.clear_field_state(&collection, &name, object);
+                    if cleared.is_ok() {
+                        self.touched.insert((collection, object));
+                    }
+                    self.keep(cleared);
+                }
+            }
+            Ok(false) => {}
+            Err(error) => self.keep(Err(error)),
+        }
     }
 
     fn clear_object(&mut self, object: ObjectId) {
