@@ -115,6 +115,10 @@ export const setElementModified = (path: unknown): string =>
 export const setElementNotBasic = (path: unknown): string =>
   `${path}: a set's element is a basic value: nc.string(), nc.int(), nc.float(), nc.boolean() or nc.oneOf([...]).`;
 
+/** `storageLost` (storageLost): nc.open in a browser, when this browser context had the database open before and its files on OPFS are gone while IndexedDB kept the record, as after Chromium drops a private window's OPFS (NOC-445). */
+export const storageLost = (name: unknown): string =>
+  `the browser dropped the storage of the database ${name}, which this browser had open before, as Chromium does with a private window's storage after ten minutes with no database open; its changes the relay had not confirmed are lost. Tell the user, then open with ifStorageLost: "open-empty" to start an empty copy`;
+
 /** `workerFailed` (storageFailed): Every call waiting on the SDK's worker when the worker fails, with the browser's own message. */
 export const workerFailed = (message: unknown): string =>
   `the database's Web Worker failed: ${message}`;
