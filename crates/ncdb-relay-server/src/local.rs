@@ -8,13 +8,16 @@
 //! ```no_run
 //! use ncdb_relay_server::local::{Options, TestRelay};
 //!
-//! # fn identity_of_my_account() -> String { String::new() }
-//! // The identity the SDK reports with `db.account().identity()`.
-//! let identity = identity_of_my_account();
-//! let relay = TestRelay::start(Options::new().allow_identity(&identity))?;
-//! // Open the databases with `OpenOptions::relay(relay.url())`.
+//! let relay = TestRelay::start(Options::new().admit_any())?;
+//! // Open each database with `OpenOptions::relay(&relay.url())` and
+//! // `OpenOptions::admission(relay.admissions())`: the SDK fetches an
+//! // admission for its account when the relay refuses a new space.
 //! # Ok::<(), std::io::Error>(())
 //! ```
+//!
+//! A test that knows its account's identity before it opens the database
+//! lists it with [`Options::allow_identity`] instead, as a relay in
+//! production lists its accounts.
 //!
 //! The relay runs on a Tokio runtime of its own, on a thread of its own, so
 //! a test needs no runtime, and one inside a runtime may start and drop it
@@ -25,13 +28,19 @@
 //! keeps nothing after it is dropped, and like every server of this crate it
 //! serves plain `ws://` on the loopback only. Each relay draws a new relay
 //! id, which [`TestRelay::relay_id`] returns for an admission a test signs.
+//! [`Options::admit_any`] exists only here: the relay itself stays as in
+//! production, and admits any account only through admissions this test
+//! relay signs, which an app's database asks for through
+//! `OpenOptions::admission`.
 
 use std::collections::BTreeSet;
 use std::io;
 use std::net::SocketAddr;
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
 use std::thread::JoinHandle;
 
+use ed25519_dalek::SigningKey;
+use ncdb_core::admission::Admission;
 use ncdb_relay::Relay;
 use ncdb_relay::sqlite::SqliteStore;
 use tokio::sync::oneshot;
@@ -43,6 +52,7 @@ use crate::{Server, config};
 pub struct Options {
     identities: Vec<String>,
     admission_keys: BTreeSet<[u8; 32]>,
+    admit_any: bool,
 }
 
 impl Options {
@@ -67,13 +77,30 @@ impl Options {
         self.admission_keys.insert(key);
         self
     }
+
+    /// Any account may create spaces, through an admission the test relay
+    /// signs with an admission key of its own, which
+    /// [`TestRelay::admissions`] hands to the SDK. An app's test then needs
+    /// no identity before it opens its database.
+    pub fn admit_any(mut self) -> Options {
+        self.admit_any = true;
+        self
+    }
 }
+
+/// How long an admission of [`TestRelay::admissions`] holds: a day.
+const ADMISSION_FOR: u64 = 24 * 60 * 60;
+
+/// How many spaces an admission of [`TestRelay::admissions`] lets an
+/// account create.
+const ADMITTED_SPACES: u64 = 1_000_000;
 
 /// A relay server on SQLite in memory and a free loopback port, which stops
 /// when dropped.
 pub struct TestRelay {
     addr: SocketAddr,
     relay_id: [u8; 16],
+    admission_key: Option<Arc<SigningKey>>,
     stop: Option<oneshot::Sender<()>>,
     thread: Option<JoinHandle<()>>,
 }
@@ -94,6 +121,15 @@ impl TestRelay {
         }
         let mut config = config(allowed);
         config.admission_keys = options.admission_keys;
+        let admission_key = if options.admit_any {
+            let mut secret = [0u8; 32];
+            getrandom::fill(&mut secret).map_err(|e| io::Error::other(e.to_string()))?;
+            let key = SigningKey::from_bytes(&secret);
+            config.admission_keys.insert(key.verifying_key().to_bytes());
+            Some(Arc::new(key))
+        } else {
+            None
+        };
         let mut relay_id = [0u8; 16];
         getrandom::fill(&mut relay_id).map_err(|e| io::Error::other(e.to_string()))?;
         let store = SqliteStore::in_memory().map_err(io::Error::other)?;
@@ -142,6 +178,7 @@ impl TestRelay {
         Ok(TestRelay {
             addr,
             relay_id,
+            admission_key,
             stop: Some(stop),
             thread: Some(thread),
         })
@@ -158,6 +195,20 @@ impl TestRelay {
     pub fn relay_id(&self) -> [u8; 16] {
         self.relay_id
     }
+
+    /// The function an app's database fetches its admissions with, for
+    /// `OpenOptions::admission`: it answers an admission's text for the
+    /// identity it gets, for this relay, a day and a million spaces. It
+    /// answers an error when the relay was started without
+    /// [`Options::admit_any`], or for an identity that is not 64 hex
+    /// digits.
+    pub fn admissions(
+        &self,
+    ) -> impl Fn(String) -> std::future::Ready<io::Result<String>> + Send + Sync + 'static {
+        let key = self.admission_key.clone();
+        let relay_id = self.relay_id;
+        move |identity| std::future::ready(admission(key.as_deref(), relay_id, &identity))
+    }
 }
 
 impl Drop for TestRelay {
@@ -169,6 +220,35 @@ impl Drop for TestRelay {
             let _ = thread.join();
         }
     }
+}
+
+/// An admission's text for `identity` on the relay `relay_id`, signed with
+/// `key`.
+fn admission(key: Option<&SigningKey>, relay_id: [u8; 16], identity: &str) -> io::Result<String> {
+    let key = key.ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::Unsupported,
+            "the test relay was started without admit_any",
+        )
+    })?;
+    let identity = hex32(identity).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "the identity is not 64 hex digits",
+        )
+    })?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| io::Error::other("the clock is before 1970"))?
+        .as_secs();
+    let admission = Admission::sign(
+        key,
+        relay_id.to_vec(),
+        identity,
+        now + ADMISSION_FOR,
+        ADMITTED_SPACES,
+    );
+    Ok(admission.to_string())
 }
 
 /// 32 bytes written as 64 hex digits.

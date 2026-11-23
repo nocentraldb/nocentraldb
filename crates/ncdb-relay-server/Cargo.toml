@@ -33,6 +33,9 @@ futures-util = { version = "=0.3.34", default-features = false, features = ["sin
 httparse = { version = "=1.10.1", default-features = false, features = ["std"] }
 # The challenge's nonce and a new relay id: the platform's secure generator.
 getrandom = { version = "=0.4.3", default-features = false }
+# The admission key a test relay that admits any account signs with
+# (`local`; RFC 0015, "Admission tokens"). The version the relay core pins.
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["alloc", "fast", "zeroize"] }
 
 # The errno values of `accept` that mean the listener itself is gone. Already
 # in the tree through tokio; the same pinned version.
