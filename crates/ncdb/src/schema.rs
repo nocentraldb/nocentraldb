@@ -8,10 +8,10 @@
 
 use std::io::ErrorKind;
 use std::path::Path;
-use std::process::Command;
 
 use ncdb_core::model_lock::Draft;
 
+use crate::host::Host;
 use crate::texts;
 
 /// Imports the schema module and prints the description of its `model`.
@@ -54,12 +54,9 @@ fn not_started(error: std::io::Error) -> String {
 }
 
 /// Refuses a missing `node`, or one older than [`NODE_MAJOR`].
-fn check_node() -> Result<(), String> {
-    let output = Command::new("node")
-        .arg("--version")
-        .output()
-        .map_err(not_started)?;
-    let version = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+fn check_node(host: &mut dyn Host) -> Result<(), String> {
+    let output = host.node(&["--version".into()]).map_err(not_started)?;
+    let version = output.stdout.trim().to_owned();
     let major = version
         .strip_prefix('v')
         .and_then(|v| v.split('.').next())
@@ -79,25 +76,24 @@ fn check_node() -> Result<(), String> {
 
 /// The description of the schema module at `path`, or the message to show
 /// after the module's name.
-pub fn describe(path: &Path) -> Result<Draft, String> {
-    if !path.is_file() {
+pub fn describe(host: &mut dyn Host, path: &Path) -> Result<Draft, String> {
+    if !host.is_file(path) {
         return Err(texts::NO_SCHEMA_FILE.into());
     }
-    let absolute = path.canonicalize().map_err(texts::cannot_be_opened)?;
-    check_node()?;
-    let output = Command::new("node")
-        .arg("--input-type=module")
-        .arg("--eval")
-        .arg(SCRIPT)
-        .arg(absolute)
-        .arg(texts::schema_cannot_be_run("{error}"))
-        .arg(texts::SCHEMA_EXPORTS_NO_MODEL)
-        .output()
+    let absolute = host.canonicalize(path).map_err(texts::cannot_be_opened)?;
+    check_node(host)?;
+    let output = host
+        .node(&[
+            "--input-type=module".into(),
+            "--eval".into(),
+            SCRIPT.into(),
+            absolute.to_string_lossy().into_owned(),
+            texts::schema_cannot_be_run("{error}"),
+            texts::SCHEMA_EXPORTS_NO_MODEL.into(),
+        ])
         .map_err(not_started)?;
-    if !output.status.success() {
-        let message = String::from_utf8_lossy(&output.stderr);
-        return Err(message.trim_end().to_owned());
+    if !output.success {
+        return Err(output.stderr.trim_end().to_owned());
     }
-    let text = String::from_utf8_lossy(&output.stdout);
-    Draft::from_json(&text).map_err(texts::description_unreadable)
+    Draft::from_json(&output.stdout).map_err(texts::description_unreadable)
 }

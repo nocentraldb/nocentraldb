@@ -6,7 +6,7 @@ This RFC defines who belongs to a space and what each member may do. It covers t
 
 It builds on [RFC 0001](0001-nocentraldb.md) and on [RFC 0002](0002-change-and-log-format.md), which reserves control changes as [kind 1](0002-change-and-log-format.md#key-generation-suite-and-kind); [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) names the rest.
 
-**Status.** Decided by the owner (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Partly built. Built: the genesis, the roles, every control change and the rules that fold them, provisional erasure and the erasure decision, in the core, the relay and both SDKs. Not built: the SDK's reports to an admin who removes a member with changes it has not seen, of the members a removed admin added, of a revoked member's fork, of a generation-id collision, and of a wrong key envelope or key chain entry. The core finds a wrong key envelope; the SDK does not show it yet.
 
@@ -717,14 +717,14 @@ It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership
 
 ## Decisions
 
-- **2026-11-11 · The sign-off compares accounts by account key and every recovery key.** (Carsten, 2026-11-11, NOC-201; [decision](../../factory/decisions/2026-11-11-NOC-196-the-sign-off-reads-every-certificate-for-recovery-keys.md))
-- **2026-11-11 · With one admin account, a writer of another account may sign off an erasure.** (Carsten, 2026-11-11, NOC-228; [decision](../../factory/decisions/2026-11-11-NOC-229-exactly-one-admin-account-is-counted-by-same-account-and-needs-one-admin.md))
-- **2026-11-11 · A shred is final when accepted.** (Carsten, 2026-11-11, NOC-224)
-- **2026-11-11 · The account key statement entry, entry type 7.** (Carsten, 2026-11-11, NOC-187; [decision](../../factory/decisions/2026-11-12-NOC-233-a-statement-entry-rejects-only-concurrent-adds-and-counts-the-adds-own-statement.md))
-- **2026-11-11 · A provisional erasure in a space with one account, and the erasure decision, entry type 8.** (Carsten, 2026-11-11, NOC-230)
-- **2026-11-12 · The first shred that is not taken back takes effect.** (Carsten, 2026-11-12, NOC-242; [decision](../../factory/decisions/2026-11-12-NOC-258-the-first-shred-not-taken-back-takes-effect.md))
-- **2026-11-20 · A member reads a generation with the key its control change confirms.** (Carsten, 2026-11-20, NOC-389; [decision](../../factory/decisions/2026-11-20-NOC-389-a-member-reads-a-generation-with-the-key-its-control-change-confirms.md))
-- **2026-11-20 · A shred over a gap in its causal past is waiting, and the SDK lists it with the state `waiting`.** (Carsten, 2026-11-20, NOC-392)
+- **2026-11-11 · The sign-off compares accounts by account key and every recovery key.** ([decision](../../factory/decisions/2026-11-11-NOC-196-the-sign-off-reads-every-certificate-for-recovery-keys.md))
+- **2026-11-11 · With one admin account, a writer of another account may sign off an erasure.** ([decision](../../factory/decisions/2026-11-11-NOC-229-exactly-one-admin-account-is-counted-by-same-account-and-needs-one-admin.md))
+- **2026-11-11 · A shred is final when accepted.** (NOC-224)
+- **2026-11-11 · The account key statement entry, entry type 7.** ([decision](../../factory/decisions/2026-11-12-NOC-233-a-statement-entry-rejects-only-concurrent-adds-and-counts-the-adds-own-statement.md))
+- **2026-11-11 · A provisional erasure in a space with one account, and the erasure decision, entry type 8.** (NOC-230)
+- **2026-11-12 · The first shred that is not taken back takes effect.** ([decision](../../factory/decisions/2026-11-12-NOC-258-the-first-shred-not-taken-back-takes-effect.md))
+- **2026-11-20 · A member reads a generation with the key its control change confirms.** ([decision](../../factory/decisions/2026-11-20-NOC-389-a-member-reads-a-generation-with-the-key-its-control-change-confirms.md))
+- **2026-11-20 · A shred over a gap in its causal past is waiting, and the SDK lists it with the state `waiting`.** (NOC-392)
 
 ## History
 
@@ -740,3 +740,4 @@ It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership
 - 2026-11-20 · A member keeps every key the envelopes of a generation unwrap to, and reads and writes with the one the generation's control change confirms (NOC-389)
 - 2026-11-20 · A shred over a gap in its causal past is waiting until the gap fills, and the SDK lists it as `waiting` (NOC-401)
 - 2026-11-21 · The TypeScript SDK erases a person and takes a provisional erasure back, so the status line names both SDKs (NOC-406)
+- 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)

@@ -139,6 +139,8 @@ export const tabCore = async (
     };
   });
   let sync: Cbor = null;
+  // The account's identity this tab's own open answered (RFC 0015).
+  let identity: Cbor = null;
   // The calls this tab's worker is answering, its own and the others'.
   const serving = new Set<Promise<unknown>>();
   // This tab is giving the database up: it takes no new call.
@@ -166,10 +168,11 @@ export const tabCore = async (
     const message = decode(bytes) as {
       event?: string;
       status?: Cbor;
-      ok?: { sync?: Cbor };
+      ok?: { sync?: Cbor; identity?: Cbor };
     };
     if (message.event === "sync") sync = message.status ?? null;
     else if (message.ok?.sync !== undefined) sync = message.ok.sync;
+    if (message.ok?.identity !== undefined) identity = message.ok.identity;
   };
 
   const workerEvent = (bytes: Uint8Array) => {
@@ -203,7 +206,10 @@ export const tabCore = async (
     if (request.call === "open") {
       answer =
         ownOpen?.args.lock === request.args.lock
-          ? encode({ id: request.id, ok: { sync, ...relayOfOwner() } })
+          ? encode({
+              id: request.id,
+              ok: { sync, identity, ...relayOfOwner() },
+            })
           : failure(request.id, "modelRefused", texts.ANOTHER_LOCK);
     } else {
       answer = await track(
