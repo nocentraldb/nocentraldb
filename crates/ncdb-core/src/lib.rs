@@ -35,6 +35,7 @@
 //! and on wasm32, as RFC 0006 (`docs/rfc/0006-local-view.md`) defines it
 //! ([`view`]).
 
+pub mod admission;
 pub mod basic;
 /// The canonical CBOR of RFC 0002, which the core shares with plugins'
 /// `Data` (RFC 0011): it lives in `ncdb-plugin`.
