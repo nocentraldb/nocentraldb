@@ -278,4 +278,4 @@ It adds an operation to [RFC 0002](0002-change-and-log-format.md)'s format and [
 
 - 2026-11-22 · First published (NOC-447)
 - 2026-11-23 · Its status line names nobody who decided; the decision log records it (NOC-454, #449)
-- 2026-11-23 · The move is operation 6, later edits are computed from the log, a set plugin field is refused for now, and the decided RFCs describe the move (NOC-474)
+- 2026-11-23 · The move is operation 6, later edits are computed from the log, a set plugin field is refused for now, and the decided RFCs describe the move (NOC-474, #474)

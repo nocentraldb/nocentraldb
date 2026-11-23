@@ -876,4 +876,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set 
 - 2026-11-20 · A plain introduction to the ideas behind it, and its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-21 · Days and points in time, two basic value types, as the owner answered (NOC-412, NOC-434, #430)
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
-- 2026-11-23 · Operation 5 is the rich-text update and 6 the move; a link to a moved object reads moved, and a reference follows the trace, as RFC 0016 decided (NOC-474)
+- 2026-11-23 · Operation 5 is the rich-text update and 6 the move; a link to a moved object reads moved, and a reference follows the trace, as RFC 0016 decided (NOC-474, #474)

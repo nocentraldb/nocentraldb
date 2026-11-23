@@ -621,4 +621,4 @@ It makes them more precise in these points:
 - 2026-11-20 · Erasure stays a work order, with 0.1's `Db::erase` as an interim call, and two notices come later, as the owner answered (NOC-362, #396)
 - 2026-11-20 · A member that holds several keys for a generation opens its changes with the one the generation's control change confirms (NOC-389)
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
-- 2026-11-23 · The notice of moving data between spaces is RFC 0016's `objectMoved` (NOC-474)
+- 2026-11-23 · The notice of moving data between spaces is RFC 0016's `objectMoved` (NOC-474, #474)

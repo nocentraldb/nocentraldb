@@ -595,4 +595,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · Key 0 is "must understand", and a former member's own change pushed again is answered `duplicate`, as the owner answered (NOC-362, #396)
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
-- 2026-11-23 · The operation list names rich text's update, 5, and the move, 6 (NOC-474)
+- 2026-11-23 · The operation list names rich text's update, 5, and the move, 6 (NOC-474, #474)
