@@ -53,6 +53,13 @@ CREATE TABLE IF NOT EXISTS guest_spaces (
     account BLOB PRIMARY KEY,
     space BLOB NOT NULL
 ) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS admissions (
+    identity BLOB PRIMARY KEY,
+    until INTEGER NOT NULL,
+    spaces INTEGER NOT NULL,
+    key BLOB NOT NULL,
+    created INTEGER NOT NULL
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS statements (
     identity BLOB PRIMARY KEY,
     number INTEGER NOT NULL

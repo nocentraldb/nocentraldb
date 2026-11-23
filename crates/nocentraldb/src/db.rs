@@ -80,6 +80,8 @@ pub(crate) struct Inner {
     /// Whether the database joins an account another device created: it
     /// then creates no account space (`crate::account`).
     pub(crate) joins_account: bool,
+    /// The app's function that fetches an admission (RFC 0015).
+    pub(crate) admission: Option<crate::admission::Fetch>,
 }
 
 /// What the database keeps of one space besides its log: the checks,
@@ -413,6 +415,7 @@ impl Db {
             sync: None,
             status: crate::sync::Notify::default(),
             joins_account: options.joins_account,
+            admission: options.admission.clone(),
         };
         let mut inner = inner;
         crate::account::reconcile(&mut inner)?;

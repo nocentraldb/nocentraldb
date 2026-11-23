@@ -36,6 +36,8 @@ pub struct OpenOptions {
     /// crate-internal until the browser export names it (NOC-176).
     #[cfg(target_arch = "wasm32")]
     pub(crate) browser: Option<String>,
+    /// The app's function that fetches an admission (RFC 0015).
+    pub(crate) admission: Option<crate::admission::Fetch>,
 }
 
 impl OpenOptions {
@@ -60,7 +62,28 @@ impl OpenOptions {
             sub_agent: false,
             #[cfg(target_arch = "wasm32")]
             browser: None,
+            admission: None,
         }
+    }
+
+    /// The app's function that fetches an admission from its backend
+    /// (RFC 0015, "In the SDK"): it gets the account's identity, the
+    /// recovery key in hexadecimal that
+    /// [`Account::identity`](crate::Account::identity) gives, and answers
+    /// the admission's text, `ncdb-admit-1:...`, which the backend signed
+    /// after it authenticated its user. When the relay refuses a new space
+    /// with `not_allowed`, the SDK calls it, presents the answer to the
+    /// relay, and pushes the space again, once; the next refusal calls it
+    /// again. An error, or a text that is no admission, leaves the space
+    /// refused as without the function, and the SDK never logs either. The
+    /// developer handles a string, never a key.
+    pub fn admission<F, Fut, E>(mut self, fetch: F) -> OpenOptions
+    where
+        F: Fn(String) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Result<String, E>> + 'static,
+    {
+        self.admission = Some(crate::admission::boxed(fetch));
+        self
     }
 
     /// Opens a new database for pairing (RFC 0009, "Accounts and devices";
@@ -203,6 +226,8 @@ impl OpenOptions {
     /// refuses any other URL with `InvalidValue`. In a browser, the relay
     /// URL is `wss://`, except for localhost while developing: a page
     /// served over `https://` cannot open `ws://` (RFC 0009, NOC-245).
+    /// A token for the relay belongs in the query string, never in the
+    /// path, since the SDK shows a relay URL with its path (NOC-495).
     pub fn relay(mut self, url: &str) -> OpenOptions {
         self.relay = Some(url.to_owned());
         self
