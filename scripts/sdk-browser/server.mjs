@@ -12,8 +12,9 @@ import { DIST } from "./build.mjs";
 
 const PAGE_DIR = join(dirname(fileURLToPath(import.meta.url)), "page");
 
-const ROOTS = [
-  { prefix: "/sdk/", dir: DIST },
+/** What the server serves: the package's build output from `dist`, and the page. */
+const roots = (dist) => [
+  { prefix: "/sdk/", dir: dist },
   { prefix: "/", dir: PAGE_DIR },
 ];
 
@@ -24,7 +25,7 @@ const TYPES = {
 };
 
 /** The file a URL path names, or null when it lies outside every root. */
-const resolve = (pathname) => {
+const resolve = (pathname, served) => {
   let decoded;
   try {
     decoded = decodeURIComponent(pathname);
@@ -32,7 +33,7 @@ const resolve = (pathname) => {
     return null;
   }
   if (decoded.includes("\0")) return null;
-  for (const { prefix, dir } of ROOTS) {
+  for (const { prefix, dir } of served) {
     if (!decoded.startsWith(prefix)) continue;
     const file = join(dir, decoded.slice(prefix.length) || "index.html");
     return file.startsWith(dir + sep) ? file : null;
@@ -40,8 +41,11 @@ const resolve = (pathname) => {
   return null;
 };
 
-const handle = async (request, response) => {
-  const file = resolve(new URL(request.url, "http://localhost").pathname);
+const handle = async (request, response, served) => {
+  const file = resolve(
+    new URL(request.url, "http://localhost").pathname,
+    served,
+  );
   const type = file && TYPES[extname(file)];
   if (!type) {
     response.writeHead(404).end();
@@ -59,11 +63,20 @@ const handle = async (request, response) => {
   }
 };
 
-/** Starts the server; resolves to { url, close }. Port 0 picks a free one. */
-export const startServer = ({ port = 8335, host = "127.0.0.1" } = {}) =>
+/**
+ * Starts the server; resolves to { url, close }. Port 0 picks a free one.
+ * `dist` serves another copy of the package under /sdk/, as
+ * scripts/memory-budget/browser.test.mjs serves an instrumented one.
+ */
+export const startServer = ({
+  port = 8335,
+  host = "127.0.0.1",
+  dist = DIST,
+} = {}) =>
   new Promise((done, reject) => {
+    const served = roots(dist);
     const server = createServer((request, response) => {
-      handle(request, response).catch(() => {
+      handle(request, response, served).catch(() => {
         if (!response.headersSent) response.writeHead(500);
         response.end();
       });
