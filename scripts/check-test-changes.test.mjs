@@ -167,3 +167,70 @@ test("an ignored test or a skip marker that was there before is not flagged", ()
   );
   assert.equal(status, 0, out);
 });
+
+test("a removed Rust assert or TypeScript expect is flagged", () => {
+  const { status, out } = pr(
+    {
+      [RS]: rust(rustTest("one", "assert!(ready());\n    assert_eq!(count(), 2);")),
+      [TS]: ts(tsTest("one", "expect(ready()).toBe(true);\n  expect(count()).toBe(2);")),
+      "scripts/b.test.mjs": `test("b", () => {\n  assert.equal(count(), 2);\n  assert.ok(ready());\n});\n`,
+    },
+    {
+      [RS]: rust(rustTest("one", "assert!(ready());")),
+      [TS]: ts(tsTest("one", "expect(ready()).toBe(true);")),
+      "scripts/b.test.mjs": `test("b", () => {\n  assert.ok(ready());\n});\n`,
+    },
+  );
+  assert.equal(status, 1, out);
+  assert.ok(out.includes(`${RS}: removes or rewrites the assertion \`assert_eq!(count(), 2)\``), out);
+  assert.ok(out.includes(`${TS}: removes or rewrites the assertion \`expect(count()).toBe(2)\``), out);
+  assert.ok(out.includes("scripts/b.test.mjs: removes or rewrites the assertion `assert.equal(count(), 2)`"), out);
+  assert.doesNotMatch(out, /ready/);
+});
+
+test("an assertion inside a Rust #[cfg(test)] module counts, one outside does not", () => {
+  const src = (inner, outer) =>
+    `pub fn f(x: u8) {\n    ${outer}\n}\n\n#[cfg(test)]\nmod tests {\n    fn helper() {\n        ${inner}\n    }\n}\n`;
+  const kept = pr(
+    { "crates/a/src/lib.rs": src("assert_eq!(f(1), ());", "assert!(x > 0);") },
+    { "crates/a/src/lib.rs": src("assert_eq!(f(1), ());", "") },
+  );
+  assert.equal(kept.status, 0, kept.out);
+  const removed = pr(
+    { "crates/a/src/lib.rs": src("assert_eq!(f(1), ());", "assert!(x > 0);") },
+    { "crates/a/src/lib.rs": src("", "assert!(x > 0);") },
+  );
+  assert.equal(removed.status, 1, removed.out);
+  assert.match(removed.out, /removes or rewrites the assertion `assert_eq!\(f\(1\), \(\)\)`/);
+});
+
+test("a changed literal in an assertion is flagged with both versions", () => {
+  const { status, out } = pr(
+    {
+      [RS]: rust(rustTest("one", 'assert_eq!(name(), "alpha");')),
+      [TS]: ts(tsTest("one", "expect(count()).toBe(2);")),
+    },
+    {
+      [RS]: rust(rustTest("one", 'assert_eq!(name(), "beta");')),
+      [TS]: ts(tsTest("one", "expect(count()).toBe(3);")),
+    },
+  );
+  assert.equal(status, 1, out);
+  assert.ok(out.includes(`${RS}: changes an expected value: \`assert_eq!(name(), "alpha")\` became \`assert_eq!(name(), "beta")\``), out);
+  assert.ok(out.includes(`${TS}: changes an expected value: \`expect(count()).toBe(2)\` became \`expect(count()).toBe(3)\``), out);
+});
+
+test("an assertion only reformatted or moved to another file is not flagged", () => {
+  const { status, out } = pr(
+    {
+      [TS]: ts(tsTest("one", "expect(count()).toEqual([1, 2]);")),
+      [RS]: rust(rustTest("one", "assert_eq!(count(), 2);")),
+    },
+    {
+      [TS]: ts(tsTest("one", "expect(count()).toEqual([\n    1,\n    2,\n  ]);")),
+      [RS]: rust(rustTest("one", "helper();")),
+      "crates/a/tests/b.rs": rust("fn helper() {\n    assert_eq!( count(), 2 );\n}\n"),
+    },
+  );
+  assert.equal(status, 0, out);
+});
