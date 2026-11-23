@@ -143,7 +143,10 @@ fn a_changed_field_breaks_the_signature() {
 #[test]
 fn a_map_without_a_key_or_with_a_wrong_one_is_refused() {
     for key in 1..=5 {
-        assert!(Admission::decode(&changed(key, None)).is_err(), "without key {key}");
+        assert!(
+            Admission::decode(&changed(key, None)).is_err(),
+            "without key {key}"
+        );
     }
     for (key, value) in [
         (1, Value::Unsigned(1)),
