@@ -10,7 +10,7 @@ Merge rules are hard to change once a type ships: a changed rule makes old and n
 
 **Status.** Decided, 2026-11-10.
 
-**At 0.1.** Partly built. Built in the core: basic values, sets, links and references, creating and deleting objects, the operation numbers, and the plugin contract with its harness. Not built: the calls that let an app read a field's conflicts, an outcome, or the state of a link or reference (`space.inspect`, `$conflicts`), in either SDK. Days and points in time came after 0.1.
+**At 0.1.** Partly built. Built in the core: basic values, sets, links and references, creating and deleting objects, the operation numbers, and the plugin contract with its harness. Not built: the calls that let an app read a field's conflicts, an outcome, or the state of a link or reference (`space.inspect`, `$conflicts`), in either SDK, and the move of [RFC 0016](0016-moving-an-object.md) with the link status **moved**. Days and points in time came after 0.1.
 
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0004: Merge rules for basic values, sets and links](https://github.com/nocentraldb/nocentraldb/discussions/127), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -36,8 +36,8 @@ The sections below define each rule and say why it was chosen.
 | --------------------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Basic value (string, number, boolean, choice from a list, day, point in time) | The writes no other write has replaced                        | The write with the highest stamp: last writer wins | One wins by stamp order; the others stay as conflicts             | Each losing write, with its value, author and stamp              |
 | Set                                                       | The additions no removal has seen, and the removals           | The elements with at least one live addition       | An addition wins over a removal that did not see it (add wins)    | Each removal that lost to a concurrent addition                  |
-| Link (one target)                                         | A basic value whose value is an object id                     | The winning target, with its resolution status     | As for basic values                                               | As for basic values; plus a target that is deleted or missing    |
-| Links (many targets)                                      | A set of object ids                                           | The targets, each with its resolution status       | As for sets                                                       | As for sets; plus each target that is deleted or missing         |
+| Link (one target)                                         | A basic value whose value is an object id                     | The winning target, with its resolution status     | As for basic values                                               | As for basic values; plus a target that is deleted, moved or missing |
+| Links (many targets)                                      | A set of object ids                                           | The targets, each with its resolution status       | As for sets                                                       | As for sets; plus each target that is deleted, moved or missing |
 | Reference (one target, in any space)                      | A basic value whose value is a space id and an object id      | The winning reference, with its resolution state   | As for basic values                                               | As for basic values; plus a target that is not accessible or missing |
 
 In one sentence: every field's state is a pure function of the set of changes a copy has received, so the order in which they arrive cannot matter; and no change disappears without either a later writer having seen it or the app being able to read that it lost.
@@ -222,8 +222,9 @@ Resolution is not part of the link's state. The link keeps the object id as writ
 | **deleted**           | The copy holds the target and it is deleted.                                                                                                  |
 | **missing**           | The copy holds no object with this id. The target may not have arrived yet, may never have been created, or may live in another space (see below). |
 | **wrong collection**  | The copy holds the target, but in a collection the schema does not allow for this field.                                                      |
+| **moved**             | The copy holds the target as a trace: a move took it to another space, which the status names ([RFC 0016, "Links to the moved object"](0016-moving-an-object.md#links-to-the-moved-object)). |
 
-Because the status is a function of the copy, two copies that hold the same set of changes compute the same status. Before they hold the same set, they may differ, as any other value does during sync. Computed fields and views that follow links (RFC 0001's `nc.reach`) will read these statuses; how they treat each status belongs to the computed-fields RFC.
+A target that was moved reads **moved**, even when it was also deleted after the move, since a delete written after the move is a later edit and the object lives on in the new space. Reading a moved target as **deleted** was not taken: the app could not tell a moved object from a deleted one. Because the status is a function of the copy, two copies that hold the same set of changes compute the same status. Before they hold the same set, they may differ, as any other value does during sync. Computed fields and views that follow links (RFC 0001's `nc.reach`) will read these statuses; how they treat each status belongs to the computed-fields RFC.
 
 ### A link whose target was deleted
 
@@ -265,7 +266,7 @@ Rights come from many small spaces (GENESIS.md), so related data often lives in 
 
 ### State and operations
 
-A reference is a field type of its own, `ncdb/ref` with rule version 1. It has no merge rule of its own: its state is a basic value's, and its value is a pair, the target's space id and object id. So the one table of [operation numbers](#operation-numbers) stays as it is, the merge rule needs no new proof, and an old client that does not know `ncdb/ref` parks the field's operations as an unknown type ([RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model)) instead of misreading them. Two forms were not taken: `ncdb/link` with a new rule version whose value may name a space, one type for both, because a link's meaning would change under its own name and every reader of links would have to handle both forms; and `ncdb/ref` with a new operation number from 5 to 63, "set a reference", because the type id already says what the value is, so a second number adds nothing.
+A reference is a field type of its own, `ncdb/ref` with rule version 1. It has no merge rule of its own: its state is a basic value's, and its value is a pair, the target's space id and object id. So the one table of [operation numbers](#operation-numbers) stays as it is, the merge rule needs no new proof, and an old client that does not know `ncdb/ref` parks the field's operations as an unknown type ([RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model)) instead of misreading them. Two forms were not taken: `ncdb/link` with a new rule version whose value may name a space, one type for both, because a link's meaning would change under its own name and every reader of links would have to handle both forms; and `ncdb/ref` with a new operation number from the reserved range, "set a reference", because the type id already says what the value is, so a second number adds nothing.
 
 | Type                                 | State                                                    | Read value                                       | Concurrent writes   | What stays visible to the app                                        |
 | ------------------------------------ | -------------------------------------------------------- | ------------------------------------------------ | ------------------- | -------------------------------------------------------------------- |
@@ -285,6 +286,8 @@ As for a link, the state is not part of the reference: the reference keeps the s
 | **not accessible**   | The member holds no copy of the target's space: it never joined it, or it left and its rows of the space were deleted ([RFC 0006](0006-local-view.md)).                                                                 |
 | **missing**          | The member holds a copy of the target's space, but the copy holds no object with that id, or holds it deleted, or in a collection the schema does not name for the field. An erased target reads missing, as a deleted one does. |
 
+**A moved target.** When the member's copy of the named space holds the target as a trace ([RFC 0016, "References to the moved object"](0016-moving-an-object.md#references-to-the-moved-object)), resolution follows the trace into the space it names, and on through each further trace, up to 8 in a row, so that a cycle of moves ends. The reference resolves to the state it finds where the object is now: **ok** at the first copy that holds the target live, **not accessible** at a space the member holds no copy of, and **missing** otherwise, a ninth trace included. The read gives the space where it found the object, so an app that wants the reference to name the new space writes it once. A member that holds no copy of the named space cannot follow the trace and reads **not accessible**, even when it holds the new space. The reference itself stays as written. Reading the reference as **missing** until an app rewrites it was not taken: every reference to a moved object would break until a member of the referencing space rewrote it.
+
 Unlike a link's status, the state differs from member to member. Two members of the orders' space hold the same changes and the same reference, but only one of them may be in the customers' space. So the state is never part of the space's shared state (principle 2): no computed field, view, index or other stored value depends on it, and a computed field or view never follows a reference into its target. The computed-fields RFC must refuse one that tries. A member shows the state as local information only, as principle 3 allows for what differs from member to member. Two members that hold the same copies of the same spaces compute the same state. Keeping the resolution state as part of the field's stored state was not taken for that reason: it differs from member to member, so it can never be shared state (principle 3).
 
 Three states, not four. A reference resolves to the three states above, and no more: a target in a collection the schema does not name reads **missing**, and an old client that does not know a target collection added later reads **missing** until it upgrades. A fourth state, **wrong collection**, as links have, would be more precise, but it would go beyond the three states the reference was decided with, and every app would have to handle it.
@@ -295,6 +298,7 @@ The state changes without any change to the reference:
 
 - **The target arrives** in the member's copy of its space: **missing** becomes **ok**.
 - **The target is deleted:** **ok** becomes **missing**, and **ok** again if it is restored ([A link whose target was deleted](#a-link-whose-target-was-deleted)).
+- **The target is moved:** the state is the one found where the trace leads, as above.
 - **The member joins** the target's space: **not accessible** becomes **missing** until the target arrives, then **ok**. **It leaves**, and its rows of the space are deleted: the state becomes **not accessible**.
 
 A copy cannot tell a target that has not arrived from one that never will, as for links ([A link to an object the member has not received](#a-link-to-an-object-the-member-has-not-received)). The state says what the member's copies hold, no more.
@@ -436,7 +440,9 @@ The arguments sit in key 5 as a map with small integer keys, because RFC 0002's 
 | 2         | **add**                       | set, links (many targets)                                        | `{1: element, 2: replaces}`           |
 | 3         | **remove**                    | set, links (many targets)                                        | `{1: element, 3: observed}`           |
 | 4         | **delete**                    | none: it writes whether the object is deleted                    | `{1: true or false, 2: replaces}`; key 3 absent |
-| 5 to 63   | reserved                      | later built-in types: rich text, streams                         | defined by their RFCs                 |
+| 5         | **rich-text update**          | rich text (`ncdb/richText`)                                      | defined by [RFC 0013](0013-rich-text.md) |
+| 6         | **move**                      | none: it writes the space the object moved to                    | `{1: destination or null, 2: replaces}`; key 3 absent ([RFC 0016](0016-moving-an-object.md#formats)) |
+| 7 to 63   | reserved                      | later built-in types, such as streams                            | defined by their RFCs                 |
 | 64 and up | reserved for plugin types     | each plugin type numbers its own operations                      | defined by the plugin                 |
 
 The rules for the numbers:
@@ -444,7 +450,7 @@ The rules for the numbers:
 - **One table for the built-in types.** A number means at most one operation across all built-in types: add is 2 on a set field and on a links field alike, and 2 is never set on another built-in type. A remove sent to a basic value is therefore an operation the type does not define, and is parked (see [Operations a member does not understand](#operations-a-member-does-not-understand)), instead of being misread as one of the type's own operations. A log or an error can name an operation without the field's type.
 - **A number is never reused or redefined.** A retired operation keeps its number reserved.
 - **Plugin types start at 64.** A plugin type numbers its operations from 64 up, within its own type id; two plugin types may use the same number, because the field's type in `model.lock.json` tells them apart: its type id and rule version, as [RFC 0005](0005-schema-and-model-lock.md) references them ([How a field type is referenced](0005-schema-and-model-lock.md#how-a-field-type-is-referenced)), such as `ncdb/set` for a built-in type or `acme/counter` for a plugin. A plugin is Rust compiled into the core ([The plugin contract](#the-plugin-contract)).
-- **Numbers 0 and 4 belong to the object**, for every collection: 0 is RFC 0002's create, 4 is delete (see [Creating and deleting an object](#creating-and-deleting-an-object)). No field type defines them.
+- **Numbers 0, 4 and 6 belong to the object**, for every collection: 0 is RFC 0002's create, 4 is delete and 6 is move (see [Creating and deleting an object](#creating-and-deleting-an-object)). No field type defines them.
 
 So an operation sent to the wrong type is parked, not misread, and a number names an operation without the field's type. The numberings not taken:
 
@@ -506,6 +512,8 @@ Whether an object is deleted is a basic boolean value of the object, with this R
 
 - **create** (number 0, RFC 0002) writes `{1: object id, 2: collection, 4: 0}`, without key 5. Its collection (key 2) is the value it writes; it replaces nothing, as RFC 0004 says, so it carries no arguments.
 - **delete** (number 4) writes `{1: object id, 2: collection, 4: 4, 5: {1: deleted, 2: replaces}}`. The arguments are set's: `true` deletes the object, `false` restores it, and `replaces` names the deletes of this object, winner and conflicts, that the author's copy held. It merges as a basic value: the last writer wins, and a delete that lost stays readable as a conflict. Before any delete, an object is not deleted.
+
+- **move** (number 6) writes `{1: object id, 2: collection, 4: 6, 5: {1: destination, 2: replaces}}`: the 16-byte id of the space the object moved to, or `null` to take a move back. It merges as a basic value of the object, as delete does, and a move and a delete are independent values. [RFC 0016](0016-moving-an-object.md#formats) defines it; an old core parks it as an unknown operation.
 
 Rules for delete:
 
@@ -853,6 +861,9 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set 
 - **2026-11-21 · A day travels as a CBOR integer of days since 1970-01-01, a point in time as one of milliseconds.** ([decision](../../factory/decisions/2026-11-21-NOC-412-a-day-is-a-cbor-integer-of-days-since-1970.md))
 - **2026-11-21 · Days and points in time range over the years 1 to 9999.** ([decision](../../factory/decisions/2026-11-21-NOC-412-dates-range-over-the-years-1-to-9999.md))
 
+- **2026-11-23 · Operation 5 is the rich-text update of RFC 0013, and the move of RFC 0016 is operation 6; the reserved range is 7 to 63.** (NOC-474)
+- **2026-11-22 · A link to a moved object reads `moved`, and a reference follows the trace.** ([decision](../../factory/decisions/2026-11-22-NOC-447-a-moved-object-s-links-and-references.md))
+
 ## History
 
 - 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)
@@ -865,3 +876,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set 
 - 2026-11-20 · A plain introduction to the ideas behind it, and its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-21 · Days and points in time, two basic value types, as the owner answered (NOC-412, NOC-434, #430)
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
+- 2026-11-23 · Operation 5 is the rich-text update and 6 the move; a link to a moved object reads moved, and a reference follows the trace, as RFC 0016 decided (NOC-474, #474)

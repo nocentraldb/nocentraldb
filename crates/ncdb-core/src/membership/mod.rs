@@ -17,7 +17,7 @@ mod body;
 mod certificate;
 mod current;
 mod extend;
-mod fields;
+pub(crate) mod fields;
 mod generations;
 mod genesis;
 mod input;

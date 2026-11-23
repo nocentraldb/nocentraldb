@@ -390,6 +390,12 @@ impl<S: TokenUrls + 'static> Connection<S> {
                         .await;
                 self.answer(req, put.map(|()| wire::ok(req))).await
             }
+            Request::Admit { req, admission } => {
+                let relay_id = self.shared.relay_id;
+                let admitted =
+                    blocking(async move { relay.admit(&relay_id, &admission).await }).await;
+                self.answer(req, admitted.map(|()| wire::ok(req))).await
+            }
             Request::Ping { req } => {
                 self.send(wire::pong(req)).await;
                 true
