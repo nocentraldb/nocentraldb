@@ -6,7 +6,7 @@
 //! The order a genesis goes through is the allowlist, then an admission
 //! that holds, then the guest's one space (pm, 2026-11-23, NOC-469). A
 //! later admission replaces the earlier one and keeps its count of spaces
-//! created ([`RelayStore::admit`]); the owner decides that rule on NOC-493.
+//! created ([`RelayStore::admit`]; Carsten, 2026-11-23, NOC-493).
 
 use ncdb_core::admission::Admission;
 

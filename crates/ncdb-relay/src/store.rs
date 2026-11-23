@@ -344,8 +344,7 @@ pub trait RelayStore: Send + Sync {
 
     /// Records an admission for `identity`, replacing the until, spaces and
     /// key of an earlier one and keeping its count of spaces created (RFC
-    /// 0015, "How the relay takes it"; pm, 2026-11-23, NOC-469, pending the
-    /// owner's NOC-493). A new identity starts at a count of 0.
+    /// 0015, "How the relay takes it"; Carsten, 2026-11-23, NOC-493). A new identity starts at a count of 0.
     fn admit(
         &self,
         identity: [u8; 32],
