@@ -1,11 +1,13 @@
-// RFC 0017 drafts the ncdb MCP server (NOC-485): a Rust binary on the Rust
+// RFC 0017 designs the ncdb MCP server (NOC-485): a Rust binary on the Rust
 // SDK that is itself an agent's member, for clients that cannot link an SDK,
-// such as a person's own Claude Code or Codex. It is published as a draft
-// and states its design directly, as docs/rfc/README.md asks of a newly
-// published RFC: each section says what the design does and why, then the
-// options not taken. It names nobody who decides; the questions for the
-// decision stand in its pull request. These tests check that each part is
-// there; whether the design is right is the review of the draft.
+// such as a person's own Claude Code or Codex, and that serves the tools an
+// app declares in its model (NOC-488). It is decided and states its design
+// directly, as docs/rfc/README.md asks of a newly published RFC: each
+// section says what the design does and why, then the options not taken.
+// It names nobody who decided; the decision log does. The public names that
+// declared tools add stay open in its own "Open questions", each with its
+// options and their costs. These tests check that each part is there;
+// whether the design is right was the owner's review.
 import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -26,14 +28,14 @@ const text = () => read(file());
 /** The prose of the RFC: no fenced code. */
 const prose = () => text().replace(/^```[\s\S]*?^```$/gm, "");
 
-test("RFC 0017 is a draft about the MCP server", () => {
+test("RFC 0017 is decided and is about the MCP server", () => {
   const markdown = text();
   assert.match(markdown.split("\n")[0], /^# RFC 0017: .*MCP server/);
   assert.equal(
     markdown.split("\n")[2],
     "REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-485",
   );
-  assert.match(markdown, /^\*\*Status\.\*\* Draft\./m);
+  assert.match(markdown, /^\*\*Status\.\*\* Decided, 2026-11-23\./m);
   assert.match(markdown, /^\*\*At 0\.1\.\*\* Not built\./m);
 });
 
@@ -63,6 +65,7 @@ const CHOICES = [
   ["which-process-holds-the-copy", "the lifecycle"],
   ["how-current-the-copy-is", "how current the copy stays"],
   ["the-tools", "the tool surface"],
+  ["declared-tools", "the tools an app declares"],
   ["identity-rules", "the identity rules"],
   ["how-it-ships", "distribution"],
 ];
@@ -80,7 +83,34 @@ for (const [anchor, name] of CHOICES) {
   });
 }
 
-test("RFC 0017 names every tool, the clients' limits and the token", () => {
+test("RFC 0017 names the declared tools' schema, lock and build check", () => {
+  const part = section(text(), "declared-tools");
+  for (const name of [
+    "nc.tools",
+    "nc.tool.find",
+    "nc.tool.get",
+    "nc.tool.action",
+  ]) {
+    assert.ok(part.includes(`\`${name}`), `no ${name}`);
+  }
+  assert.match(part, /"tools"/, "the lock's key");
+  assert.match(part, /`ncdb model build`/);
+  assert.match(part, /one change/, "an action is one write");
+});
+
+test("RFC 0017 keeps the generic tools behind a developer flag", () => {
+  assert.match(prose(), /`--generic-tools`/);
+});
+
+test("RFC 0017's open questions each give options and their costs", () => {
+  const part = section(text(), "open-questions");
+  const questions = part.split("\n").filter((l) => /^\d+\. \*\*/.test(l));
+  assert.ok(questions.length >= 3, `${questions.length} questions`);
+  assert.match(part, /[Cc]ost/);
+  assert.doesNotMatch(part, /\bRecommended\b/);
+});
+
+test("RFC 0017 names every generic tool, the clients' limits and the token", () => {
   const body = prose();
   for (const tool of [
     "list_spaces",
@@ -108,14 +138,26 @@ test("RFC 0017 says plainly what it does not do", () => {
   assert.match(part, /replace the SDKs/);
 });
 
-test("the RFC lists name RFC 0017 as a draft", () => {
+test("the decision log holds one file per decision of RFC 0017", () => {
+  const files = readdirSync(join(root, "factory/decisions")).filter((f) =>
+    f.startsWith("2026-11-23-NOC-485-"),
+  );
+  assert.equal(files.length, 7, files.join("\n"));
+  for (const f of files) {
+    const entry = read(`factory/decisions/${f}`);
+    assert.match(entry, /^- Decided by: Carsten, 2026-11-23\b.*NOC-488/m);
+    assert.match(entry, /^- Topics: .*\brfc-0017\b/m);
+  }
+});
+
+test("the RFC lists name RFC 0017 without calling it a draft", () => {
   const index = read("docs/rfc/README.md");
   const row = index.split("\n").find((l) => l.startsWith("| [0017]"));
   assert.ok(row, "the RFC index has no row for RFC 0017");
-  assert.match(row, /draft/);
+  assert.doesNotMatch(row, /draft/);
   const site = read("site/src/content/docs/docs/rfcs.md");
   const item = site.split("\n").find((l) => l.includes("[RFC 0017: "));
   assert.ok(item, "the site's RFC list has no item for RFC 0017");
   assert.match(item, /\/docs\/rfc\/0017-/);
-  assert.match(item, /draft/);
+  assert.doesNotMatch(item, /draft/);
 });
