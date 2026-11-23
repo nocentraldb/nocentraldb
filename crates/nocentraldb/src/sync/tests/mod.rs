@@ -42,6 +42,7 @@ mod push;
 mod push_again;
 mod reconnect;
 mod refusals;
+mod relay_url;
 mod remove_member;
 mod removed;
 mod renewed_key;
