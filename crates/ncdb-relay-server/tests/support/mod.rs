@@ -96,13 +96,28 @@ pub async fn server_with_max_handshakes(max: usize) -> (SocketAddr, TempDir) {
     server_with(|server| server.with_max_handshakes(max)).await
 }
 
+/// As [`server`], taking the admissions of these admission keys (RFC 0015,
+/// "Admission tokens").
+pub async fn server_with_admission_keys(keys: BTreeSet<[u8; 32]>) -> (SocketAddr, TempDir) {
+    configured(|config| config.admission_keys = keys, |server| server).await
+}
+
 async fn server_with(
+    configure: impl FnOnce(Server<SqliteStore>) -> Server<SqliteStore>,
+) -> (SocketAddr, TempDir) {
+    configured(|_| {}, configure).await
+}
+
+async fn configured(
+    settings: impl FnOnce(&mut ncdb_relay::Config),
     configure: impl FnOnce(Server<SqliteStore>) -> Server<SqliteStore>,
 ) -> (SocketAddr, TempDir) {
     let dir = TempDir::new();
     let store = SqliteStore::open(&dir.database()).expect("the database opens");
     let allowed = BTreeSet::from([account().verifying_key().to_bytes()]);
-    let relay = Relay::new(store, ncdb_relay_server::config(allowed));
+    let mut config = ncdb_relay_server::config(allowed);
+    settings(&mut config);
+    let relay = Relay::new(store, config);
     let server = Server::bind("127.0.0.1:0", relay, RELAY_ID)
         .await
         .expect("the server binds");

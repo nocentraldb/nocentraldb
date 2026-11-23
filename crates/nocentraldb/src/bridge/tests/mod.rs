@@ -6,7 +6,11 @@ use ncdb_core::cbor::{self, Key, Value};
 use super::Bridge;
 
 mod account;
+mod account_identity;
 mod ad_hoc;
+// Waits on another thread for the SDK's answer, which wasm32 has none of.
+#[cfg(not(target_arch = "wasm32"))]
+mod admission;
 mod dates;
 mod erase;
 mod erasures;

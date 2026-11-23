@@ -6,8 +6,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 use ncdb_relay::store::{
-    AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry, PersonKeyId, PersonKeyPut,
-    PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError, Upload, UploadId,
+    AdmissionRecord, Admitted, AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry,
+    PersonKeyId, PersonKeyPut, PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError,
+    Upload, UploadId,
 };
 
 /// Passes every call to the first store until [`Swap::swap`], and to the
@@ -105,6 +106,14 @@ impl<S: RelayStore> RelayStore for Swap<S> {
 
     async fn statement(&self, identity: [u8; 32]) -> Result<Option<u64>, StoreError> {
         self.current().statement(identity).await
+    }
+
+    async fn admit(&self, identity: [u8; 32], admitted: Admitted) -> Result<(), StoreError> {
+        self.current().admit(identity, admitted).await
+    }
+
+    async fn admission(&self, identity: [u8; 32]) -> Result<Option<AdmissionRecord>, StoreError> {
+        self.current().admission(identity).await
     }
 
     async fn person_keys(&self, space: SpaceId) -> Result<Vec<PersonKeyRecord>, StoreError> {

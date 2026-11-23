@@ -38,6 +38,15 @@ pub struct Account<'a> {
 }
 
 impl Account<'_> {
+    /// The account's identity, its recovery key in lowercase hexadecimal:
+    /// public, the same on every device and agent of the account, and kept
+    /// by a recovery and by removing a lost device (RFC 0015, "In the SDK";
+    /// RFC 0010, "The account's identity"). The app's backend signs its
+    /// admission for it. `None` while the database waits to be paired.
+    pub fn identity(&self) -> Option<String> {
+        crate::admission::identity(&self.db.lock())
+    }
+
     /// The account's recovery code while the person has not confirmed they
     /// stored it, and `None` after (RFC 0009, "Accounts and devices"). The
     /// first open that creates an account creates its code, as does the

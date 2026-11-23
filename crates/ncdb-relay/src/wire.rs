@@ -121,6 +121,14 @@ pub enum Request {
         /// member id, 4: wrapped, 5: signature}`.
         records: Vec<PersonKeyRecord>,
     },
+    /// `admit`: an admission token's canonical bytes (RFC 0015, "How the
+    /// relay takes it"; pm, 2026-11-23, NOC-469).
+    Admit {
+        /// The request id.
+        req: u64,
+        /// The admission's canonical CBOR map.
+        admission: Vec<u8>,
+    },
     /// Liveness.
     Ping {
         /// The request id.
@@ -141,6 +149,7 @@ impl Request {
             | Request::Keys { req, .. }
             | Request::PersonKeys { req, .. }
             | Request::PutPersonKeys { req, .. }
+            | Request::Admit { req, .. }
             | Request::Ping { req } => Some(*req),
         }
     }
@@ -292,6 +301,10 @@ fn read(kind: &str, req: Option<u64>, fields: &mut Fields) -> Option<Request> {
                 records,
             })
         }
+        "admit" => Some(Request::Admit {
+            req: req?,
+            admission: fields.bytes(3)?,
+        }),
         "ping" => Some(Request::Ping { req: req? }),
         _ => None,
     }
