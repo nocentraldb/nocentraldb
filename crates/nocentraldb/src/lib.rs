@@ -30,6 +30,7 @@
 
 mod account;
 mod ad_hoc;
+mod admission;
 #[cfg(target_arch = "wasm32")]
 mod browser;
 // The worker's side of the TypeScript SDK (NOC-176): public only with the

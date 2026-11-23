@@ -33,6 +33,8 @@ pub struct Events {
     pub(super) durability: Arc<Mutex<Watch<Durability>>>,
     /// The view's report (NOC-315).
     pub(super) view: Arc<Mutex<Watch<ViewStatus>>>,
+    /// The sync's asks for an admission, for the SDK to answer (RFC 0015).
+    pub(super) asks: super::admission::Asks,
 }
 
 /// The guarded value of `mutex`, poisoned or not.
@@ -96,6 +98,9 @@ impl Events {
                 ("event", Value::Text("view".into())),
                 ("view", super::reports::view(&view)),
             ])));
+        }
+        for ask in self.asks.take() {
+            messages.push(cbor::encode(&ask));
         }
         for (space, watch) in self.spaces().iter_mut() {
             if let Some(status) = watch.take() {
@@ -173,6 +178,7 @@ impl Events {
             }
             if guard(&events.durability).changed(cx.waker())
                 || guard(&events.view).changed(cx.waker())
+                || events.asks.changed(cx)
             {
                 return Poll::Ready(());
             }

@@ -516,6 +516,26 @@ if let Some(code) = db.account().recovery_code().await? {
 
 Reusing `MemberAdded` for the automatic adds was not taken: its text speaks of a member someone chose to add, not of the person's own device.
 
+**Admission on a relay with open signup** ([RFC 0015, "In the SDK"](0015-relay-admission.md#in-the-sdk); 2026-11-23, NOC-493):
+
+```ts
+const db = await nc.open({
+  model, lock, relay,
+  admission: (identity) => fetch("/api/ncdb-admission", { method: "POST", body: identity }).then((r) => r.text()),
+});
+db.account.identity; // the recovery key in hexadecimal, or null while waiting to be paired
+```
+
+```rust
+let db = Db::open(OpenOptions::new(lock).path("./data").relay(url).admission(|identity| async move {
+    backend.admission(&identity).await // Result<String, E>: the text ncdb-admit-1:...
+})).await?;
+let identity: Option<String> = db.account().identity();
+```
+
+- **`db.account.identity`** is the account's identity, its recovery key in lowercase hexadecimal: public, the same on every device and agent of the account, and kept by a recovery and by removing a lost device ([RFC 0015, "The account's identity"](0015-relay-admission.md#the-accounts-identity)). It is `null` while the database waits to be paired, and `completePairing` sets it. In Rust, `Account::identity()` returns `Option<String>`.
+- **`admission`**, an option of `nc.open`, and `OpenOptions::admission(f)` in Rust, take the app's function that fetches an admission from its backend for that identity and answers its text, `ncdb-admit-1:...`. When the relay refuses a new space with `not_allowed`, the SDK calls it, presents the answer with `admit` ([RFC 0007, "Admit: present an admission token"](0007-relay.md#admit-present-an-admission-token)) and pushes the space again, once; the next refusal calls it again, so an admission that lapsed is renewed the same way. A function that throws, in Rust one that returns an error, or a text that is no admission, leaves the space refused as without the function, and the SDK logs neither. The developer handles a string from its own backend, never a key (principle 5).
+
 A database that is neither paired nor recovered creates an account of its own on its first open, keeps the account key next to the member key, and certifies its own member with it: as a device, or as an agent when the Rust SDK opens it with `agent()` ([The Rust SDK](#the-rust-sdk); [RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key)). A person's devices are unrelated accounts until they pair or link ([RFC 0010](0010-accounts.md)), so `members.add` asks for the fingerprint of each, as for any account new to the device. Two options were not taken: the app passing the account key, which puts a key in the app's hands and which principle 5 rules out; and no space until accounts exist, which blocks every space.
 
 ## Sync and status
@@ -540,7 +560,7 @@ await db.sync.resume();
 | Value | Meaning |
 | --- | --- |
 | `connection` | `"connected"`, `"connecting"`, `"offline"` (no relay reachable, the SDK retries), `"paused"` or `"none"` (opened without a relay). |
-| `relay` | The relay `nc.open` named, absent without one. In a browser tab that reaches another tab's database, it is the owning tab's relay, which serves every tab ([RFC 0006, "The browser"](0006-local-view.md#the-browser)). TypeScript only (2026-11-13, #317). |
+| `relay` | The relay `nc.open` named, without user, password, query string and fragment, which may carry a credential (NOC-495); absent without one. A token belongs in the query string, never in the path. In a browser tab that reaches another tab's database, it is the owning tab's relay, which serves every tab ([RFC 0006, "The browser"](0006-local-view.md#the-browser)). TypeScript only (2026-11-13, #317). |
 | `unconfirmed` | This member's changes the relay has not confirmed, as `db.durability` counts them ([RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)). |
 | `refused` | Changes of this member the relay refused ([RFC 0002, "A change the relay refuses after the member folded it"](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)). |
 | `epochChanged` | The relay was restored and the SDK is pushing again what it lost ([RFC 0007, "Restores and the relay epoch"](0007-relay.md#restores-and-the-relay-epoch)). |
@@ -652,7 +672,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 
 | Name | What it is | Builds on |
 | --- | --- | --- |
-| `nc.open` | Opens this member's database; options `model`, `lock`, `relay`, `name` (in a browser; 2026-11-12, NOC-274), `persistentStorage` (`"on-open"`, the default this RFC names, or `"on-request"`), `warnings`, `subAgent`, `pairing` (`"request"`), `recover`, and in Node.js only `path`, `keyFile`, `inMemory`, `agent` | Named in RFC 0006 with `model`, `persistentStorage`, `warnings`: [RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports); `lock`: [RFC 0005](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device); `pairing`, `recover`: [RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account); `path`, `keyFile`, `inMemory`, `agent`: [RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) |
+| `nc.open` | Opens this member's database; options `model`, `lock`, `relay`, `name` (in a browser; 2026-11-12, NOC-274), `persistentStorage` (`"on-open"`, the default this RFC names, or `"on-request"`), `warnings`, `subAgent`, `pairing` (`"request"`), `recover`, `admission` (RFC 0015; 2026-11-23, NOC-493), and in Node.js only `path`, `keyFile`, `inMemory`, `agent` | Named in RFC 0006 with `model`, `persistentStorage`, `warnings`: [RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports); `lock`: [RFC 0005](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device); `pairing`, `recover`: [RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account); `path`, `keyFile`, `inMemory`, `agent`: [RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) |
 | `db.close` | Closes the database | [RFC 0006, "One writer, many readers"](0006-local-view.md#one-writer-many-readers) |
 | `nc.Error` | The one error class, with `code`, `ids` and `fingerprint` (2026-11-12, NOC-274) | [RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry) |
 | `Db`, `Space`, `Tx`, `Invitation`, `Page<T>`, `Query<T>`, `Notice`, `SyncStatus`, `SpaceStatus`, `Durability` | The TypeScript types of a database, a space, a transaction, an invitation, a page and a query of `T`, a notice, and the three reports (2026-11-12, NOC-274) | `Invitation`: [RFC 0003, "Invitation"](0003-keys-and-cryptography.md#invitation); `Durability`: [RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports) |
@@ -732,6 +752,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 | `notice` | What a membership call does not do: `{ code, text }`. Every text lives in `texts/texts.json`, with when it shows; a text quoted in this RFC is a copy of it (2026-11-15, NOC-329) | [RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys) |
 | `memberAdded`, `memberRemoved`, `roleSet`, `spaceLeft`, `adHocSpaceCreated`, `erased`, `takenBack` | Notice codes, each named by the call that returns it (`takenBack`: 2026-11-15, NOC-326) | [RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys) |
 | `erasurePending` | The notice of a provisional erasure, which the space status gives on every device of the account, not a call (2026-11-11, NOC-230), with the text "Personal fields were erased on a device of this account. The erasure becomes final after 7 days; until then an admin of this account can take it back." (pm, 2026-11-12, NOC-234) | [RFC 0008, "A provisional erasure in a space with one account"](0008-membership.md#a-provisional-erasure-in-a-space-with-one-account) |
+| `db.account.identity` | The account's identity, which the app's backend signs an admission for (2026-11-23, NOC-493) | [RFC 0015, "In the SDK"](0015-relay-admission.md#in-the-sdk) |
 | `db.account.pair`, `db.account.completePairing`, `db.account.removeMember` | Pairing a device or an agent, and removing a lost one | [RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account) |
 | `confirm` | Confirms that the person stored the recovery code | [RFC 0010, "The recovery code"](0010-accounts.md#the-recovery-code) |
 | `db.account().recovered()` | `AccountRecovered` on the open that recovered the account, else `None`; the open returns a `Db`, so a method gives the notice (2026-11-13, NOC-289) | [RFC 0010, "The recovery code"](0010-accounts.md#the-recovery-code) |
@@ -799,6 +820,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 | `ErasureMember`, `Acknowledged` | A member of an erasure's audit: `id`, `account`, `current`, `acknowledged`; `Deleted`, `Seen`, `Missing` | [RFC 0008, "Acknowledgement"](0008-membership.md#acknowledgement) |
 | `Notice`, `NoticeCode` | What `Members::add` and the other membership calls return: `code` and `text`, such as `NoticeCode::MemberAdded` or `NoticeCode::RoleSet` | [RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys) |
 | `OpenOptions::pairing`, `OpenOptions::recover`, `Db::account`, `Account`, `PairKind`, `Paired`, `PairingAnswer`, `Removed`, `RecoveryCode` | Accounts in Rust (2026-11-12, NOC-273) | [RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account) |
+| `OpenOptions::admission`, `Account::identity` | Admission in Rust (2026-11-23, NOC-493) | [RFC 0015, "In the SDK"](0015-relay-admission.md#in-the-sdk) |
 | `OpenOptions::sub_agent` | Opens a sub-agent's database: no account, no recovery code, no account space, no space of its own; its invitation is RFC 0003's version 3, and an agent's `Members::add` signs its certificate (2026-11-15, NOC-320 Q1, Q2, Q10, Q11) | [RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space) |
 | `Spaces::create_ad_hoc`, `AdHoc`, `AdHocCreated`, `NoticeCode::AdHocSpaceCreated` | `db.spaces.createAdHoc`: `AdHoc { copy, personal, local }`, the objects to copy as `Vec<Object>`; `AdHocCreated { space, notice, copies, cleared_links, plugin_fields_not_copied }`, each source and its copy in the order of `copy`. `personal` and `local` are refused with `NotAllowed` until their own tickets (2026-11-15, NOC-320 Q3, Q4, Q6, Q7, Q8, Q10) | [RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space) |
 | `Space::move_objects`, `Object::moved_to`, `Space::moves`, `Moves`, `Edit`, `NoticeCode::ObjectMoved`, `ErrorCode::Moved` | `space.move` and `space.moves`: `move_objects` gives `ids`, `cleared_links`, `conflicts` and the notice; `Moves` has `later_edits`, `carry_over` and `conflicts`; `Edit::{Set, Add, Remove, Delete, Restore, Other}` | [RFC 0016, "The SDK call and its notice"](0016-moving-an-object.md#the-sdk-call-and-its-notice) |
@@ -924,4 +946,5 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - 2026-11-23 · Any member may lower its own role with `members.setRole`, as RFC 0008 says (NOC-453, #449)
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
 - 2026-11-23 · RFC 0009 gains RFC 0016's move: space.move, space.moves, the notice objectMoved, the error moved and the link status moved (NOC-474, #474)
+- 2026-11-23 · Both SDKs gain the `admission` option and the account's identity, as RFC 0015 decides (NOC-469)
 - 2026-11-23 · Inline attributions keep the date and the ticket and name nobody who decided; the decision log records it (NOC-481, #475)
