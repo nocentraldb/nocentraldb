@@ -29,17 +29,24 @@ function variables(admissionKeys?: readonly string[]) {
 }
 
 describe("the admission keys", () => {
+  // Synthesized once, at collection, as the other infra tests do: a stack's
+  // first synthesis takes seconds, more than a test's own time limit.
+  const given = variables([first, second]);
+  const none = variables();
+
   test("become NCDB_ADMISSION_KEYS, comma-separated", () => {
-    expect(variables([first, second])).toMatchObject({
+    expect(given).toMatchObject({
       NCDB_ADMISSION_KEYS: `${first},${second}`,
       NCDB_ALLOWED_ACCOUNTS: account,
     });
   });
 
   test("set no variable when the relay takes none", () => {
-    expect(variables()).not.toHaveProperty("NCDB_ADMISSION_KEYS");
-    expect(variables([])).not.toHaveProperty("NCDB_ADMISSION_KEYS");
-    expect(variables()).toMatchObject({ NCDB_RELAY_ID: relayId });
+    expect(none).not.toHaveProperty("NCDB_ADMISSION_KEYS");
+    expect(none).toMatchObject({ NCDB_RELAY_ID: relayId });
+    expect(
+      relayEnvironment({ relayId, allowedAccounts: [], admissionKeys: [] }),
+    ).not.toHaveProperty("NCDB_ADMISSION_KEYS");
   });
 
   test("refuse a key that is not 64 lowercase hex digits", () => {
