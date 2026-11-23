@@ -114,7 +114,7 @@ fn an_edit_decodes_and_encodes_as_operation_5() {
     let e = edit(&op, origin(1, ALICE, 10));
     let (number, args) = RichText.arguments(&e);
     assert_eq!(number, 5);
-    assert_eq!(Some(args), op.value);
+    assert_eq!(Some(args), op.value());
 }
 
 #[test]
@@ -184,20 +184,13 @@ fn malformed_arguments_park() {
             (Key::Unsigned(2), clients()),
         ]),
         // A nonce that is not 8 bytes.
-        operation(&update, &[]).tap(|op| {
-            op.value = Some(Value::Map(
-                [
-                    (Key::Unsigned(1), Value::Bytes(update.clone())),
-                    (
-                        Key::Unsigned(2),
-                        Value::Map(
-                            [(Key::Unsigned(alice.client()), Value::Bytes(vec![1; 7]))].into(),
-                        ),
-                    ),
-                ]
-                .into(),
-            ))
-        }),
+        arguments(vec![
+            (Key::Unsigned(1), Value::Bytes(update.clone())),
+            (
+                Key::Unsigned(2),
+                Value::Map([(Key::Unsigned(alice.client()), Value::Bytes(vec![1; 7]))].into()),
+            ),
+        ]),
         // No arguments at all.
         Operation::new(OBJECT, "notes".into(), Some("body".into()), 5, None),
     ];
@@ -209,14 +202,6 @@ fn malformed_arguments_park() {
     }
 }
 
-trait Tap: Sized {
-    fn tap(mut self, f: impl FnOnce(&mut Self)) -> Self {
-        f(&mut self);
-        self
-    }
-}
-impl Tap for Operation {}
-
 #[test]
 fn an_unknown_must_understand_argument_parks_and_one_from_64_is_ignored() {
     // Keys 1 to 3 are RFC 0004's: key 3, which operation 5 does not
@@ -225,7 +210,7 @@ fn an_unknown_must_understand_argument_parks_and_one_from_64_is_ignored() {
     let alice = Writer::new(ALICE);
     let op = alice.operation(&add_block(&alice.doc, "paragraph", "Hello"));
     let with = |key: u64| {
-        let Some(Value::Map(mut entries)) = op.value.clone() else {
+        let Some(Value::Map(mut entries)) = op.value() else {
             unreachable!()
         };
         entries.insert(Key::Unsigned(key), Value::Null);
