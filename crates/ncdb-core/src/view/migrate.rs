@@ -120,12 +120,27 @@ pub(super) fn run<C: Checks>(
     if !additions.folds() {
         return Ok(());
     }
+    fold_parked(conn, model, &mut logs, checks, unknown)
+}
+
+/// Folds the operations parked for a reason `retry` names, in every change
+/// of `logs` that holds any, with the checks `checks` gives for each such
+/// space; without them, that is [`Error::Model`]. An operation that still
+/// does not fold stays parked, for the reason it gives now. A take-back
+/// among them folds its object's fields again (RFC 0016; `super::trace`).
+pub(super) fn fold_parked<C: Checks>(
+    conn: &Connection,
+    model: &Model,
+    logs: &mut BTreeMap<SpaceId, Log>,
+    checks: Option<impl FnMut(SpaceId) -> C>,
+    retry: fn(OperationParkReason) -> bool,
+) -> Result<(), Error> {
     let mut checks = checks;
-    for (space, log) in &mut logs {
+    for (space, log) in logs.iter_mut() {
         let waiting: Vec<_> = log
             .folded_sealed()
             .into_iter()
-            .filter(|(_, parked)| parked.iter().any(|operation| unknown(operation.reason)))
+            .filter(|(_, parked)| parked.iter().any(|operation| retry(operation.reason)))
             .collect();
         if waiting.is_empty() {
             continue;
@@ -146,7 +161,7 @@ pub(super) fn run<C: Checks>(
             let mut still = Vec::new();
             for operation in parked {
                 let position = operation.position;
-                let Some(op) = (unknown(operation.reason))
+                let Some(op) = (retry(operation.reason))
                     .then(|| payload.operations.get(position as usize))
                     .flatten()
                 else {

@@ -3,7 +3,7 @@
 //! upgrades"): the older core parked the move (operation 6) as an unknown
 //! operation and `$movedFrom` as an unknown field. The first open by this
 //! core folds them, so the object becomes a trace, and the view equals one
-//! this core folded from the start. Later opens open no change for it.
+//! this core folded from the start.
 //!
 //! The older view is made by hand: the changes before the move as this
 //! core folds them, then the move's change appended as the older core

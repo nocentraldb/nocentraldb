@@ -36,6 +36,7 @@ mod shreds_held;
 mod state;
 mod stored_lock;
 mod trace;
+mod upgrade;
 
 use crate::plugins::Registry;
 use crate::texts;
@@ -256,21 +257,28 @@ impl View {
         schema::drop_staging(&tx)?;
         let mut serving = model;
         let mut rebuild = None;
+        let mut checks = checks;
         match schema::open(&tx, &serving, lock, registry)? {
             schema::Fit::Current => {}
             schema::Fit::Migrate(additions) => {
-                migrate::run(&tx, &serving, &additions, log_table::load(&tx)?, checks)?;
+                let logs = log_table::load(&tx)?;
+                migrate::run(&tx, &serving, &additions, logs, checks.as_mut())?;
             }
             schema::Fit::Refold(Some(old)) if checks.is_some() => {
-                let mut checks = checks.expect("checked above");
+                let mut checks = checks.take().expect("checked above");
                 let factory: rebuild::Factory = Box::new(move |space| Box::new(checks(space)));
                 rebuild = Some(rebuild::Rebuild::start(&tx, serving, factory)?);
                 serving = *old;
             }
             schema::Fit::Refold(_) => {
-                let checks = checks.ok_or(Error::Model)?;
+                let checks = checks.as_mut().ok_or(Error::Model)?;
                 refold::run(&tx, &serving, &log_table::load(&tx)?, checks)?;
             }
+        }
+        // A rebuild folds every change afresh; the tables that serve until
+        // it ends wait for a later open.
+        if rebuild.is_none() {
+            upgrade::run(&tx, &serving, log_table::load(&tx)?, checks.as_mut())?;
         }
         query::check(&tx, &serving.indexes)?;
         let logs = log_table::load(&tx)?;
