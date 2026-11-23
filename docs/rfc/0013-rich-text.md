@@ -10,7 +10,7 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operations carry a
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0013 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Decided. Its design stands as written (Carsten, 2026-11-21). Nothing is built yet; [Follow-up tickets](#follow-up-tickets) is the build plan, and [Changes to the other RFCs](#changes-to-the-other-rfcs) lists what the decided RFCs take from it.
+**Status.** Decided, 2026-11-21. Nothing is built yet; [Follow-up tickets](#follow-up-tickets) is the build plan, and [Changes to the other RFCs](#changes-to-the-other-rfcs) lists what the decided RFCs take from it.
 
 **At 0.1.** Not built. Release 0.1 has no rich text: `nc.richText` stays reserved, and nothing of this design is built.
 
@@ -490,12 +490,13 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 
 ## Decisions
 
-- **2026-11-22 · The binding holds a write while an IME composition is open, until `compositionend` and for at most 2 s.** (Carsten, 2026-11-22, NOC-467; [decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-binding-holds-a-write-during-an-ime-composition-for-at-most-2-s.md))
-- **2026-11-22 · A rebuild waits for `compositionend`, then restores the focus and the selection.** (Carsten, 2026-11-22, NOC-467; [decision](../../factory/decisions/2026-11-22-NOC-467-a-rich-text-editor-rebuild-waits-for-compositionend-and-restores-focus-and-selection.md))
-- **2026-11-22 · One UndoManager per binding outlives the rebuilds, so a rebuild keeps the undo history.** (Carsten, 2026-11-22, NOC-467; [decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-binding-keeps-one-undomanager-across-editor-rebuilds.md))
-- **2026-11-22 · The guard reloads once, then makes the field read-only; an editor without `enableContentCheck` is refused.** (Carsten, 2026-11-22, NOC-467; [decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-guard-reloads-once-then-the-field-is-read-only-and-an-editor-without-the-content-check-is-refused.md))
+- **2026-11-22 · The binding holds a write while an IME composition is open, until `compositionend` and for at most 2 s.** ([decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-binding-holds-a-write-during-an-ime-composition-for-at-most-2-s.md))
+- **2026-11-22 · A rebuild waits for `compositionend`, then restores the focus and the selection.** ([decision](../../factory/decisions/2026-11-22-NOC-467-a-rich-text-editor-rebuild-waits-for-compositionend-and-restores-focus-and-selection.md))
+- **2026-11-22 · One UndoManager per binding outlives the rebuilds, so a rebuild keeps the undo history.** ([decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-binding-keeps-one-undomanager-across-editor-rebuilds.md))
+- **2026-11-22 · The guard reloads once, then makes the field read-only; an editor without `enableContentCheck` is refused.** ([decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-guard-reloads-once-then-the-field-is-read-only-and-an-editor-without-the-content-check-is-refused.md))
 
 ## History
 
 - 2026-11-22 · First published (NOC-411, #422)
 - 2026-11-22 · The binding's example rebuilds from `onContentError`; a composition holds the write and a rebuild; one UndoManager outlives rebuilds; the guard reloads once, as the owner decided after the browser spike (NOC-455, NOC-467, #454)
+- 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
