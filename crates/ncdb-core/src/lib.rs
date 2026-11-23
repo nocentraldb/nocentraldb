@@ -38,6 +38,7 @@
 //! With the compiler cfg `ncdb_rich_text`, it also holds rich text, RFC 0013's
 //! `ncdb/richText` (`rich_text`).
 
+pub mod admission;
 pub mod basic;
 /// The canonical CBOR of RFC 0002, which the core shares with plugins'
 /// `Data` (RFC 0011): it lives in `ncdb-plugin`.

@@ -75,10 +75,20 @@ pub(super) async fn pair(db: &Db, args: &Value) -> Result<Value, Failed> {
 pub(super) async fn complete_pairing(db: &Db, args: &Value) -> Result<Value, Failed> {
     let answer = PairingAnswer::from_str(text(args, "answer")?)?;
     let notices = db.account().complete_pairing(&answer).await?;
-    Ok(entries([(
-        "notices",
-        Value::Array(notices.into_iter().map(notice_of).collect()),
-    )]))
+    Ok(entries([
+        (
+            "notices",
+            Value::Array(notices.into_iter().map(notice_of).collect()),
+        ),
+        ("identity", identity(db)),
+    ]))
+}
+
+/// The account's identity, as `open` and `account.completePairing` answer
+/// it: its recovery key in hex, or `null` while the database waits to be
+/// paired (RFC 0015, "In the SDK").
+pub(super) fn identity(db: &Db) -> Value {
+    db.account().identity().map_or(Value::Null, Value::Text)
 }
 
 /// `account.removeMember` `{"member": id, "recover": words}`, on a device

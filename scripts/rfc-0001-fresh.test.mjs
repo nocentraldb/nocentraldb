@@ -86,7 +86,7 @@ test("the status, the discussion and History", () => {
 
 test("groups leave the design, as a section of the design, with the options not taken", () => {
   const groups = part("groups-leave-the-design");
-  assert.match(groups, /withdrawn by the owner \(Carsten, 2026-11-09\)/);
+  assert.match(groups, /withdrawn by the owner \(2026-11-09\)/);
   assert.match(groups, /more problems than they solved/);
   assert.match(groups, /groups as members of many spaces/i);
   assert.match(groups, /lists of members that the SDK expands/);

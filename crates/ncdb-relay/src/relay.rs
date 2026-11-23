@@ -52,6 +52,10 @@ pub struct Config {
     /// account key also matches a certificate of that key whose statement
     /// names a recovery key, until the account's first recovery.
     pub allowed_accounts: BTreeSet<[u8; 32]>,
+    /// The public admission keys whose admissions the relay takes, one per
+    /// app (RFC 0015, "Admission tokens"; `NCDB_ADMISSION_KEYS`). Empty, it
+    /// takes none.
+    pub admission_keys: BTreeSet<[u8; 32]>,
     /// The largest frame the relay accepts.
     pub max_frame: usize,
     /// The relay's clock, in milliseconds since the Unix epoch.
@@ -63,6 +67,7 @@ impl Config {
     pub fn new(allowed_accounts: BTreeSet<[u8; 32]>) -> Config {
         Config {
             allowed_accounts,
+            admission_keys: BTreeSet::new(),
             max_frame: MAX_FRAME,
             clock: now,
         }
@@ -346,6 +351,8 @@ impl<S: RelayStore> Relay<S> {
                 AppendOutcome::HeadMoved(_) => continue,
                 // The account already created its one space.
                 AppendOutcome::GuestSpaceTaken => return Err(ErrorCode::NotAllowed),
+                // Another genesis spent the admission's last space.
+                AppendOutcome::AdmissionSpent => return Err(ErrorCode::NotAllowed),
             }
         }
         Err(ErrorCode::Unavailable)
@@ -381,10 +388,16 @@ impl<S: RelayStore> Relay<S> {
             return Err(ErrorCode::NotAllowed);
         }
         let identity = identity(&genesis.certificate);
-        let guest = match self.allowed(&genesis.certificate) {
-            true => false,
-            false if self.guest(uploader).await? => true,
-            false => return Err(ErrorCode::NotAllowed),
+        // The allowlist, then an admission that holds, then the guest's one
+        // space (RFC 0015, "How the relay takes it"; pm, 2026-11-23,
+        // NOC-469).
+        let (admitted, guest) = match self.allowed(&genesis.certificate) {
+            true => (None, false),
+            false => match self.admitted_space(identity).await? {
+                Some(effect) => (Some(effect), false),
+                None if self.guest(uploader).await? => (None, true),
+                None => return Err(ErrorCode::NotAllowed),
+            },
         };
         let resolved = membership::resolve(change.header().space, [change]);
         verdict(resolved.verdict(change.id()))?;
@@ -395,6 +408,7 @@ impl<S: RelayStore> Relay<S> {
         if guest {
             checked.effects.push(Effect::GuestSpace(identity));
         }
+        checked.effects.extend(admitted);
         checked.effects.extend(standing.effect());
         Ok(checked)
     }
