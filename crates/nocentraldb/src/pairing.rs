@@ -44,20 +44,7 @@ impl Account<'_> {
     /// RFC 0010, "The account's identity"). The app's backend signs its
     /// admission for it. `None` while the database waits to be paired.
     pub fn identity(&self) -> Option<String> {
-        let inner = self.db.lock();
-        let statement = match &inner.account {
-            keys::Account::Holds { statement, .. } | keys::Account::Agent { statement, .. } => {
-                statement
-            }
-            keys::Account::None => return None,
-        };
-        Some(
-            statement
-                .recovery_key
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect(),
-        )
+        crate::admission::identity(&self.db.lock())
     }
 
     /// The account's recovery code while the person has not confirmed they
