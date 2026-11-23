@@ -208,3 +208,53 @@ test("in a tab that reaches another tab's database, current() names the owner's 
   const db = await connect(reached, { model, lock, relay });
   expect(db.sync.current().relay).toBe("ws://owner");
 });
+
+// NOC-495: a relay URL may carry a token in its query string, checked by
+// the relay's `$connect` authorizer (NOC-417). The core connects with the
+// whole URL; the status names the relay without query string and fragment.
+const TOKEN = "s3cr3t-relay-token";
+const withToken = `wss://relay.example.com/prod?token=${TOKEN}#${TOKEN}`;
+
+test("the status names the relay without its query string and fragment, and the core gets the whole URL", async () => {
+  const { core, calls, send } = fake();
+  const db = await connect(core, { model, lock, relay: withToken });
+  expect(calls[0]?.args.relay).toBe(withToken);
+  expect(db.sync.current().relay).toBe("wss://relay.example.com/prod");
+  const seen: unknown[] = [];
+  db.sync.subscribe((status) => seen.push(status));
+  send({ ...OFFLINE, error: "unsupported_version" });
+  expect(db.sync.current().error).toBe("unsupported_version");
+  expect(JSON.stringify([db.sync.current(), seen])).not.toContain(TOKEN);
+});
+
+test("a relay URL with only a fragment, or with neither, is named as given up to it", async () => {
+  for (const [given, named] of [
+    ["ws://127.0.0.1:7700#x", "ws://127.0.0.1:7700"],
+    ["ws://127.0.0.1:7700", "ws://127.0.0.1:7700"],
+  ]) {
+    const { core } = fake();
+    const db = await connect(core, { model, lock, relay: given });
+    expect(db.sync.current().relay).toBe(named);
+  }
+});
+
+test("in a tab that reaches another tab's database, the owner's token does not show either", async () => {
+  const { core } = fake({ ...OFFLINE });
+  const reached: Core = {
+    ...core,
+    call: async (bytes) => {
+      const answer = decode(await core.call(bytes)) as {
+        id: number;
+        ok?: Record<string, unknown>;
+      };
+      const { call } = decode(bytes) as { call: string };
+      return encode(
+        call === "open"
+          ? { ...answer, ok: { ...answer.ok, relay: withToken } }
+          : answer,
+      );
+    },
+  };
+  const db = await connect(reached, { model, lock, relay });
+  expect(db.sync.current().relay).toBe("wss://relay.example.com/prod");
+});
