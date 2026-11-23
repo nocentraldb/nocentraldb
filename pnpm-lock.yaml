@@ -216,7 +216,11 @@ importers:
         specifier: 2.1146.1
         version: 2.1146.1
 
-  packages/sdk: {}
+  packages/sdk:
+    devDependencies:
+      '@types/node':
+        specifier: 24.19.2
+        version: 24.19.2
 
 packages:
 

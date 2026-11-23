@@ -8,7 +8,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every copy of 
 
 Merge rules are hard to change once a type ships: a changed rule makes old and new clients diverge. So each rule below says why it was chosen and which rules were not.
 
-**Status.** Decided by the owner (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Partly built. Built in the core: basic values, sets, links and references, creating and deleting objects, the operation numbers, and the plugin contract with its harness. Not built: the calls that let an app read a field's conflicts, an outcome, or the state of a link or reference (`space.inspect`, `$conflicts`), in either SDK. Days and points in time came after 0.1.
 
@@ -847,11 +847,11 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set 
 
 ## Decisions
 
-- **2026-11-12 · A plugin field type is Rust compiled into the core, through RFC 0011's registry.** (Carsten, 2026-11-12, NOC-232; [decision](../../factory/decisions/2026-11-12-NOC-232-a-plugin-crate-is-one-namespace-that-exports-plugin-and.md))
-- **2026-11-12 · A personal field is a set whose value is sealed, with `replaces` readable to members.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
-- **2026-11-21 · Two date types, a calendar day and a point in time to the millisecond in UTC, merge as basic values.** (Carsten, 2026-11-21, NOC-412; [decision](../../factory/decisions/2026-11-21-NOC-412-a-calendar-day-and-a-millisecond-point-in-time-in-utc-are-two-basic-value-types.md))
-- **2026-11-21 · A day travels as a CBOR integer of days since 1970-01-01, a point in time as one of milliseconds.** (Carsten, 2026-11-21, NOC-434, answer 2a; [decision](../../factory/decisions/2026-11-21-NOC-412-a-day-is-a-cbor-integer-of-days-since-1970.md))
-- **2026-11-21 · Days and points in time range over the years 1 to 9999.** (Carsten, 2026-11-21, NOC-434, answer 3a; [decision](../../factory/decisions/2026-11-21-NOC-412-dates-range-over-the-years-1-to-9999.md))
+- **2026-11-12 · A plugin field type is Rust compiled into the core, through RFC 0011's registry.** ([decision](../../factory/decisions/2026-11-12-NOC-232-a-plugin-crate-is-one-namespace-that-exports-plugin-and.md))
+- **2026-11-12 · A personal field is a set whose value is sealed, with `replaces` readable to members.** ([decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
+- **2026-11-21 · Two date types, a calendar day and a point in time to the millisecond in UTC, merge as basic values.** ([decision](../../factory/decisions/2026-11-21-NOC-412-a-calendar-day-and-a-millisecond-point-in-time-in-utc-are-two-basic-value-types.md))
+- **2026-11-21 · A day travels as a CBOR integer of days since 1970-01-01, a point in time as one of milliseconds.** ([decision](../../factory/decisions/2026-11-21-NOC-412-a-day-is-a-cbor-integer-of-days-since-1970.md))
+- **2026-11-21 · Days and points in time range over the years 1 to 9999.** ([decision](../../factory/decisions/2026-11-21-NOC-412-dates-range-over-the-years-1-to-9999.md))
 
 ## History
 
@@ -864,3 +864,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set 
 - 2026-11-20 · What the merge rules rely on follows the rules, restructured for readers, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · A plain introduction to the ideas behind it, and its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-21 · Days and points in time, two basic value types, as the owner answered (NOC-412, NOC-434, #430)
+- 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)

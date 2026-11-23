@@ -1,8 +1,10 @@
 // The record of an RFC's later changes (scripts/lib/rfc-record.mjs, NOC-362):
 // History starts with the publication and adds one dated line per later
 // change; a Decisions section appears only after publication, directly
-// before History, and each entry is dated, names who decided it and when,
-// and names its decision file or ticket. These tests feed the helper small
+// before History, and each entry is dated, says what changed and links its
+// decision file, or names its ticket where the decision has no entry in the
+// log. An entry names nobody who decided: the decision log records that
+// (Carsten, 2026-11-23, NOC-454 B). These tests feed the helper small
 // RFCs, so a helper that lets a wrong record through fails here.
 import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
@@ -42,8 +44,8 @@ test("later History lines and a Decisions entry hold", () => {
   assertRecord(
     rfc({
       decisions: [
-        `- **2026-11-12 · Personal values are sealed under a subkey.** The person key seals a personal value (Carsten, 2026-11-12; [decision](../../factory/decisions/${FILE})).`,
-        "- **2026-11-13 · A ticket's decision.** Recorded on the ticket (pm, 2026-11-13, NOC-298).",
+        `- **2026-11-12 · Personal values are sealed under a subkey.** ([decision](../../factory/decisions/${FILE}))`,
+        "- **2026-11-13 · A ticket's decision.** (NOC-298)",
       ],
       history: [
         `- ${PUBLISHED}`,
@@ -98,9 +100,7 @@ test("Decisions needs a later History line", () => {
   assert.throws(() =>
     assertRecord(
       rfc({
-        decisions: [
-          "- **2026-11-12 · A decision.** Text (Carsten, 2026-11-12, NOC-1).",
-        ],
+        decisions: ["- **2026-11-12 · A decision.** (NOC-1)"],
         history: [`- ${PUBLISHED}`],
       }),
       PUBLISHED,
@@ -110,20 +110,20 @@ test("Decisions needs a later History line", () => {
 
 test("Decisions stands directly before History", () => {
   const text = rfc({
-    decisions: [
-      "- **2026-11-12 · A decision.** Text (Carsten, 2026-11-12, NOC-1).",
-    ],
+    decisions: ["- **2026-11-12 · A decision.** (NOC-1)"],
     history: [`- ${PUBLISHED}`, "- 2026-11-12 · A decision (NOC-1, #2)"],
   }).replace("## History", "## Something between\n\nText.\n\n## History");
   assert.throws(() => assertRecord(text, PUBLISHED));
 });
 
-test("an entry is dated, names who decided and when, and its source", () => {
+test("an entry is dated and names its source, and names nobody who decided", () => {
   for (const entry of [
-    "- A decision without a date (Carsten, 2026-11-12, NOC-1).",
-    "- **2026-11-12 · A decision.** Nobody decided it (NOC-1).",
-    "- **2026-11-12 · A decision.** No source (Carsten, 2026-11-12).",
-    "- **2026-11-12 · A decision.** A missing file (Carsten, 2026-11-12; [decision](../../factory/decisions/2026-11-12-NOC-1-no-such-file.md)).",
+    "- A decision without a date (NOC-1).",
+    "- **2026-11-12 · A decision.** No source.",
+    "- **2026-11-12 · A decision.** ([decision](../../factory/decisions/2026-11-12-NOC-1-no-such-file.md))",
+    "- **2026-11-12 · A decision.** (Carsten, 2026-11-12, NOC-1)",
+    "- **2026-11-12 · A decision.** (pm, 2026-11-12, NOC-1)",
+    `- **2026-11-12 · A decision.** (pm, 2026-11-22, NOC-379, recording the coding agent's call on NOC-57 as shipped in #215; [decision](../../factory/decisions/${FILE}))`,
   ]) {
     assert.throws(
       () =>

@@ -7,6 +7,7 @@
 pub mod space;
 
 pub mod counting;
+pub mod genesis;
 pub mod interleave;
 pub mod swap;
 

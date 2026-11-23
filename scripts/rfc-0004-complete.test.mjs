@@ -114,14 +114,11 @@ test("no document links a removed anchor of RFC 0004", () => {
   assert.deepEqual(found, []);
 });
 
-test("the status says in one sentence that the owner decided it, and when", () => {
+test("the status says in one sentence that it is decided, and when", () => {
   const status = read(RFC)
     .split("\n")
     .find((l) => l.startsWith("**Status.**"));
-  assert.equal(
-    status,
-    "**Status.** Decided by the owner (Carsten, 2026-11-10).",
-  );
+  assert.equal(status, "**Status.** Decided, 2026-11-10.");
 });
 
 test("the feedback line links the RFC's discussion", () => {

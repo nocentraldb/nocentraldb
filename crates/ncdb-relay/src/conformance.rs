@@ -29,8 +29,10 @@ use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 
 mod guest;
 mod large;
+mod statement;
 pub use guest::*;
 pub use large::*;
+pub use statement::*;
 
 use crate::store::{
     AppendOutcome, Effect, MemberRecord, NewEntry, PersonKeyId, PersonKeyPut, PersonKeyRecord,
@@ -104,6 +106,7 @@ macro_rules! conformance_suite {
             control_entries_are_read_alone,
             a_bounded_read_stops_before_its_byte_budget,
             an_account_records_one_guest_space,
+            the_highest_statement_number_is_kept_per_identity,
         );
     };
     (@tests $fresh:path; $attrs:tt; $($name:ident),* $(,)?) => {

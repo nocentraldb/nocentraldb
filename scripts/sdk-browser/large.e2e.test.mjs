@@ -116,8 +116,10 @@ test("a write too large for the core fails with an nc.Error that has a code", as
 // broken for good, so every later call fails with `storageFailed` and a
 // text that says to open the database again; `db.close()` succeeds, and the
 // database opened again works and holds what was written before. Where the
-// engine's core holds the value, the later call simply works. Either way
-// nothing reaches the page as an uncaught error.
+// engine's core holds the value, the write goes through, or the browser's
+// storage refuses it with `storageFull` (WebKit's, since NOC-422 made the
+// core hold it); either way the core runs on and the later call simply
+// works. In no case does anything reach the page as an uncaught error.
 test("after a write too large for the core, later calls say to open the database again, and it opens again", async () => {
   const opened = await (await browser.newContext()).newPage();
   const errors = [];
@@ -164,7 +166,7 @@ test("after a write too large for the core, later calls say to open the database
   assert.deepEqual(errors, []);
   assert.equal(result.closed, "ok");
   assert.equal(result.title, "before");
-  if (result.written === "ok") {
+  if (result.written === "ok" || result.written.startsWith("storageFull: ")) {
     assert.equal(result.later, "ok");
   } else {
     assert.match(result.written, /^storageFailed: /);
