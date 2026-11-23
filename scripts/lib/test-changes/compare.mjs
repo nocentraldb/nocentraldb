@@ -29,6 +29,28 @@ function lost(base, head) {
 }
 
 /**
+ * An assertion whose text is gone at head is either a changed expected value,
+ * when an assertion new at head has its skeleton, or removed or rewritten.
+ */
+function assertionFindings(base, head) {
+  const pick = (s) => s.assertions;
+  const text = (a) => a.text;
+  const gone = lost(tally(base, pick, text), tally(head, pick, text));
+  const added = lost(tally(head, pick, text), tally(base, pick, text));
+  return gone.map((a) => {
+    const i = added.findIndex((b) => b.skeleton === a.skeleton);
+    if (i === -1) {
+      return { ...a, text: `removes or rewrites the assertion \`${a.text}\`` };
+    }
+    const [now] = added.splice(i, 1);
+    return {
+      ...a,
+      text: `changes an expected value: \`${a.text}\` became \`${now.text}\``,
+    };
+  });
+}
+
+/**
  * The findings for a pull request: `base` and `head` are lists of
  * `{ path, scan }` for the changed files as they stand at each side.
  */
@@ -48,5 +70,6 @@ export function compare(base, head) {
   for (const m of lost(markersAfter, markersBefore)) {
     findings.push({ ...m, text: `adds \`${m.key}\`` });
   }
+  findings.push(...assertionFindings(base, head));
   return findings;
 }

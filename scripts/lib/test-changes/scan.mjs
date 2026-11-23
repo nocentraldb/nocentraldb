@@ -1,4 +1,5 @@
 // Reads one file's tests for the test-change check (NOC-508).
+import { assertions, rustTestRegions } from "./assertions.mjs";
 
 const lineAt = (text, index) => text.slice(0, index).split("\n").length;
 
@@ -14,17 +15,26 @@ const ignores = (attribute) =>
   attribute[1] === "ignore" ||
   (attribute[1] === "cfg_attr" && /\bignore\b/.test(attribute[2]));
 
-function rust(text) {
+function rust(text, kind) {
   const tests = [];
   const ignored = [];
+  const bodies = [];
   for (const fn of text.matchAll(RUST_FN)) {
     const attributes = [...fn[1].matchAll(ATTRIBUTE)];
     if (!attributes.some((a) => TEST_PATH.test(a[1]))) continue;
-    const test = { name: fn[2], line: lineAt(text, fn.index + fn[0].length) };
+    const end = fn.index + fn[0].length;
+    const test = { name: fn[2], line: lineAt(text, end) };
     tests.push(test);
+    bodies.push(end);
     if (attributes.some(ignores)) ignored.push(test);
   }
-  return { tests, ignored, markers: [] };
+  const regions = kind === "rust" ? null : rustTestRegions(text, bodies);
+  return {
+    tests,
+    ignored,
+    markers: [],
+    assertions: assertions(text, kind, regions),
+  };
 }
 
 // `it(` or `test(`, with modifiers such as `.skip` or `.each(table)`, then
@@ -61,13 +71,14 @@ function typescript(text) {
       line: lineAt(text, m.index),
     })),
   );
-  return { tests, ignored: [], markers };
+  return { tests, ignored: [], markers, assertions: assertions(text, "ts") };
 }
 
 /**
  * The tests in `text`, a file of kind `kind` (lib/test-changes/files.mjs):
  * `tests` and the `ignored` ones (Rust) by name, and the `markers` that skip
- * tests (TypeScript), each with its line.
+ * tests (TypeScript), each with its line, and the `assertions` in test code
+ * (lib/test-changes/assertions.mjs).
  */
 export const scan = (text, kind) =>
-  kind === "ts" ? typescript(text) : rust(text);
+  kind === "ts" ? typescript(text) : rust(text, kind);
