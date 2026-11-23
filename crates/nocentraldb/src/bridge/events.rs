@@ -254,8 +254,8 @@ pub(super) fn sync_status(status: &SyncStatus) -> Value {
 /// "equivocations": [id], "exposed": bool, "waitingForKey": bool,
 /// "badPersonKeyRecords": [fingerprint], "provisionalErasures":
 /// [{"change": id, "age": milliseconds, "canUndo": bool, "performer":
-/// member, "notice": {"code": text, "text": text}}]}`. A reason is its
-/// Rust name in lower camel case.
+/// member, "notice": {"code": text, "text": text}}], "onlyMember": bool}`.
+/// A reason is its Rust name in lower camel case.
 pub(super) fn space_status(status: &SpaceStatus) -> Value {
     let ids =
         |ids: &[ChangeId]| Value::Array(ids.iter().map(|id| Value::Text(id.to_string())).collect());
@@ -368,5 +368,6 @@ pub(super) fn space_status(status: &SpaceStatus) -> Value {
                     .collect(),
             ),
         ),
+        ("onlyMember", Value::Bool(status.only_member)),
     ])
 }
