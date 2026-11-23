@@ -13,6 +13,8 @@
 //! says where the change stops, as a [`Stop`]. [`crate::checks`] implements
 //! [`Checks`] with the signature and decryption of RFC 0003.
 
+use std::collections::BTreeSet;
+
 use std::fmt;
 
 use crate::change::{Change, ChangeError, Header, Kind, Operation, Payload};
@@ -22,7 +24,7 @@ use crate::log::{
     AppendError, Appended, Log, OperationParkReason, ParkReason, ParkedOperation, RejectReason,
     State,
 };
-use crate::object::ObjectOperation;
+use crate::object::{MOVED_FROM, ObjectOperation};
 use crate::texts;
 use crate::tips::Opened;
 
@@ -192,8 +194,17 @@ pub trait Fold {
     /// touched it: un-folding then folds it again from the operations of
     /// the changes still folded (RFC 0006, "Un-folding").
     fn clear_field(&mut self, object: ObjectId, collection: &str, field: &str);
-    /// Forgets the creates and deletes of an object, for the same reason.
+    /// Forgets the creates, deletes and moves of an object, for the same
+    /// reason.
     fn clear_object(&mut self, object: ObjectId);
+    /// The objects whose move was taken back since the last call, and
+    /// whose fields the fold did not keep while they were moved (RFC 0016,
+    /// "What the members of the old space keep"): the log then folds
+    /// their field operations again from the changes still folded. A fold
+    /// that keeps the fields of a moved object names none.
+    fn take_revived(&mut self) -> BTreeSet<ObjectId> {
+        BTreeSet::new()
+    }
     /// The fields, each an object, a collection as changes name it and a
     /// field, to fold again in stamp order since an operation folded into
     /// them displaced others: a rich-text operation that is earlier than
@@ -202,6 +213,13 @@ pub trait Fold {
     fn take_refolds(&mut self) -> Vec<(ObjectId, String, String)> {
         Vec::new()
     }
+    /// The field, an object, a collection as changes name it and a field,
+    /// that a refold in stamp order folds from now on, or `None` once it
+    /// is done. A fold that keeps no state of a moved object's fields
+    /// keeps the field's state while the refold runs, so that each of its
+    /// operations parks as on the live object, and forgets it after
+    /// (RFC 0016; RFC 0013, "The same id twice").
+    fn refolding(&mut self, _field: Option<(ObjectId, &str, &str)>) {}
 }
 
 /// Why a received frame was not appended.
@@ -279,6 +297,9 @@ impl Log {
                 self.check_rejected_again(checks, fold);
                 crate::unfold::unfold(self, checks, fold);
             }
+            // A revived field folds first: it can displace operations a
+            // refold then folds again in stamp order.
+            crate::unfold::fold_revived(self, checks, fold);
             crate::unfold::refold_displaced(self, checks, fold);
         }
         Ok(appended)
@@ -379,17 +400,19 @@ fn check(
     (State::Folded { parked }, Some(opened))
 }
 
-/// Folds one operation the model knows, a create or a delete of its object
-/// or a field operation, through the fold.
+/// Folds one operation the model knows, a create, a delete, a move or a
+/// set of `$movedFrom` of its object, or a field operation, through the
+/// fold.
 pub(crate) fn fold_one(
     operation: &Operation,
     origin: Origin,
     fold: &mut impl Fold,
 ) -> Result<(), OperationParkReason> {
-    if operation.field.is_some() {
-        return fold.fold(origin, operation);
-    }
-    let object = field_op::decode_object(operation, origin)?;
+    let object = match operation.field.as_deref() {
+        Some(MOVED_FROM) => field_op::decode_moved_from(operation, origin)?,
+        Some(_) => return fold.fold(origin, operation),
+        None => field_op::decode_object(operation, origin)?,
+    };
     fold.fold_object(operation.object, &object);
     Ok(())
 }
@@ -404,7 +427,9 @@ pub(crate) fn understand(
     if !fold.knows_collection(&operation.collection) {
         return Err(OperationParkReason::UnknownCollection);
     }
+    // `$movedFrom` is hidden: no model declares it (RFC 0016, "Formats").
     if let Some(field) = &operation.field
+        && field != MOVED_FROM
         && !fold.knows_field(&operation.collection, field)
     {
         return Err(match fold.unregistered(&operation.collection, field) {
