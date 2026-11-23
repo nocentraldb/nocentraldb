@@ -8,6 +8,7 @@ use super::Bridge;
 mod account;
 mod account_identity;
 mod ad_hoc;
+mod admission;
 mod dates;
 mod erase;
 mod erasures;
