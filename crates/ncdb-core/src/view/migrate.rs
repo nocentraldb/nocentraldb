@@ -12,7 +12,7 @@
 //! state is a function of its set of operations (RFC 0004), so folding the
 //! parked operations late gives the view a full fold would give.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::Connection;
 
@@ -22,7 +22,8 @@ use super::{Error, log_table, schema};
 use crate::field_op::Origin;
 use crate::ids::SpaceId;
 use crate::log::{Log, OperationParkReason, ParkedOperation, State};
-use crate::receive::{Checks, fold_one, understand};
+use crate::receive::{Checks, Fold, fold_one, understand};
+use crate::unfold::fold_revived;
 
 /// What a model adds to the model the view's tables were folded by.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -133,6 +134,7 @@ pub(super) fn run<C: Checks>(
         let mut space_checks = factory(*space);
         let controls: Vec<_> = log.folded_controls().cloned().collect();
         space_checks.add_controls(&controls);
+        let mut revived = BTreeSet::new();
         for (change, parked) in waiting {
             // A change that no longer opens keeps its parked operations,
             // as the fold before left them.
@@ -161,10 +163,17 @@ pub(super) fn run<C: Checks>(
                     still.push(ParkedOperation { position, reason });
                 }
             }
+            revived.append(&mut fold.take_revived());
             fold.finish()?;
             log.set_state(change.id(), State::Folded { parked: still });
             log_table::update(conn, log, change.id())?;
         }
+        // A take-back among them folds its object's fields again, from
+        // every change now folded (RFC 0016; `super::trace`).
+        let mut fold = SqlFold::new(conn, model, *space).for_space(space_checks.space_model_id());
+        fold.revived = revived;
+        fold_revived(log, &space_checks, &mut fold);
+        fold.finish()?;
     }
     Ok(())
 }

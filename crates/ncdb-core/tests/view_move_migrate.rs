@@ -120,5 +120,9 @@ fn a_take_back_folded_by_a_migration_folds_the_fields_again() {
     let row = view.get(space, PROJECT, P).unwrap().unwrap();
     assert_eq!(row.object.moved_to(), None);
     assert_eq!(row, expected.get(space, PROJECT, P).unwrap().unwrap());
-    assert_eq!(row.fields.len(), 1, "the name written while moved is folded");
+    assert_eq!(
+        row.fields.len(),
+        1,
+        "the name written while moved is folded"
+    );
 }
