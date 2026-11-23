@@ -1,6 +1,7 @@
 // `npx ncdb model build` and `npx ncdb model check` behave as the native
 // `ncdb` does (NOC-415): on the same project, both say the same, exit with
 // the same code and write the same lock.
+import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, test } from "vitest";
 import { buildBoth, type Files, type Run, runIn, schema } from "./ncdbRuns.ts";
 
@@ -201,5 +202,24 @@ describe("npx ncdb model check answers what the native ncdb answers", () => {
   test("when there is no lock", () => {
     const run = same({ "model.ts": V1 }, ["model", "check"]);
     expect(run).toMatchObject({ code: 1, lock: null });
+  });
+});
+
+describe("@nocentraldb/sdk ships the bin", () => {
+  const read = (path: string) =>
+    readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+
+  test("package.json names dist/ncdb.js as ncdb", () => {
+    expect(JSON.parse(read("package.json")).bin).toEqual({
+      ncdb: "dist/ncdb.js",
+    });
+  });
+
+  test("the build puts the core into dist/ncdb/, where dist/ncdb.js finds it", () => {
+    expect(read("src/ncdb.ts")).toMatch(/^#!\/usr\/bin\/env node\n/);
+    expect(read("src/ncdb.ts")).toContain(
+      'start(new URL("./ncdb/", import.meta.url))',
+    );
+    expect(read("build.mjs")).toContain('join(BUILD, "ncdb")');
   });
 });
