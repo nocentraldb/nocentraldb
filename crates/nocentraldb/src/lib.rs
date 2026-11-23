@@ -108,6 +108,8 @@ mod durability_tests;
 mod erasure_waiting_tests;
 #[cfg(test)]
 mod fold_feed_tests;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod moving_tests;
 #[cfg(test)]
 mod page_limit_tests;
 #[cfg(test)]
