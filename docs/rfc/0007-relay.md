@@ -6,7 +6,7 @@ This RFC defines the relay: the protocol members use to push and pull a space's 
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and uses the change, the log and the cursor of [RFC 0002](0002-change-and-log-format.md) without redefining them; [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) names the rest.
 
-**Status.** Decided by the owner (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Partly built. The protocol, the relay core and the SQLite backend for local runs are built in `crates/ncdb-relay`. The AWS backend is built in `crates/ncdb-relay-aws` and `crates/ncdb-relay-lambda`, with its infrastructure in `infra/aws`, and deployed in the account NoCentralDb-Prod ([Deploying the relay to AWS](../relay-deploy.md)). The Postgres backend is not built, nor are changes exchanged directly between members in island mode, nor compaction, whose error is only reserved.
 

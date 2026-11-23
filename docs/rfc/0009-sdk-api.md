@@ -6,7 +6,7 @@ This RFC defines the API an app or an agent uses to work with NoCentralDB: how i
 
 The decided RFCs define what lies under these calls, and this RFC names the calls in between. [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) says which RFC defines what. Every name below links the RFC it builds on, and where an RFC is silent, this RFC says so. GENESIS.md counts public API names among what a user sees first, and RFC 0004, RFC 0005 and RFC 0008 left the names of reads and roles to the SDK, so this RFC is where they are decided.
 
-**Status.** Decided by the owner (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Partly built. Built, in both SDKs: opening, writing, reading, queries and subscriptions, spaces, members and their notices, the erasure audit, the space and sync status, the view report, accounts, synced ad-hoc spaces and erasing a person. Not built: the TypeScript SDK in Node.js, with its options `path`, `keyFile`, `inMemory`, `agent` and `subAgent`; the option `warnings`; `space.inspect`, `space.outcome`, `$conflicts` and `$raw`; `$erased` and `samePersonAs` in TypeScript; the error `deprecated`; `db.durability` in Rust; and local or personal ad-hoc copies.
 

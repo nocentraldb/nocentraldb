@@ -8,7 +8,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every copy of 
 
 Merge rules are hard to change once a type ships: a changed rule makes old and new clients diverge. So each rule below says why it was chosen and which rules were not.
 
-**Status.** Decided by the owner (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Partly built. Built in the core: basic values, sets, links and references, creating and deleting objects, the operation numbers, and the plugin contract with its harness. Not built: the calls that let an app read a field's conflicts, an outcome, or the state of a link or reference (`space.inspect`, `$conflicts`), in either SDK. Days and points in time came after 0.1.
 

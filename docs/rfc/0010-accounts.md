@@ -8,7 +8,7 @@ It builds on [RFC 0003](0003-keys-and-cryptography.md), which defines the accoun
 
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0010: Accounts](https://github.com/nocentraldb/nocentraldb/discussions/154), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Decided. The owner decided this RFC as it stands (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Partly built. Built: the account key and its statement, the recovery code, pairing a device or an agent, recovering an account, removing a lost device, the account space, and linking a database's own account. Not built: linking an agent's own account, and the space status that says losing this device loses the space.
 

@@ -8,7 +8,7 @@ A local-first database for people and agents.
 
 NoCentralDB puts all the data right next to the people and agents who use it. A relay, the server in the middle, keeps everyone in sync, yet it only ever sees encrypted data.
 
-**Status.** Decided by the owner (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Partly built. Built: spaces, members and roles; the full copy, folded into an SQLite view; the relay, locally on SQLite and on AWS with DynamoDB and S3; island mode; the lock and `ncdb model build`; declared indexes and ordered pages; basic values, sets, links, references and personal fields; plugin field types in the Rust SDK; erasure and its audit; accounts with pairing and a recovery code; synced ad-hoc spaces for sub-agents. Not built: rich text, streams, computed fields and views, work orders with compaction and the archive, the Postgres relay, adapters, the TypeScript SDK outside the browser, and native mobile apps.
 

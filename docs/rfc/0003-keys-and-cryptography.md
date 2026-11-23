@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · nocentraldb.io
 
 Which keys NoCentralDB uses, who holds them, and which audited primitives use them.
 
-**Status.** Decided by the owner (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Partly built. Built: the member key and its key record, in the keystores of macOS, Windows and Linux, in a key file and in the browser's IndexedDB; key envelopes, the key chain and rotation; person keys, shreds and the account sign-off; accounts, the recovery key and pairing; invitations; the relay's authentication. Not built: the keystores of iOS and Android; local ad-hoc spaces and personal fields in ad-hoc copies; `db.workOrders.erase`, since the Rust SDK erases with `Db::erase` until work orders exist; the notices for moving data between spaces and for invitations; and the hybrid post-quantum suite, which this RFC only reserves.
 

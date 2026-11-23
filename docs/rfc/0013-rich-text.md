@@ -10,7 +10,7 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operations carry a
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0013 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Decided. Its design stands as written (Carsten, 2026-11-21). Nothing is built yet; [Follow-up tickets](#follow-up-tickets) is the build plan, and [Changes to the other RFCs](#changes-to-the-other-rfcs) lists what the decided RFCs take from it.
+**Status.** Decided, 2026-11-21. Nothing is built yet; [Follow-up tickets](#follow-up-tickets) is the build plan, and [Changes to the other RFCs](#changes-to-the-other-rfcs) lists what the decided RFCs take from it.
 
 **At 0.1.** Not built. Release 0.1 has no rich text: `nc.richText` stays reserved, and nothing of this design is built.
 

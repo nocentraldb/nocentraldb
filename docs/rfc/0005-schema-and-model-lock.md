@@ -6,7 +6,7 @@ This RFC defines how a developer describes the model of an app once, in TypeScri
 
 It starts from the example in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page) and builds on the change, the keys and the merge rules of RFC 0002, RFC 0003 and RFC 0004; [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) links each.
 
-**Status.** Decided by the owner (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Partly built. Built: the schema functions `nc.*`, `ncdb model build` and `ncdb model check`, the lock and its checks when a database opens, personal fields and references. Not built: rich text and streams, which the build refuses; computed fields and views, which keep their names only; plugin field types in the TypeScript schema; `space.inspect`, `$raw` and `$conflicts`; and `samePersonAs` in TypeScript. Days and points in time, `nc.date()` and `nc.timestamp()`, came after 0.1.
 

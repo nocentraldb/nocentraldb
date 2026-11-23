@@ -8,7 +8,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member f
 
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0006: The local view on SQLite](https://github.com/nocentraldb/nocentraldb/discussions/146), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Decided by the owner (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Partly built. Built: the fold, the rebuild, declared indexes and ordered pages, natively and in the browser on `opfs-sahpool`, with the owning tab and `db.durability`. Not built: the TypeScript SDK's native addon for Node.js, the Derive step of computed fields, and folding or restoring changes received directly from another member.
 

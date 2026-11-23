@@ -6,7 +6,7 @@ This RFC defines what a change is, how it is encoded byte for byte, and how a sp
 
 It builds on [RFC 0001](0001-nocentraldb.md) and on the principles in [GENESIS.md](../../factory/GENESIS.md); [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) says which RFCs build on it.
 
-**Status.** Decided by the owner (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Built, except what this RFC leaves to later RFCs: compaction and the archive, and the values of rich text and streams, which are not built.
 

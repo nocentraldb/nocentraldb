@@ -6,7 +6,7 @@ This RFC defines who belongs to a space and what each member may do. It covers t
 
 It builds on [RFC 0001](0001-nocentraldb.md) and on [RFC 0002](0002-change-and-log-format.md), which reserves control changes as [kind 1](0002-change-and-log-format.md#key-generation-suite-and-kind); [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) names the rest.
 
-**Status.** Decided by the owner (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Partly built. Built: the genesis, the roles, every control change and the rules that fold them, provisional erasure and the erasure decision, in the core, the relay and both SDKs. Not built: the SDK's reports to an admin who removes a member with changes it has not seen, of the members a removed admin added, of a revoked member's fork, of a generation-id collision, and of a wrong key envelope or key chain entry. The core finds a wrong key envelope; the SDK does not show it yet.
 

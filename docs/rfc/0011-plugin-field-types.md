@@ -8,7 +8,7 @@ It builds on RFC 0004 and RFC 0005, above, and on [RFC 0001](0001-nocentraldb.md
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0011 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Decided. The owner decided this RFC's design as it stands (Carsten, 2026-11-12).
+**Status.** Decided, 2026-11-12.
 
 **At 0.1.** Partly built. Built: the crate `ncdb-plugin`, registering a plugin with `OpenOptions::plugin` in the Rust SDK, parking a field whose type is not registered and refusing writes to it, and the harness `ncdb-harness`. Not built: `ncdb-harness` on crates.io, which is not published, and `ncdb core build`. TypeScript has no plugins in v1, by this design.
 

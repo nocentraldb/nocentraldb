@@ -34,10 +34,7 @@ test("RFC 0016 is decided and is about moving an object", () => {
     markdown.split("\n")[2],
     "REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-447",
   );
-  assert.match(
-    markdown,
-    /^\*\*Status\.\*\* Decided\. .*\(Carsten, 2026-11-22\)/m,
-  );
+  assert.match(markdown, /^\*\*Status\.\*\* Decided, 2026-11-22\. /m);
 });
 
 test("RFC 0016 states its design directly, with no list of decisions", () => {
