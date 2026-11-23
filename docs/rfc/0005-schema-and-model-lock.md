@@ -8,7 +8,7 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 
 **Status.** Decided, 2026-11-10.
 
-**At 0.1.** Partly built. Built: the schema functions `nc.*`, `ncdb model build` and `ncdb model check`, the lock and its checks when a database opens, personal fields and references. Not built: rich text and streams, which the build refuses; computed fields and views, which keep their names only; plugin field types in the TypeScript schema; `space.inspect`, `$raw` and `$conflicts`; and `samePersonAs` in TypeScript. Days and points in time, `nc.date()` and `nc.timestamp()`, came after 0.1.
+**At 0.1.** Partly built. Built: the schema functions `nc.*`, `ncdb model build` and `ncdb model check`, the lock and its checks when a database opens, personal fields and references. Not built: rich text and streams, which the build refuses; computed fields and views, which keep their names only; plugin field types in the TypeScript schema; `space.inspect`, `$raw` and `$conflicts`; `$movedFrom`, with the move of RFC 0016; and `samePersonAs` in TypeScript. Days and points in time, `nc.date()` and `nc.timestamp()`, came after 0.1.
 
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0005: The schema language and model.lock.json](https://github.com/nocentraldb/nocentraldb/discussions/144), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -97,6 +97,8 @@ Collection and field names are the names that changes carry forever: RFC 0002 na
 - Two names in the same scope may not differ only in case (`title` and `Title`), because the local view is SQLite, whose column names ignore case.
 - A collection's fields, computed fields, views and indexes share one scope: a computed field cannot have the name of a stored field.
 - Names that start with `_` or `$` are reserved for the core, which the pattern above already excludes.
+
+The core keeps two hidden fields under such names, which no schema declares. `$person` holds a person's id on the person's object ([Identifying the person](#identifying-the-person)). `$movedFrom` is set in the new space's change when an object is moved there from another space ([RFC 0016, "Formats"](0016-moving-an-object.md#formats)): a set whose argument 1 is `{1: old space id}`, merged as a basic value, as `$person` is. It lets a member of both spaces find the object's history in the old space, and tells the new space's members the old space's random id and nothing more. Leaving it out was not taken: the new space would learn nothing of where the object came from, but no member, the mover included, could find its history from the new space.
 
 The TypeScript key is the stored name. There is no alias in v1, so the TypeScript name cannot differ from the stored name: v1 is simpler without it, and an alias is additive and can come later as an optional key of the lock, without a format change. Numeric field ids in the lock were not taken: changes name fields by name ([RFC 0002, "Operations: object, field and value"](0002-change-and-log-format.md#operations-object-field-and-value)), and numbers would need a registry that two branches could fill differently.
 
@@ -710,6 +712,7 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 - **2026-11-21 · Days and points in time are no set elements in v1.** ([decision](../../factory/decisions/2026-11-21-NOC-412-days-and-points-in-time-are-no-set-elements-in-v1.md))
 - **2026-11-22 · Every sealed change of a space of another model parks as "another model", whatever its key 64 says.** ([decision](../../factory/decisions/2026-11-11-NOC-57-a-space-of-another-model-parks-every-sealed-change.md))
 - **2026-11-22 · A plugin field's `config` that appears or disappears is a changed `config`.** ([decision](../../factory/decisions/2026-11-12-NOC-251-a-plugin-config-that-appears-or-disappears-is-a-change.md))
+- **2026-11-22 · The hidden field `$movedFrom` names the space a moved object came from.** (NOC-447)
 
 ## History
 
@@ -724,3 +727,4 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 - 2026-11-21 · Days and points in time: `nc.date()` and `nc.timestamp()`, as the owner answered (NOC-412, NOC-434, #430)
 - 2026-11-22 · Every sealed change of a space of another model parks, and a plugin field's `config` that appears or disappears is refused as a change (NOC-379, NOC-57, NOC-251, #449)
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
+- 2026-11-23 · The hidden field `$movedFrom` of RFC 0016's move (NOC-474)

@@ -142,12 +142,12 @@ Each operation names:
 
 - **The object** (key 1), by its 16-byte id. Its space is the change's space.
 - **The collection and the field** (keys 2 and 3), by their names in `model.lock.json`. Names are stable, because schema changes are additive and a field is never renamed. Names need no id registry that two developers could fill differently, and they let a client that does not know the field yet tell which field an operation is for, keep the operation and fold it after an upgrade. They cost a few bytes per operation, inside the ciphertext. Numeric ids that `ncdb model build` assigns were not taken: they would save those bytes, but need that registry.
-- **The operation** (key 4), a small integer whose meaning the field type defines. RFC 0004 defines it for basic values, sets and links. Value 0 is reserved for "create the object", which takes no field (key 3 is absent) and puts the object into the collection.
+- **The operation** (key 4), a small integer whose meaning the field type defines. RFC 0004 defines it for basic values, sets and links, and numbers every built-in operation in one table ([RFC 0004, "Operation numbers"](0004-merge-rules-basic-types.md#operation-numbers)). Three numbers belong to the object and take no field (key 3 is absent): 0 is "create the object", which puts the object into the collection; 4 is delete; and 6 is move, which says the object went to another space ([RFC 0016, "Formats"](0016-moving-an-object.md#formats)). Number 5 is rich text's update.
 - **The value** (key 5), any CBOR value of the profile below. The field type defines its shape.
 
 The format leaves room for the field types that are not designed yet:
 
-- **Rich text.** The value is a byte string holding a Yrs update. A focused edit is a small update, so the change stays small too.
+- **Rich text.** Operation 5 carries a Yjs update, as [RFC 0013](0013-rich-text.md) defines it. A focused edit is a small update, so the change stays small too.
 - **Streams.** The value carries one chunk and its index in the stream. Each chunk is its own change, or several chunks share one change, as the stream type will decide.
 - **Personal fields.** A write to a personal field is a set whose value, argument 1, is a sealed personal value: a map of the person-key id (key 1) and the AEAD ciphertext of the field's value under that person key (key 2), inside the payload. Its `replaces`, argument 2, stays readable to members, so a member without the key still merges the field ([RFC 0004, "The arguments of each operation"](0004-merge-rules-basic-types.md#the-arguments-of-each-operation); Carsten, 2026-11-12, NOC-244). Clearing the field writes a plain `null`. RFC 0003 defines the encryption and its associated data (space, object, field and person-key id, in [Personal value](0003-keys-and-cryptography.md#personal-value)); the field is named by collection and field name, as every operation names it. Destroying the person's key makes that value unreadable, while the signature over the whole change stays valid, because the signature covers the bytes and not the plaintext. This is what [shred and audit](0001-nocentraldb.md#the-design-in-one-page) needs.
 - **Custom field types.** A plugin defines its own operation numbers and value shapes, inside the same container.
@@ -579,6 +579,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - **2026-11-12 · A personal value is sealed under a subkey of the person key, inside the payload.** ([decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
 - **2026-11-20 · Key 0 is "must understand".** ([decision](../../factory/decisions/2026-11-20-NOC-362-header-and-payload-keys-0-to-63-are-must-understand.md))
 - **2026-11-20 · A change the relay holds is answered `duplicate` to its own author, even after it left the space.** ([decision](../../factory/decisions/2026-11-20-NOC-362-the-relay-answers-duplicate-when-a-former-member-re-sends-its-own-change.md))
+- **2026-11-23 · Operation 5 is rich text's update, and the move of RFC 0016 is operation 6, an operation on the object.** (NOC-474)
 
 ## History
 
@@ -594,3 +595,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · Key 0 is "must understand", and a former member's own change pushed again is answered `duplicate`, as the owner answered (NOC-362, #396)
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
+- 2026-11-23 · The operation list names rich text's update, 5, and the move, 6 (NOC-474)
