@@ -34,15 +34,16 @@ pub(crate) enum Watcher {
         space: Option<CoreSpaceId>,
         watch: Weak<Mutex<Watch>>,
     },
-    #[cfg(any(test, feature = "bridge"))]
     Folds(Weak<Mutex<Feed>>),
 }
 
 /// Whose change a fold folded: this member's own write, or one that sync
 /// brought (RFC 0009, "Subscribe": `origin` is "local" or "remote").
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Origin {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Origin {
+    /// This member's own write, on this device.
     Local,
+    /// A change that sync brought from the relay.
     Remote,
 }
 
@@ -64,27 +65,24 @@ pub(crate) struct Folded<'a> {
     pub(crate) space: CoreSpaceId,
     pub(crate) collections: &'a BTreeSet<String>,
     /// The `(collection, object)` the fold wrote, and whose change it was;
-    /// none for a fold that re-reads everything, as after a rebuild. Only
-    /// the fold feed reads it and the origin, so only the bridge's build.
-    #[cfg_attr(not(any(test, feature = "bridge")), allow(dead_code))]
+    /// none for a fold that re-reads everything, as after a rebuild.
     pub(crate) touched: &'a [(String, ncdb_core::ids::ObjectId)],
-    #[cfg_attr(not(any(test, feature = "bridge")), allow(dead_code))]
     pub(crate) origin: Origin,
 }
 
 /// One fold a fold feed gives out.
-#[cfg(any(test, feature = "bridge"))]
 #[derive(Clone, Debug)]
 pub(crate) struct Fold {
     pub(crate) space: crate::id::SpaceId,
-    /// The collections whose reads it may have changed.
+    /// The collections whose reads it may have changed; only the bridge
+    /// reads them.
+    #[cfg_attr(not(any(test, feature = "bridge")), allow(dead_code))]
     pub(crate) collections: Vec<String>,
     /// The objects it touched, per collection, with their origin.
     pub(crate) changes: Vec<Changed>,
 }
 
 /// The objects one fold touched in one collection, and whose change it was.
-#[cfg(any(test, feature = "bridge"))]
 #[derive(Clone, Debug)]
 pub(crate) struct Changed {
     pub(crate) collection: String,
@@ -94,7 +92,6 @@ pub(crate) struct Changed {
 
 /// The folds a fold feed has not given out yet, in order, and who waits
 /// for them.
-#[cfg(any(test, feature = "bridge"))]
 #[derive(Default)]
 pub(crate) struct Feed {
     folds: Vec<Fold>,
@@ -102,15 +99,14 @@ pub(crate) struct Feed {
     waker: Option<Waker>,
 }
 
-/// The space and collections of every fold, for the TypeScript SDK's
-/// worker, which re-runs the reads its subscriptions follow (NOC-176;
-/// RFC 0009, "Subscribe"). It carries names and ids, never values.
-/// Dropping every clone stops it.
-#[cfg(any(test, feature = "bridge"))]
+/// The space and collections of every fold, and the ids each touched with
+/// their origin: for the TypeScript SDK's worker, which re-runs the reads
+/// its subscriptions follow (NOC-176), and for `db.changes()` (RFC 0009,
+/// "Subscribe"). It carries names and ids, never values. Dropping every
+/// clone stops it.
 #[derive(Clone)]
 pub(crate) struct FoldFeed(Arc<Mutex<Feed>>);
 
-#[cfg(any(test, feature = "bridge"))]
 impl FoldFeed {
     fn state(&self) -> std::sync::MutexGuard<'_, Feed> {
         self.0
@@ -143,6 +139,7 @@ impl FoldFeed {
     }
 
     /// Closes the feed: a waiter returns, and no fold is added.
+    #[cfg(any(test, feature = "bridge"))]
     pub(crate) fn close(&self) {
         let mut state = self.state();
         state.closed = true;
@@ -152,11 +149,13 @@ impl FoldFeed {
     }
 
     /// Whether the feed is closed.
+    #[cfg(any(test, feature = "bridge"))]
     pub(crate) fn is_closed(&self) -> bool {
         self.state().closed
     }
 
     /// Whether `other` is this feed.
+    #[cfg(any(test, feature = "bridge"))]
     pub(crate) fn same(&self, other: &FoldFeed) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
     }
@@ -242,7 +241,6 @@ pub(crate) fn touched(watchers: &mut Vec<Watcher>, folded: &Folded<'_>) {
             }
             true
         }
-        #[cfg(any(test, feature = "bridge"))]
         Watcher::Folds(feed) => {
             let Some(feed) = feed.upgrade() else {
                 return false;
@@ -263,7 +261,6 @@ pub(crate) fn touched(watchers: &mut Vec<Watcher>, folded: &Folded<'_>) {
 impl Db {
     /// A fold feed of this database: the space and collections of every
     /// fold from now on (NOC-176).
-    #[cfg(any(test, feature = "bridge"))]
     pub(crate) fn folds(&self) -> FoldFeed {
         let feed = Arc::new(Mutex::new(Feed::default()));
         lock(&self.inner)
@@ -296,7 +293,6 @@ impl Space {
 /// The fold a feed gives out for `folded`: the objects of the app's
 /// collections it touched, per collection, in order; the model the SDK
 /// ships (`$` collections) is not the app's (NOC-266).
-#[cfg(any(test, feature = "bridge"))]
 fn fold_of(folded: &Folded<'_>) -> Fold {
     let mut changes: Vec<Changed> = Vec::new();
     for (collection, object) in folded.touched {

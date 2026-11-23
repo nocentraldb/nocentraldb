@@ -40,6 +40,7 @@ mod browser;
 #[cfg(any(test, feature = "bridge"))]
 #[doc(hidden)]
 pub mod bridge;
+mod changes;
 mod clock;
 mod date;
 mod db;
@@ -72,6 +73,7 @@ mod view_report;
 
 pub use account::Removed;
 pub use ad_hoc::{AdHoc, AdHocCreated};
+pub use changes::{Change, Changes};
 pub use date::{Date, Timestamp};
 pub use db::{Db, OpenOptions};
 
@@ -139,6 +141,7 @@ pub use space::{Space, Spaces, Written};
 pub use status::{
     ParkReason, ProvisionalErasure, Refused, RejectReason, SpaceStatus, SpaceStatusReport,
 };
+pub use subscribe::Origin;
 pub use sync::{Connection, SyncReport, SyncStatus};
 pub use tx::Create;
 pub use tx::Transaction;
