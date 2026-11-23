@@ -213,6 +213,7 @@ const TEXTS = [
   "Changes not yet saved",
   "Private window",
   "Another tab is open",
+  "Storage lost",
 ];
 
 test("the page offers each text for users", () => {
