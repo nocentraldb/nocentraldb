@@ -62,6 +62,19 @@ pub(crate) const ALREADY_ADEVICE: &str =
 pub(crate) const ALREADY_MEMBER: &str =
     "the invitation's member is a member of the space already";
 
+/// `carryOverToSeveralSpaces` (invalidValue): space.moves().carry_over
+/// (space.moves.carryOver) when the edits given are of objects that moved to
+/// more than one space (RFC 0016, "Later edits": one write in the new space).
+pub(crate) const CARRY_OVER_TO_SEVERAL_SPACES: &str =
+    "these later edits belong to objects that moved to different spaces; carry them over one space at a time";
+
+/// `carryOverUnreadable` (notAllowed): space.moves().carry_over
+/// (space.moves.carryOver) when an edit given is one the SDK reads as
+/// Edit::Other.
+pub(crate) fn carry_over_unreadable(position: impl std::fmt::Display, change: impl std::fmt::Display) -> String {
+    format!("the later edit {position} of the change {change} writes what this SDK cannot carry over: a personal value, a plugin's operation or a create")
+}
+
 /// `certificateDoesNotHold` (invalidCertificate): Members::add and
 /// Account::pair (members.add, db.account.pair) when the invitation's
 /// certificate does not verify, or certifies another member.
@@ -294,6 +307,13 @@ pub(crate) const NO_ACCOUNT_SPACE: &str =
 /// IndexedDB, where the member's keys live.
 pub(crate) const NO_INDEXED_DB: &str =
     "this browser context has no IndexedDB, which keeps the member's keys";
+
+/// `noLaterEdit` (invalidValue): space.moves().carry_over
+/// (space.moves.carryOver) when an edit given is not among the space's later
+/// edits now (RFC 0016, "Later edits").
+pub(crate) fn no_later_edit(position: impl std::fmt::Display, change: impl std::fmt::Display, id: impl std::fmt::Display) -> String {
+    format!("the edit {position} of the change {change} is no later edit of the object {id} in this space")
+}
 
 /// `noLongerMember` (notMember): A membership call or a write by a member that
 /// was removed from the space, or that the relay answered not_member or
