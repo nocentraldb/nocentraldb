@@ -196,3 +196,53 @@ fn a_revived_rich_text_field_that_displaces_an_operation_converges_in_every_orde
     let (_, xml) = body.as_ref().expect("the revived body");
     assert!(xml.contains('P') && !xml.contains('Q'), "{xml}");
 }
+
+#[test]
+fn rich_text_operations_on_a_trace_park_as_they_would_on_the_live_object_in_every_order() {
+    // Without a take-back the object stays a trace and the view keeps no
+    // body, but whether the later change's operation parks must not
+    // depend on whether it arrived before or after the move.
+    let mut space = Space::new(A);
+    let genesis = space.genesis.clone();
+    let add = space.add(A, B, Role::Writer, &[&genesis]);
+    let envelope = space.envelope(A, B, &[&add]);
+    let create = space.sealed(A, vec![field_op::create(T, TASK)]);
+    let setup = [genesis, add, envelope, create];
+    let earlier = space.sealed(
+        A,
+        vec![body_op(A, &add_block(&doc(client(A)), "paragraph", "P"))],
+    );
+    let later = space.sealed(
+        A,
+        vec![
+            field_op::create(ObjectId([0x22; 16]), TASK),
+            body_op(A, &add_block(&doc(client(A)), "paragraph", "Q")),
+        ],
+    );
+    let moved = space.sealed(
+        A,
+        vec![move_write(Value::Bytes(NEW.0.to_vec()), BTreeSet::new())],
+    );
+
+    let mut ends = Vec::new();
+    for order in orders(&[&earlier, &later, &moved]) {
+        let changes: Vec<&Change> = setup.iter().chain(order.iter().copied()).collect();
+        let view = view_of(space.space, &changes);
+        let states = [&earlier, &later, &moved].map(|c| view.state(space.space, c.id()));
+        ends.push((states, body(&view, space.space)));
+    }
+    for end in &ends {
+        assert_eq!(end, &ends[0], "every order ends the same");
+    }
+    let (states, body) = &ends[0];
+    assert_eq!(body, &None, "a trace keeps no body");
+    assert_eq!(
+        states[1],
+        Some(State::Folded {
+            parked: vec![ParkedOperation {
+                position: 1,
+                reason: OperationParkReason::MalformedArguments,
+            }],
+        })
+    );
+}
