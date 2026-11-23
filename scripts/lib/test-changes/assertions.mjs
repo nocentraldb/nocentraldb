@@ -47,20 +47,23 @@ export function normalize(text) {
     .trim();
 }
 
-const LITERAL =
-  /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`|\b\d[\w.]*|\b(?:true|false|null|undefined)\b/g;
+const LITERAL = /\b\d[\w.]*|\b(?:true|false|null|undefined)\b/g;
 
-/** The text with each string, number and boolean literal blanked. */
-export const skeleton = (text) => text.replace(LITERAL, "_");
+/**
+ * The skeleton of an assertion's masked code (lib/test-changes/mask.mjs),
+ * whose strings are blank already: each number and boolean blanked too.
+ */
+export const skeleton = (code) => normalize(code).replace(LITERAL, "_");
 
 const RUST_ASSERT = /(?<![\w$])\w*assert\w*!\s*[([{]/g;
 const TS_ASSERT = /(?<![\w$.])(?:expect|assert)\b(?=\s*[.(])/g;
 
 /**
- * The assertions of `text` that start inside one of `regions` ([from, to)
- * index pairs; the whole text when null), in kind "ts" or Rust.
+ * The assertions of a masked file (`{ code, plain }`, lib/test-changes/
+ * mask.mjs) that start inside one of `regions` ([from, to) index pairs; the
+ * whole text when null), in kind "ts" or Rust.
  */
-export function assertions(text, kind, regions = null) {
+export function assertions({ code: text, plain }, kind, regions = null) {
   const inside = (i) => !regions || regions.some(([a, b]) => i >= a && i < b);
   const pattern = kind === "ts" ? TS_ASSERT : RUST_ASSERT;
   const found = [];
@@ -70,10 +73,9 @@ export function assertions(text, kind, regions = null) {
       kind === "ts"
         ? statementEnd(text, m.index)
         : pastGroup(text, m.index + m[0].length - 1);
-    const source = normalize(text.slice(m.index, end));
     found.push({
-      text: source,
-      skeleton: skeleton(source),
+      text: normalize(plain.slice(m.index, end)),
+      skeleton: skeleton(text.slice(m.index, end)),
       line: lineAt(text, m.index),
     });
   }

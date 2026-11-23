@@ -1,5 +1,6 @@
 // Reads one file's tests for the test-change check (NOC-508).
 import { assertions, rustTestRegions } from "./assertions.mjs";
+import { mask } from "./mask.mjs";
 
 const lineAt = (text, index) => text.slice(0, index).split("\n").length;
 
@@ -15,7 +16,9 @@ const ignores = (attribute) =>
   attribute[1] === "ignore" ||
   (attribute[1] === "cfg_attr" && /\bignore\b/.test(attribute[2]));
 
-function rust(text, kind) {
+function rust(source, kind) {
+  const masked = mask(source, kind);
+  const text = masked.code;
   const tests = [];
   const ignored = [];
   const bodies = [];
@@ -33,15 +36,16 @@ function rust(text, kind) {
     tests,
     ignored,
     markers: [],
-    assertions: assertions(text, kind, regions),
+    assertions: assertions(masked, kind, regions),
   };
 }
 
 // `it(` or `test(`, with modifiers such as `.skip` or `.each(table)`, then
-// the name as a string literal. A `.test(` on anything but a test context
-// (`t.test(`) is a method such as RegExp's, not a test.
+// the name as a string literal, read in the masked code (its inside blank).
+// A `.test(` on anything but a test context (`t.test(`) is a method such as
+// RegExp's, not a test.
 const TS_TEST =
-  /(?:(?<![\w$.])|(?<=(?<![\w$.])(?:t|ctx|context)\.))(it|test)((?:\.\w+)*)\s*(?:\([^)]*\)\s*)?\(\s*(["'`])((?:\\.|(?!\3)[^\\])*)\3/g;
+  /(?:(?<![\w$.])|(?<=(?<![\w$.])(?:t|ctx|context)\.))(it|test)((?:\.\w+)*)\s*(?:\([^)]*\)\s*)?\(\s*(["'`])([^"'`]*)\3/g;
 
 // What skips a test or runs only some, each with the key it is counted by:
 // a modifier (`it.skip`, `describe.only`, `test.skipIf`), a prefixed call
@@ -60,18 +64,23 @@ const TS_MARKERS = [
   ],
 ];
 
-function typescript(text) {
-  const tests = [...text.matchAll(TS_TEST)].map((m) => ({
-    name: m[4],
-    line: lineAt(text, m.index),
-  }));
+function typescript(source) {
+  const masked = mask(source, "ts");
+  const text = masked.code;
+  const tests = [...text.matchAll(TS_TEST)].map((m) => {
+    const end = m.index + m[0].length - 1;
+    return {
+      name: masked.plain.slice(end - m[4].length, end),
+      line: lineAt(text, m.index),
+    };
+  });
   const markers = TS_MARKERS.flatMap(([pattern, key]) =>
     [...text.matchAll(pattern)].map((m) => ({
       key: key(m),
       line: lineAt(text, m.index),
     })),
   );
-  return { tests, ignored: [], markers, assertions: assertions(text, "ts") };
+  return { tests, ignored: [], markers, assertions: assertions(masked, "ts") };
 }
 
 /**
