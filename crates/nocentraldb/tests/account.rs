@@ -90,7 +90,7 @@ fn the_first_open_hands_the_recovery_code_until_it_is_confirmed() {
 /// instead of searching random key material for text.
 fn stored_code(record: &[u8]) -> Option<&[u8]> {
     const MAGIC: &[u8] = b"nocentraldb-keys";
-    // The format byte, the member's two secrets.
+    // The magic, the format byte and the member's two secrets.
     let rest = record.strip_prefix(MAGIC).expect("a key record");
     let (&format, rest) = rest.split_first().unwrap();
     assert_eq!(format, 2, "a key record of format 2");
