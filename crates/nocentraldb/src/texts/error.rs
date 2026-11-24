@@ -235,6 +235,45 @@ pub(crate) fn lock_refused(error: impl std::fmt::Display) -> String {
 pub(crate) const MEMBER_REMOVES_ITSELF: &str =
     "a member does not remove itself: leaving a space is space.leave()";
 
+/// `moveAlreadyMoved` (invalidValue): Space::move_objects (space.move) when an
+/// object to move reads as moved in this space (RFC 0016, "The SDK call and its
+/// notice").
+pub(crate) fn move_already_moved(id: impl std::fmt::Display) -> String {
+    format!("the object {id} has moved to another space already; move it from the space it is in now")
+}
+
+/// `moveIntoItsOwnSpace` (invalidValue): Space::move_objects (space.move) when
+/// the destination is the space the call is made on.
+pub(crate) const MOVE_INTO_ITS_OWN_SPACE: &str =
+    "a move needs another space than the one its objects are in";
+
+/// `moveNamedTwice` (invalidValue): Space::move_objects (space.move) when the
+/// same object is in the list twice.
+pub(crate) fn move_named_twice(id: impl std::fmt::Display) -> String {
+    format!("the object {id} is named twice")
+}
+
+/// `moveOfAnotherSpace` (invalidValue): Space::move_objects (space.move) when
+/// an object to move was read from another space (RFC 0016, "The SDK call and
+/// its notice").
+pub(crate) fn move_of_another_space(id: impl std::fmt::Display, space: impl std::fmt::Display) -> String {
+    format!("the object {id} is in the space {space}; a move takes only objects of the space it is called on")
+}
+
+/// `movePersonalLater` (notAllowed): Space::move_objects (space.move) when an
+/// object to move holds a personal value: sealing it again in the new space
+/// comes with NOC-477 (RFC 0016, "Its personal fields").
+pub(crate) fn move_personal_later(id: impl std::fmt::Display) -> String {
+    format!("the object {id} holds a personal value, and an object with personal values cannot be moved yet")
+}
+
+/// `movePluginLater` (notAllowed): Space::move_objects (space.move) when an
+/// object to move has a set plugin field: a plugin's read is no value its write
+/// takes, so the move cannot carry it yet (NOC-475).
+pub(crate) fn move_plugin_later(id: impl std::fmt::Display, name: impl std::fmt::Display) -> String {
+    format!("the object {id} has a value in the plugin field {name}, and a plugin's value cannot be moved yet")
+}
+
 /// `newerAccountKeyNotTaken` (invalidValue): Account::remove_member
 /// (db.account.removeMember) while the account space records an account key
 /// newer than this device's own: the device takes it when it syncs.
@@ -396,6 +435,12 @@ pub(crate) const NOT_WAITING_TO_BE_PAIRED: &str =
 /// no personal field, so it names no person to erase (NOC-325).
 pub(crate) const OBJECT_IS_NO_PERSON: &str =
     "the object is not a person's: it has no personal field";
+
+/// `objectMoved` (moved): Space::write (space.write) to an object this copy
+/// reads as moved (RFC 0016, "The SDK call and its notice").
+pub(crate) fn object_moved(id: impl std::fmt::Display, space: impl std::fmt::Display) -> String {
+    format!("the object {id} moved to the space {space}; write to it there")
+}
 
 /// `onlyAgentAddsSubAgent` (notAllowed): Members::add (members.add) with a
 /// sub-agent's invitation, version 3, on a device's or a sub-agent's database:

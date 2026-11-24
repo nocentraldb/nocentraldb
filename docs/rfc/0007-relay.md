@@ -237,7 +237,7 @@ member → (url)   PUT the frame bytes
 member → relay   push      {req, space, frames: [{upload: id}]}
 ```
 
-The relay reads the uploaded bytes and checks them like any other frame. On a pull, a large entry carries a short-lived download URL instead of the frame. The largest frame the relay accepts is a protocol limit too: 16 MiB, large enough for rich-text pastes with images inlined, small enough that one change cannot block a member's pull. Files are a later RFC. 4 MiB was not taken, nor no limit with multipart uploads.
+The relay reads the uploaded bytes and checks them like any other frame. On a pull, a large entry carries a short-lived download URL instead of the frame. The largest frame the relay accepts is a protocol limit too: 16 MiB, large enough for rich-text pastes with images inlined, small enough that one change cannot block a member's pull. A change at the 16 MiB limit fits in 256 MiB of core memory, natively and in a browser tab's WebAssembly memory. Files are a later RFC. 4 MiB was not taken, nor no limit with multipart uploads.
 
 The upload and download URLs answer CORS for any origin, the browser's preflight of the `PUT` included, so an app in a browser reaches them with `fetch()`. A URL is a one-time capability, valid for minutes, and carries no cookie, so an origin gains nothing by it that the URL's holder did not already have. Refusing large changes in the browser was not taken: a large paste would then sync from every device but a browser.
 
@@ -733,6 +733,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - **2026-11-22 · The relay admits by the account's identity, the recovery key, with the account key for an account without one.** ([decision](../../factory/decisions/2026-11-22-NOC-413-the-relay-admits-by-the-account-s-identity-the-recovery-key.md))
 - **2026-11-23 · A later admission replaces the earlier one and keeps its count of spaces created, and an older admission that has not lapsed can be presented again.** (NOC-493)
 - **2026-11-23 · `admit` carries an admission's bytes, its refusals are `malformed` and `not_allowed`, and a genesis goes through the allowlist, then an admission, then the guest's one space.** ([decision](../../factory/decisions/2026-11-23-NOC-469-admit-carries-an-admission-s-bytes-and-is-refused-with-malformed-or-not-allowed.md))
+- **2026-11-23 · A change at the 16 MiB limit fits in 256 MiB of core memory, natively and in a browser tab's WebAssembly memory; a phone was not measured.** ([decision](../../factory/decisions/2026-11-23-NOC-479-a-change-at-the-16-mib-limit-fits-in-256-mib-of-core-memory.md))
 
 ## History
 
@@ -756,3 +757,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
 - 2026-11-23 · The relay takes admission tokens with `admit`, and an admitted account creates spaces up to its admission's spaces (NOC-469)
 - 2026-11-23 · Inline attributions keep the date and the ticket and name nobody who decided; the decision log records it (NOC-481, #475)
+- 2026-11-23 · Large changes states the memory budget of a change at the 16 MiB limit, 256 MiB, which a release-only guard test holds (NOC-479)

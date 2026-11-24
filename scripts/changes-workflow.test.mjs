@@ -13,6 +13,8 @@
 // cargo-semver-checks checks only the publishable crates the base also has
 // (scripts/release/semver-packages.mjs), and does not run when there are
 // none: a crate new in the pull request has no baseline (NOC-253).
+// The test-change check (NOC-508) runs last, with the PR's base and head,
+// even when an earlier step failed, and its failure fails the job.
 //
 // The workflow is parsed with the `yaml` package and checked by structure.
 // Every check is also run against mutants of the file and must reject each
@@ -55,6 +57,8 @@ const baselineStep = (ctx) => at(ctx, (step) => step.id === "base-worktree");
 const packagesStep = (ctx) => at(ctx, (step) => step.id === "packages");
 const semverNoticeStep = (ctx) =>
   at(ctx, (step) => step.id === "semver-failed");
+const testChangesStep = (ctx) =>
+  at(ctx, (step) => String(step.run).includes("check-test-changes.mjs"));
 const toolchainStep = (ctx) =>
   at(ctx, (step) => step.run === "rustup toolchain install --no-self-update");
 
@@ -383,6 +387,48 @@ const checks = [
       },
       "api with continue-on-error": (ctx) =>
         ctx.doc.setIn([...STEPS, apiStep(ctx), "continue-on-error"], true),
+    },
+  },
+  {
+    name: "runs the test-change check last, with the PR base and head, after a failed step too",
+    check: (ctx) => {
+      const index = testChangesStep(ctx);
+      const step = steps(ctx)[index];
+      assert.equal(index, steps(ctx).length - 1, "it is not the last step");
+      assert.deepEqual(step.env, {
+        BASE: gh("github.event.pull_request.base.sha"),
+        HEAD: gh("github.event.pull_request.head.sha"),
+      });
+      assert.equal(
+        step.run,
+        'node scripts/check-test-changes.mjs --base "$BASE" --head "$HEAD"',
+      );
+      assert.equal(step.if, gh("!cancelled()"));
+      assert.equal(step["continue-on-error"], undefined);
+    },
+    mutants: {
+      "drops --base": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, testChangesStep(ctx), "run"],
+          'node scripts/check-test-changes.mjs --head "$HEAD"',
+        ),
+      "sets BASE to github.sha": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, testChangesStep(ctx), "env", "BASE"],
+          gh("github.sha"),
+        ),
+      "may fail without failing the job": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, testChangesStep(ctx), "continue-on-error"],
+          true,
+        ),
+      "runs only when every step before it passed": (ctx) =>
+        ctx.doc.deleteIn([...STEPS, testChangesStep(ctx), "if"]),
+      "runs before the fragment step": (ctx) => {
+        const list = ctx.doc.getIn(STEPS);
+        const step = list.items.splice(testChangesStep(ctx), 1)[0];
+        list.items.splice(fragmentsStep(ctx), 0, step);
+      },
     },
   },
   {

@@ -40,7 +40,7 @@ import { runWorkflowChecks } from "./lib/workflow-checks.mjs";
 const TIMEOUTS = {
   alpha: 20,
   "alpha-npm": 45,
-  verify: 45,
+  verify: 75,
   build: 45,
   publish: 20,
   "publish-crates": 45,

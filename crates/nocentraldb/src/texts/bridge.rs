@@ -157,6 +157,12 @@ pub(crate) const OPEN_ALREADY: &str =
 pub(crate) const OPEN_TAKES_IN_MEMORY_OR_NAME: &str =
     "open takes inMemory: true, or a name in the browser";
 
+/// `bridgeRelayAnswerTakesARequest` (invalidValue): The bridge, on a request
+/// from the TypeScript SDK: relay.answer without its request number, or with a
+/// relay that is not text or null.
+pub(crate) const RELAY_ANSWER_TAKES_AREQUEST: &str =
+    "relay.answer takes a request number and a relay URL text or null";
+
 /// `bridgeRoleIsText` (invalidValue): The bridge, on a request from the
 /// TypeScript SDK: members.add or members.setRole given a role that is not
 /// text.

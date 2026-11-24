@@ -5,7 +5,9 @@
 //! the retry-after of `rate_limited`, and a local write does not cut it
 //! short. A pause drops the connection, or the wait, and holds the thread
 //! until the app resumes; resuming connects at once. The loop ends when
-//! the database is dropped. Natively it runs on a thread of its own, with
+//! the database is dropped. Each attempt first takes the relay's URL,
+//! which the app's function gives anew when it gave one (NOC-496).
+//! Natively it runs on a thread of its own, with
 //! a tokio runtime of its own; in the browser, on the event loop of the
 //! page or worker that opened the database (NOC-175).
 
@@ -17,6 +19,8 @@ use tokio::sync::watch;
 use super::session::{End, session};
 use super::{Connection, SyncState};
 use crate::db::{Inner, lock};
+use crate::relay::Relay;
+use crate::texts::part::RELAY_URL_FAILED;
 
 /// The first wait before a reconnect.
 pub(super) const FIRST: Duration = Duration::from_millis(100);
@@ -25,8 +29,8 @@ pub(super) const FIRST: Duration = Duration::from_millis(100);
 /// "Island mode").
 pub(super) const LONGEST: Duration = Duration::from_secs(120);
 
-/// Starts syncing the database `inner` with the relay at `url`.
-pub(crate) fn start(inner: &Arc<Mutex<Inner>>, url: String) {
+/// Starts syncing the database `inner` with `relay`.
+pub(crate) fn start(inner: &Arc<Mutex<Inner>>, relay: Relay) {
     let (wake, receiver) = watch::channel(());
     let (pause, paused) = watch::channel(false);
     {
@@ -41,7 +45,7 @@ pub(crate) fn start(inner: &Arc<Mutex<Inner>>, url: String) {
     }
     let db = Arc::downgrade(inner);
     #[cfg(target_arch = "wasm32")]
-    wasm_bindgen_futures::spawn_local(run(db, url, receiver, paused));
+    wasm_bindgen_futures::spawn_local(run(db, relay, receiver, paused));
     #[cfg(not(target_arch = "wasm32"))]
     {
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -50,7 +54,7 @@ pub(crate) fn start(inner: &Arc<Mutex<Inner>>, url: String) {
         let started = runtime.map(|runtime| {
             std::thread::Builder::new()
                 .name("nocentraldb-sync".into())
-                .spawn(move || runtime.block_on(run(db, url, receiver, paused)))
+                .spawn(move || runtime.block_on(run(db, relay, receiver, paused)))
         });
         if !matches!(started, Ok(Ok(_))) {
             set(inner, Connection::Offline, Some("unavailable".into()));
@@ -77,7 +81,7 @@ fn set(inner: &Mutex<Inner>, connection: Connection, error: Option<String>) {
 
 async fn run(
     db: Weak<Mutex<Inner>>,
-    url: String,
+    relay: Relay,
     mut wake: watch::Receiver<()>,
     mut pause: watch::Receiver<bool>,
 ) {
@@ -90,7 +94,7 @@ async fn run(
         set(&inner, Connection::Connecting, None);
         drop(inner);
         let end = tokio::select! {
-            end = session(&db, &url, &mut wake) => end,
+            end = attempt(&db, &relay, &mut wake) => end,
             () = halted(&db, &mut pause) => End::Paused,
         };
         let (progress, retry_after) = match end {
@@ -121,6 +125,24 @@ async fn run(
         }
         delay = (delay * 2).min(LONGEST);
     }
+}
+
+/// One attempt to sync: the URL to connect with, then a session with the
+/// relay there. When the app's relay function fails or gives no relay URL,
+/// the attempt ends as a lost connection with `relay_url_failed`, and the
+/// loop calls the function again after the backoff (NOC-496).
+async fn attempt(db: &Weak<Mutex<Inner>>, relay: &Relay, wake: &mut watch::Receiver<()>) -> End {
+    let Some(url) = relay.url().await else {
+        let Some(inner) = db.upgrade() else {
+            return End::Dropped;
+        };
+        set(&inner, Connection::Offline, Some(RELAY_URL_FAILED.into()));
+        return End::Lost {
+            progress: false,
+            retry_after: None,
+        };
+    };
+    session(db, &url, wake).await
 }
 
 /// Waits while the app has paused syncing, then lifts the halt of the
