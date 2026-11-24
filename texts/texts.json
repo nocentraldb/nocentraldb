@@ -1239,6 +1239,20 @@
       "when": "The bridge, on a request from the TypeScript SDK: write (space.write and its shorthands) without its ops."
     },
     {
+      "id": "error.carryOverToSeveralSpaces",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "these later edits belong to objects that moved to different spaces; carry them over one space at a time",
+      "when": "space.moves().carry_over (space.moves.carryOver) when the edits given are of objects that moved to more than one space (RFC 0016, \"Later edits\": one write in the new space)."
+    },
+    {
+      "id": "error.carryOverUnreadable",
+      "kind": "error",
+      "code": "notAllowed",
+      "text": "the later edit {position} of the change {change} writes what this SDK cannot carry over: a personal value, a plugin's operation or a create",
+      "when": "space.moves().carry_over (space.moves.carryOver) when an edit given is one the SDK reads as Edit::Other."
+    },
+    {
       "id": "error.certificateDoesNotHold",
       "kind": "error",
       "code": "invalidCertificate",
@@ -1524,6 +1538,13 @@
       "code": "keyStoreUnavailable",
       "text": "this browser context has no IndexedDB, which keeps the member's keys",
       "when": "nc.open in a browser context without IndexedDB, where the member's keys live."
+    },
+    {
+      "id": "error.noLaterEdit",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "the edit {position} of the change {change} is not a later edit of the object {id} in this space",
+      "when": "space.moves().carry_over (space.moves.carryOver) when an edit given is not among the space's later edits now (RFC 0016, \"Later edits\")."
     },
     {
       "id": "error.noLongerMember",
