@@ -2187,6 +2187,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ncdb-embedder-example"
+version = "0.2.0"
+dependencies = [
+ "futures-core",
+ "ncdb-relay-server",
+ "nocentraldb",
+ "tokio",
+]
+
+[[package]]
 name = "ncdb-harness"
 version = "0.2.0"
 dependencies = [

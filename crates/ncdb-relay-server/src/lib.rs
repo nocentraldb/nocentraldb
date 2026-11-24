@@ -8,7 +8,8 @@
 //! connection, `subscription` one subscription, and `hub` tells the
 //! subscriptions of a space that a push appended to it, and the open
 //! connections of a member that a push added it to a space (`added`). The `ncdb-relay`
-//! binary runs a [`Server`] locally on the SQLite backend.
+//! binary runs a [`Server`] locally on the SQLite backend, and [`local`]
+//! runs one in memory for an app's or an engine's own tests.
 //!
 //! A change too large for one message (RFC 0007, "Large changes") goes up
 //! through an upload URL and comes down through a download URL, which the
@@ -43,6 +44,7 @@ mod accept;
 mod connection;
 mod http;
 mod hub;
+pub mod local;
 mod page;
 mod prefixed;
 mod subscription;

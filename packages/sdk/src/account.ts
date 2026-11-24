@@ -11,8 +11,10 @@ import * as texts from "./texts.ts";
 export interface RecoveryCode {
   /** The twelve words, for the person to write down or keep in a password manager. */
   words(): readonly string[];
-  /** The person stored the code: the database forgets it, and `recoveryCode()` answers `null` from then on. */
-  confirm(): Promise<void>;
+  /** The two positions, counted from 1 and in order, whose words the person types back to `confirm`. The SDK picked them at random when it handed out the code: they stay the same for this object, and the next `recoveryCode()` picks new ones. */
+  challenge(): readonly [number, number];
+  /** The person stored the code: `answers` are the words they typed back at the positions of `challenge()`, in that order; letter case and spacing do not matter. When both match, the database forgets the code, and `recoveryCode()` answers `null` from then on. A word that does not match fails with `invalidValue`, naming its position, never a word, and the code stays. */
+  confirm(answers: readonly [string, string]): Promise<void>;
 }
 
 /** A pairing answer (RFC 0010, "The pairing answer"): public data with a text form, as an invitation is. It carries the account key sealed to the one device that asked, which only that device opens. */

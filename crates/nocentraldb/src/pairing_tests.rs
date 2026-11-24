@@ -32,7 +32,7 @@ fn answer() -> PairingAnswer {
 #[test]
 fn the_recovery_codes_words_are_the_twelve_words_of_the_list() {
     let core = CoreCode::from_bits([0x7f; 16]);
-    let code = RecoveryCode::new(core.clone());
+    let code = RecoveryCode::new(core.clone(), None);
     let words = code.words();
     assert_eq!(words.join(" "), *core.words());
     let list: Vec<&str> = ncdb_core::recovery::WORD_LIST.lines().collect();
@@ -41,7 +41,7 @@ fn the_recovery_codes_words_are_the_twelve_words_of_the_list() {
 
 #[test]
 fn the_recovery_code_shows_as_redacted() {
-    let code = RecoveryCode::new(CoreCode::from_bits([0x7f; 16]));
+    let code = RecoveryCode::new(CoreCode::from_bits([0x7f; 16]), None);
     assert_eq!(code.to_string(), "RecoveryCode(redacted)");
     assert_eq!(format!("{code:?}"), "RecoveryCode(redacted)");
     assert_eq!(format!("{code:#?}"), "RecoveryCode(redacted)");
@@ -55,7 +55,7 @@ fn the_recovery_code_shows_as_redacted() {
 fn a_code_whose_words_occur_in_the_redacted_text_shows_as_redacted() {
     let mut bits = [0; 16];
     bits[..3].copy_from_slice(&[0x02, 0x65, 0xa0]);
-    let code = RecoveryCode::new(CoreCode::from_bits(bits));
+    let code = RecoveryCode::new(CoreCode::from_bits(bits), None);
     assert_eq!(code.words()[..2], ["act", "code"]);
     assert_eq!(code.to_string(), "RecoveryCode(redacted)");
     assert_eq!(format!("{code:?}"), "RecoveryCode(redacted)");

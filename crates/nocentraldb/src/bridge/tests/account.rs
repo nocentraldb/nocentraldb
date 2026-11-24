@@ -30,8 +30,38 @@ fn open_with(extra: &[(&str, Value)]) -> (Bridge, Value) {
     (bridge, answer)
 }
 
+/// The positions `account.recoveryCode` answers in `challenge`.
+fn challenge(bridge: &mut Bridge) -> [usize; 2] {
+    let answer = ok(bridge, "account.recoveryCode", map(&[]));
+    match field(&answer, "challenge") {
+        Some(Value::Array(positions)) => match positions.as_slice() {
+            [Value::Unsigned(a), Value::Unsigned(b)] => [*a as usize, *b as usize],
+            other => panic!("challenge: {other:?}"),
+        },
+        other => panic!("challenge: {other:?}"),
+    }
+}
+
+/// `account.confirmRecoveryCode`'s arguments: each word at its position.
+fn answers(given: &[(usize, &str)]) -> Value {
+    map(&[(
+        "answers",
+        Value::Array(
+            given
+                .iter()
+                .map(|(position, word)| {
+                    map(&[
+                        ("position", Value::Unsigned(*position as u64)),
+                        ("word", text(word)),
+                    ])
+                })
+                .collect(),
+        ),
+    )])
+}
+
 #[test]
-fn a_new_database_shows_its_recovery_code_until_the_person_confirmed_it() {
+fn a_new_database_shows_its_recovery_code_until_two_of_its_words_come_back() {
     let mut bridge = opened();
     let shown = words(&mut bridge).expect("a code to show");
     assert_eq!(shown.len(), 12);
@@ -40,11 +70,62 @@ fn a_new_database_shows_its_recovery_code_until_the_person_confirmed_it() {
         Some(&shown),
         "shown again until confirmed"
     );
+    let [a, b] = challenge(&mut bridge);
+    assert!(1 <= a && a < b && b <= 12, "{a}, {b}");
+    let typed = shown[b - 1].to_uppercase();
     assert_eq!(
-        ok(&mut bridge, "account.confirmRecoveryCode", map(&[])),
+        ok(
+            &mut bridge,
+            "account.confirmRecoveryCode",
+            answers(&[(a, &shown[a - 1]), (b, &typed)])
+        ),
         Value::Null
     );
     assert_eq!(words(&mut bridge), None);
+}
+
+#[test]
+fn a_wrong_word_is_refused_and_the_code_stays() {
+    let mut bridge = opened();
+    let shown = words(&mut bridge).expect("a code");
+    let [a, b] = challenge(&mut bridge);
+    let wrong = if shown[b - 1] == "zoo" {
+        "abandon"
+    } else {
+        "zoo"
+    };
+    let answer = send(
+        &mut bridge,
+        3,
+        "account.confirmRecoveryCode",
+        answers(&[(a, &shown[a - 1]), (b, wrong)]),
+    );
+    let error = field(&answer, "error").expect("refused");
+    assert_eq!(field(error, "code"), Some(&text("invalidValue")));
+    let message = as_text(field(error, "message").expect("a message"));
+    assert!(message.contains(&format!("word {b}")), "{message}");
+    assert!(!message.contains(wrong) && !message.contains(&shown[b - 1]));
+    assert_eq!(words(&mut bridge), Some(shown));
+}
+
+#[test]
+fn answers_that_are_not_two_words_at_two_positions_are_refused() {
+    let mut bridge = opened();
+    let shown = words(&mut bridge).expect("a code");
+    for given in [
+        answers(&[]),
+        answers(&[(1, &shown[0])]),
+        answers(&[(1, &shown[0]), (1, &shown[0])]),
+        answers(&[(0, "x"), (1, &shown[0])]),
+        answers(&[(1, &shown[0]), (13, "x")]),
+        answers(&[(1, &shown[0]), (2, &shown[1]), (3, &shown[2])]),
+        map(&[]),
+    ] {
+        let answer = send(&mut bridge, 4, "account.confirmRecoveryCode", given);
+        let error = field(&answer, "error").expect("refused");
+        assert_eq!(field(error, "code"), Some(&text("invalidValue")));
+    }
+    assert_eq!(words(&mut bridge), Some(shown), "the code stays");
 }
 
 #[test]
@@ -87,7 +168,11 @@ fn a_database_opened_for_pairing_has_no_recovery_code() {
     assert_eq!(words(&mut bridge), None);
     // Nothing to confirm: another tab may have confirmed it already.
     assert_eq!(
-        ok(&mut bridge, "account.confirmRecoveryCode", map(&[])),
+        ok(
+            &mut bridge,
+            "account.confirmRecoveryCode",
+            answers(&[(1, "abandon"), (2, "ability")])
+        ),
         Value::Null
     );
 }
