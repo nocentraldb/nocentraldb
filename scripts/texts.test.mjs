@@ -1,5 +1,6 @@
 // Tests of scripts/texts.mjs (NOC-329): the repository's texts pass, and
-// each check fails on its mutant.
+// each check fails on its mutant. The texts' files, one per text, and how
+// two new texts merge are tested in texts-files.test.mjs (NOC-512).
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
