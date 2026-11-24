@@ -24,6 +24,11 @@
 # diffed against the report committed at HEAD^1 (exit 3: a removed or
 # changed line). Either finding adds --require-breaking, which the
 # skip-changes label never waives.
+#
+# Test changes (NOC-508): the last step flags a pull request that removes a
+# test, skips one, removes an assertion or changes an expected value, unless
+# one of its commits carries a `Test-change: <reason>` trailer. It runs after
+# a failed step too, so one run reports both, and no label waives it.
 # scripts/changes-workflow.test.mjs asserts these rules by structure, and
 # scripts/changes-workflow-merge-ref.test.mjs runs the steps that pick the
 # baseline and the range against a fixture merge ref.
@@ -102,3 +107,9 @@ jobs:
           SKIP: ${{ contains(github.event.pull_request.labels.*.name, 'skip-changes') && '--skip' || '' }}
           BREAKING: ${{ (steps.semver.outcome == 'failure' || steps.api.outputs.breaking == 'true') && '--require-breaking' || '' }}
         run: node scripts/release/check-fragments.mjs --base HEAD^1 --head HEAD $SKIP $BREAKING
+      - name: Test changes
+        if: ${{ !cancelled() }}
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/check-test-changes.mjs --base "$BASE" --head "$HEAD"
