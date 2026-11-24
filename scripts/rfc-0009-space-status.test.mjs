@@ -2,7 +2,7 @@
 // recommendation) as RFC 0009 records it (NOC-195): the Rust names of the
 // per-space status. `space.status()` returns a `SpaceStatusReport` with
 // `current()` and `subscribe()`; `current()` gives a `SpaceStatus` with the
-// twelve values of "Sync and status" in snake case and their types; the
+// thirteen values of "Sync and status" in snake case and their types; the
 // reasons, the refused changes and the provisional erasures are their own
 // types (the waiting shreds left with the owner's NOC-224: a shred is final
 // when accepted; the provisional erasures came with NOC-230); and the
@@ -40,7 +40,7 @@ test("Sync and status points to the Rust names of the space status", () => {
   assert.match(sync, /`SpaceStatus`/);
 });
 
-test("the Rust SDK names the space status report and its twelve values with their types", () => {
+test("the Rust SDK names the space status report and its thirteen values with their types", () => {
   const text = bullet("- **The space status.**");
   for (const pattern of [
     /`space\.status\(\)` returns a `SpaceStatusReport`/,
@@ -66,7 +66,9 @@ test("the Rust SDK names the space status report and its twelve values with thei
     // NOC-234: performer and notice join the decided fields (pm).
     /`ProvisionalErasure \{ change: ChangeId, age: Duration, can_undo: bool, performer: MemberId, notice: Notice \}`/,
     /`NoticeCode::ErasurePending`/,
-    /twelve values/,
+    // NOC-494: RFC 0010's warning that losing this device loses the space.
+    /`only_member: bool`/,
+    /thirteen values/,
     /another model/,
   ]) {
     assert.match(
@@ -89,6 +91,15 @@ test("the space status names no member by its MemberId, and the forms not taken 
   ]) {
     assert.match(text, pattern, `no option not taken: ${pattern}`);
   }
+});
+
+test("Sync and status names onlyMember, RFC 0010's warning (NOC-494)", () => {
+  const sync = part("sync-and-status");
+  assert.match(sync, /onlyMember \}/);
+  const value = row(sync, "`onlyMember`");
+  assert.ok(value, "space.status has no row for onlyMember");
+  assert.match(value, /0010-accounts\.md#the-recovery-code/);
+  assert.match(value, /a removed member reads false/);
 });
 
 test("Public names lists the space status types", () => {
