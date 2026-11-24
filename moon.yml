@@ -168,11 +168,12 @@ tasks:
       - "/scripts/decisions.mjs"
   texts:
     # Every text a developer reads from the SDKs, the ncdb command line and
-    # the core lives in texts/texts.json (NOC-329): each entry well-formed,
-    # with when it shows, sorted by id and one field per line, so git diff
-    # shows each change; the generated crates/nocentraldb/src/texts/,
-    # crates/ncdb/src/texts.rs, packages/sdk/src/texts.ts and
-    # crates/ncdb-core/src/texts/ equal to the file; no text written in the
+    # the core lives in texts/, one file per text (NOC-329, NOC-512): each
+    # entry well-formed, with when it shows, at its id's path and one field
+    # per line, so git diff shows each change; the generated
+    # crates/nocentraldb/src/texts/, crates/ncdb/src/texts.rs,
+    # packages/sdk/src/texts.ts and crates/ncdb-core/src/texts/ equal to the
+    # files; no text written in the
     # Rust SDK's (its bridge too), the TypeScript SDK's, the command line's
     # or the core's code (T6); and every text used. A
     # TypeScript text's code is one RFC 0009's error table lists (T3).
