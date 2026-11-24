@@ -308,9 +308,8 @@ impl Db {
         placed: Option<Placed>,
     ) -> Result<Db, Error> {
         let place = options.place()?;
-        if let Some(url) = &options.relay
-            && !url.starts_with("wss://")
-            && !url.starts_with("ws://")
+        if let Some(crate::relay::Relay::Fixed(url)) = &options.relay
+            && !crate::relay::is_relay_url(url)
         {
             return Err(Error::new(
                 ErrorCode::InvalidValue,
@@ -425,8 +424,8 @@ impl Db {
         // in a thread, which wasm32 does not start yet.
         #[cfg(not(target_arch = "wasm32"))]
         crate::view_report::start(&inner);
-        if let Some(url) = options.relay {
-            sync::start(&inner, url);
+        if let Some(relay) = options.relay {
+            sync::start(&inner, relay);
         }
         Ok(Db { inner })
     }

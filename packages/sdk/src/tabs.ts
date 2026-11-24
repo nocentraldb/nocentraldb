@@ -129,6 +129,8 @@ export const tabCore = async (
   let worker: Core | undefined;
   let release: (() => void) | undefined;
   let ownOpen: Request | undefined;
+  // The URL this tab's relay function last gave its worker (NOC-496).
+  let ownRelay: string | undefined;
   // Whether this tab's worker opened the database, so it takes calls now.
   let isOpen = false;
   let opened: () => void = () => {};
@@ -184,11 +186,13 @@ export const tabCore = async (
     post({ kind: "event", bytes });
   };
 
-  /** The relay this tab opened with, which serves every tab while it owns the database. */
-  const relayOfOwner = (): { relay?: Cbor } =>
-    typeof ownOpen?.args.relay === "string"
-      ? { relay: ownOpen.args.relay }
-      : {};
+  /** The relay this tab opened with, or the one its relay function last gave, which serves every tab while it owns the database. */
+  const relayOfOwner = (): { relay?: Cbor } => {
+    if (typeof ownOpen?.args.relay === "string") {
+      return { relay: ownOpen.args.relay };
+    }
+    return ownRelay === undefined ? {} : { relay: ownRelay };
+  };
 
   /** `call`, counted among the calls the worker is answering until it settles. */
   const track = <T>(call: Promise<T>): Promise<T> => {
@@ -491,6 +495,12 @@ export const tabCore = async (
         openGiven();
       }
       if (worker !== undefined && !yielding) {
+        if (
+          request.call === "relay.answer" &&
+          typeof request.args.relay === "string"
+        ) {
+          ownRelay = request.args.relay;
+        }
         const answer = await track(worker.call(bytes));
         if (request.call === "open") {
           noteSync(answer);

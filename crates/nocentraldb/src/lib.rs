@@ -59,6 +59,7 @@ mod options;
 mod pairing;
 mod personal;
 mod query;
+mod relay;
 mod space;
 mod status;
 mod subscribe;
