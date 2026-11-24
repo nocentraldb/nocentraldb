@@ -1,0 +1,19 @@
+[package]
+name = "ncdb-embedder-example"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "An example of an app's own tests against the test relay of ncdb-relay-server, through the public Rust SDK only (NOC-507). Not published."
+
+# Nothing at runtime: the crate is its tests. They use what an app that
+# embeds the Rust SDK would add to its own dev-dependencies, and nothing
+# else of NoCentralDB.
+[dev-dependencies]
+nocentraldb.workspace = true
+ncdb-relay-server.workspace = true
+# The test waits for the SDK's futures and streams. The versions the SDK
+# pins.
+tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "macros", "time"] }
+futures-core = { version = "=0.3.34", default-features = false, features = ["std"] }
