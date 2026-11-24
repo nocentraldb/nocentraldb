@@ -93,6 +93,31 @@ fn a_warm_relay_reads_only_the_control_changes_it_has_not_read() {
     );
 }
 
+#[test]
+fn a_put_after_a_warm_push_does_not_read_the_pushed_change_again() {
+    let dir = TempDir::new();
+    let relay = Relay::new(Counting::new(dir.store()), config());
+    let mut space = Space::new(CREATOR);
+    let genesis = space.genesis.clone();
+    let writer = space.add(CREATOR, WRITER, Role::Writer, &[&genesis]);
+    let pushed = push_with(&relay, CREATOR, &[&genesis, &writer]);
+    assert!(pushed.iter().all(|p| matches!(p, Pushed::Accepted(_))));
+    let change = entry(&mut space, 0, &[&writer]);
+    let frame = change.bytes().len();
+    let pushed = push_with(&relay, WRITER, &[&change]);
+    assert!(matches!(pushed[..], [Pushed::Accepted(_)]), "{pushed:?}");
+    relay.store().take_bytes();
+    block_on(relay.put_person_keys(id(WRITER), space.space, vec![record(&space, 0)]))
+        .expect("the relay stores the record");
+    let (bytes, _) = relay.store().take_bytes();
+    // The push kept the change it appended, so the put reads only that
+    // entry, to see that it is still there, and resolves nothing.
+    assert!(
+        bytes <= frame + 64,
+        "the put read {bytes} frame bytes, for a pushed frame of {frame}"
+    );
+}
+
 /// The person-key entry of the `n`th of many persons, by the writer, after
 /// `head`: person ids here are numbers, so a space can hold more than 255.
 fn many(space: &mut Space, n: u32, head: &Change) -> Change {
