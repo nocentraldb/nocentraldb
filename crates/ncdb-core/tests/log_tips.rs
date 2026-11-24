@@ -52,9 +52,12 @@ impl Copy {
     /// The tips equal a full recount, and reading them opened no change.
     fn assert_tips(&mut self) {
         self.checks.take_opened();
-        let tips = of(self.log.tips(&self.checks));
+        let tips = of(self.log.tips(&self.checks, &mut ncdb_core::log::NoFrames));
         assert_eq!(self.checks.take_opened(), 0, "the tips opened a change");
-        assert_eq!(tips, recount(&self.log, &self.checks));
+        assert_eq!(
+            tips,
+            recount(&self.log, &self.checks, &mut ncdb_core::log::NoFrames)
+        );
     }
 }
 
@@ -95,7 +98,11 @@ fn the_tips_follow_revocations_that_un_fold_and_fold_again() {
         }
     }
     copy.assert_tips();
-    let before = copy.log.tips(&copy.checks).heads().clone();
+    let before = copy
+        .log
+        .tips(&copy.checks, &mut ncdb_core::log::NoFrames)
+        .heads()
+        .clone();
 
     let mut un_folded = false;
     for revocation in &pool.revocations {
@@ -107,14 +114,19 @@ fn the_tips_follow_revocations_that_un_fold_and_fold_again() {
     }
 
     assert!(un_folded, "a revocation un-folded a change");
-    assert_ne!(copy.log.tips(&copy.checks).heads(), &before);
+    assert_ne!(
+        copy.log
+            .tips(&copy.checks, &mut ncdb_core::log::NoFrames)
+            .heads(),
+        &before
+    );
 }
 
 #[test]
 fn an_empty_log_has_no_heads_and_starts_each_author_at_sequence_one() {
     let mut copy = Copy::new();
 
-    let tips = copy.log.tips(&copy.checks);
+    let tips = copy.log.tips(&copy.checks, &mut ncdb_core::log::NoFrames);
 
     assert!(tips.heads().is_empty());
     assert!(tips.control_heads().is_empty());

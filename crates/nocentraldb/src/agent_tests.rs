@@ -9,7 +9,6 @@
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
-use ncdb_core::log::Position;
 use ncdb_core::membership::{ControlBody, Entry, MemberKind};
 
 use crate::{Db, OpenOptions};
@@ -29,7 +28,7 @@ fn creator_kind(options: OpenOptions) -> MemberKind {
     };
     let inner = db.lock();
     let log = inner.view.log(space.id().0).unwrap();
-    let (_, genesis) = log.after(Position::START).next().unwrap();
+    let (genesis, _) = log.controls().next().unwrap();
     let body = ControlBody::decode(&genesis.header().payload).unwrap();
     let Entry::Genesis(genesis) = body.entry else {
         panic!("the first change of a space is its genesis");

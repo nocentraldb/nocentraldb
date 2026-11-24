@@ -63,8 +63,8 @@ pub(crate) fn ready(
         return (records, Vec::new());
     };
     let entries: Vec<(Announced, ncdb_core::ids::ChangeId)> = log
-        .after(ncdb_core::log::Position::START)
-        .filter_map(|(_, change)| {
+        .controls()
+        .filter_map(|(change, _)| {
             let body = ncdb_core::membership::ControlBody::decode(&change.header().payload).ok()?;
             match body.entry {
                 ncdb_core::membership::Entry::PersonKey(entry) => Some((

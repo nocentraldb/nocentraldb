@@ -24,7 +24,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::change::{Change, Kind};
+use crate::change::{Header, Kind};
 use crate::clock::Hlc;
 use crate::ids::{ChangeId, MemberId};
 use crate::membership::ControlBody;
@@ -127,18 +127,16 @@ impl Tips {
     }
 
     /// A change was appended to the log.
-    pub(crate) fn appended(&mut self, change: &Change) {
-        let header = change.header();
+    pub(crate) fn appended(&mut self, header: &Header) {
         let highest = self.sequences.entry(header.author).or_default();
         *highest = (*highest).max(header.sequence);
     }
 
     /// A change of the log was folded. A sealed change's dependencies and
     /// clock come from `opened`, when the checks opened it; otherwise it
-    /// waits in `unread` until [`Tips::read`].
-    pub(crate) fn folded(&mut self, change: &Change, opened: Option<Opened>) {
-        let id = change.id();
-        let header = change.header();
+    /// waits in `unread` until [`Tips::read`]. A control change's header
+    /// carries its payload, its control body.
+    pub(crate) fn folded(&mut self, id: ChangeId, header: &Header, opened: Option<Opened>) {
         if header.kind == Kind::CONTROL {
             let dependencies = ControlBody::decode(&header.payload)
                 .map(|body| body.dependencies)

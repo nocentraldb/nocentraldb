@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 use rusqlite::Connection;
 
 use super::fold::SqlFold;
+use super::log_table::StoredFrames;
 use super::model::Model;
 use super::{Error, log_table, schema};
 use crate::ids::SpaceId;
@@ -38,14 +39,20 @@ pub(super) fn run<C: Checks>(
     for (space, old) in logs {
         let mut log = Log::new(*space);
         let mut checks = checks(*space);
-        for (_, change) in old.after(Position::START) {
+        let mut frames = StoredFrames::new(conn);
+        for (_, change) in old.after(Position::START, &mut frames) {
+            let change = change.into_owned();
+            let id = change.id();
             let mut fold = SqlFold::new(conn, model, *space).for_space(checks.space_model_id());
-            let received = log.receive(change.bytes(), &mut checks, &mut fold);
+            let received = log.receive_change(change, &mut checks, &mut fold);
             fold.finish()?;
             received.map_err(Error::Receive)?;
+            // The `log` table keeps the frame (NOC-452).
+            log.release(id);
         }
-        for (_, change) in log.after(Position::START) {
-            log_table::update(conn, &log, change.id())?;
+        frames.finish()?;
+        for id in log.ids() {
+            log_table::update(conn, &log, id)?;
         }
     }
     Ok(())

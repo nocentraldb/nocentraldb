@@ -56,7 +56,11 @@ fn status_reads(m: &Member) -> Duration {
             for _ in 0..50 {
                 assert_eq!(m.log.refused_by(member(FOUNDER)).count(), 1);
                 assert!(m.log.equivocations().is_empty());
-                assert_eq!(m.log.newest_model(&m.control, MODEL), None);
+                assert_eq!(
+                    m.log
+                        .newest_model(&m.control, MODEL, &mut ncdb_core::log::NoFrames),
+                    None
+                );
             }
             start.elapsed()
         })

@@ -12,11 +12,13 @@
 //! state is a function of its set of operations (RFC 0004), so folding the
 //! parked operations late gives the view a full fold would give.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::Connection;
 
 use super::fold::SqlFold;
+use super::log_table::StoredFrames;
 use super::model::{Field, Index, Model};
 use super::{Error, log_table, schema};
 use crate::field_op::Origin;
@@ -150,7 +152,13 @@ pub(super) fn fold_parked<C: Checks>(
         let controls: Vec<_> = log.folded_controls().cloned().collect();
         space_checks.add_controls(&controls);
         let mut revived = BTreeSet::new();
-        for (change, parked) in waiting {
+        for (id, parked) in waiting {
+            let mut frames = StoredFrames::new(conn);
+            let change = log.change(id, &mut frames).map(Cow::into_owned);
+            frames.finish()?;
+            let Some(change) = change else {
+                continue;
+            };
             // A change that no longer opens keeps its parked operations,
             // as the fold before left them.
             let Ok(payload) = space_checks.open_folded(&change) else {

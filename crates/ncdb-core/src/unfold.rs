@@ -20,7 +20,14 @@
 //! they touch. RFC 0006 allows a bookkeeping table from object and field to
 //! operations, to make this a lookup; un-folding is rare, and the scan
 //! needs no table that could disagree with the log.
+//!
+//! A log keeps a sealed change's bytes only until its store keeps the
+//! frame (NOC-452), so each pass here reads the changes it needs through
+//! the fold, one at a time. Un-folding reads only the changes whose header
+//! [`Checks::may_unfold`] names, since every control change that passes
+//! starts it; a scan of the changes still folded reads each.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::change::{Change, Operation};
@@ -56,29 +63,36 @@ impl Target {
 /// control state no longer admits, or that no longer opens, and folds what
 /// they touched again from the changes still folded.
 pub(crate) fn unfold(log: &mut Log, checks: &impl Checks, fold: &mut impl Fold) {
-    let failing: Vec<_> = log
-        .folded_sealed()
-        .into_iter()
-        .filter_map(|(change, parked)| {
-            let state = if !checks.is_member(&change) {
-                State::Rejected(RejectReason::NotMember)
-            } else {
-                checks.still_opens(&change).err()?.into()
-            };
-            Some((change, parked, state))
-        })
-        .collect();
+    let mut failing = Vec::new();
+    for (id, parked) in log.folded_sealed() {
+        let header = log.header(id).expect("the log holds the change");
+        if !checks.may_unfold(header) {
+            continue;
+        }
+        let Some(change) = log.change(id, fold) else {
+            continue;
+        };
+        let state = if !checks.is_member(&change) {
+            State::Rejected(RejectReason::NotMember)
+        } else {
+            match checks.still_opens(&change) {
+                Ok(()) => continue,
+                Err(stop) => stop.into(),
+            }
+        };
+        let targets: BTreeSet<Target> = folded_operations(&change, &parked, checks)
+            .iter()
+            .map(|(_, operation)| Target::of(operation))
+            .collect();
+        failing.push((id, state, targets));
+    }
     if failing.is_empty() {
         return;
     }
     let mut touched = BTreeSet::new();
-    for (change, parked, state) in &failing {
-        log.set_state(change.id(), state.clone());
-        touched.extend(
-            folded_operations(change, parked, checks)
-                .iter()
-                .map(|(_, operation)| Target::of(operation)),
-        );
+    for (id, state, targets) in failing {
+        log.set_state(id, state);
+        touched.extend(targets);
     }
     for target in &touched {
         match target {
@@ -88,7 +102,10 @@ pub(crate) fn unfold(log: &mut Log, checks: &impl Checks, fold: &mut impl Fold) 
             Target::Object(object) => fold.clear_object(*object),
         }
     }
-    for (change, parked) in log.folded_sealed() {
+    for (id, parked) in log.folded_sealed() {
+        let Some(change) = log.change(id, fold).map(Cow::into_owned) else {
+            continue;
+        };
         for (origin, operation) in folded_operations(&change, &parked, checks) {
             if touched.contains(&Target::of(&operation)) {
                 // It folded before and the model has not changed, so it
@@ -112,7 +129,10 @@ pub(crate) fn fold_revived(log: &mut Log, checks: &impl Checks, fold: &mut impl 
         return;
     }
     let mut fields = BTreeSet::new();
-    for (change, _) in log.folded_sealed() {
+    for (id, _) in log.folded_sealed() {
+        let Some(change) = log.change(id, fold) else {
+            continue;
+        };
         let Ok(payload) = checks.open_folded(&change) else {
             continue;
         };
@@ -153,7 +173,10 @@ fn refold(log: &mut Log, checks: &impl Checks, fold: &mut impl Fold, target: &Ta
     };
     let mut operations = Vec::new();
     let mut parked_before = BTreeMap::new();
-    for (change, parked) in log.folded_sealed() {
+    for (id, parked) in log.folded_sealed() {
+        let Some(change) = log.change(id, fold) else {
+            continue;
+        };
         let Ok(payload) = checks.open_folded(&change) else {
             continue;
         };

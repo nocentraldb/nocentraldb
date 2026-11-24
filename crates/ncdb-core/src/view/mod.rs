@@ -7,7 +7,9 @@
 //! its collections, in one SQLite transaction ([`View::receive`]): after a
 //! crash a change is in both the log and the view or in neither. The view
 //! keeps each space's [`Log`] in memory too, read back from the `log` table
-//! when it opens, so the steps of [`crate::receive`] run unchanged.
+//! when it opens, so the steps of [`crate::receive`] run unchanged. Each
+//! log releases a sealed change's bytes once the `log` table holds its
+//! frame, and reads it back from there when a pass needs it (NOC-452).
 //!
 //! The same code runs natively and on wasm32 (RFC 0006, "The same fold
 //! code on every target"): only the SQLite under `rusqlite` differs.
@@ -22,6 +24,7 @@ mod fold;
 mod from_lock;
 mod joined;
 mod log_table;
+pub use log_table::StoredFrames;
 mod migrate;
 pub mod model;
 mod pending_links;
@@ -613,14 +616,25 @@ impl View {
     /// it, so after the view opens, the first read opens each folded
     /// sealed change once with `checks`; see [`Log::tips`].
     pub fn tips(&mut self, space: SpaceId, checks: &impl Checks) -> Option<&Tips> {
-        Some(self.logs.get_mut(&space)?.tips(checks))
+        let mut frames = StoredFrames::new(&self.conn);
+        Some(self.logs.get_mut(&space)?.tips(checks, &mut frames))
+    }
+
+    /// The `log` table as the store of the frames the view's logs released
+    /// (NOC-452), for a pass over a log's sealed changes, such as
+    /// [`Log::after`] or [`crate::moves::later_edits`].
+    pub fn stored_frames(&self) -> StoredFrames<'_> {
+        StoredFrames::new(&self.conn)
     }
 
     /// The newest model version the parked data of `space` needs, of the
     /// view's own model (RFC 0002, "What the model version is for"): see
     /// [`Log::newest_model`]. `checks` open the changes it reads.
     pub fn newest_model(&self, space: SpaceId, checks: &impl Checks) -> Option<u64> {
-        self.logs.get(&space)?.newest_model(checks, self.model.id)
+        let mut frames = StoredFrames::new(&self.conn);
+        self.logs
+            .get(&space)?
+            .newest_model(checks, self.model.id, &mut frames)
     }
 
     /// How many changes of `space` are parked and rejected, and how many
@@ -675,6 +689,8 @@ fn append(
     let appended = appended.map_err(Error::Receive)?;
     if let Appended::New(_) = appended {
         log_table::insert(tx, log, id, written_at)?;
+        // The table keeps the frame now (NOC-452).
+        log.release(id);
         if let Some(at) = written_at {
             log.record_written_at(id, at);
         }

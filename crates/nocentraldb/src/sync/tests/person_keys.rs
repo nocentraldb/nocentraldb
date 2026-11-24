@@ -184,7 +184,10 @@ fn waiting_puts(db: &Db, space: CoreSpaceId) -> String {
         .unwrap_or_default();
     let log = inner.view.log(space).expect("the space's log");
     let entries: Vec<(u64, bool)> = log
-        .after(ncdb_core::log::Position::START)
+        .after(
+            ncdb_core::log::Position::START,
+            &mut inner.view.stored_frames(),
+        )
         .filter_map(|(_, change)| {
             let body = ControlBody::decode(&change.header().payload).ok()?;
             let Entry::PersonKey(entry) = body.entry else {
@@ -384,7 +387,10 @@ pub(super) fn acknowledgements(db: &Db, space: CoreSpaceId) -> Vec<(CoreChangeId
     let me = inner.member.key().id();
     let log = inner.view.log(space).expect("the space's log");
     let mut own: Vec<_> = log
-        .after(ncdb_core::log::Position::START)
+        .after(
+            ncdb_core::log::Position::START,
+            &mut inner.view.stored_frames(),
+        )
         .map(|(_, change)| change)
         .filter(|change| change.header().author == me)
         .filter_map(|change| {

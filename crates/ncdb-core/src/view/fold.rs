@@ -21,9 +21,9 @@ use super::state::{self, ObjectState};
 use super::trace::out_of_indexes;
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::change::Operation;
+use crate::change::{Change, Operation};
 use crate::field_op::{Encoding, Origin};
-use crate::ids::{ObjectId, SpaceId};
+use crate::ids::{ChangeId, ObjectId, SpaceId};
 use crate::keys::PersonKey;
 use crate::log::OperationParkReason;
 use crate::object::ObjectOperation;
@@ -441,6 +441,19 @@ fn apply<T: Encoding>(
 }
 
 impl Fold for SqlFold<'_> {
+    /// From the `log` table, in the transaction the fold writes in, so a
+    /// change appended earlier in it is found too. A frame the table does
+    /// not hold or cannot decode fails the transaction.
+    fn stored(&mut self, space: SpaceId, id: ChangeId) -> Option<Change> {
+        match super::log_table::stored(self.conn, space, id) {
+            Ok(change) => Some(change),
+            Err(error) => {
+                self.keep(Err(error));
+                None
+            }
+        }
+    }
+
     fn model_id(&self) -> [u8; 16] {
         match (self.shipped, self.model.reserved) {
             (true, Some(reserved)) => reserved.id,

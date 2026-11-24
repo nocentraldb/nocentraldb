@@ -23,6 +23,7 @@ use std::collections::BTreeMap;
 use rusqlite::Connection;
 
 use super::fold::SqlFold;
+use super::log_table::StoredFrames;
 use super::model::Model;
 use super::{Error, log_table, query, schema};
 use crate::ids::SpaceId;
@@ -108,14 +109,20 @@ impl Rebuild {
             });
             while budget > 0 && staged.taken < live.len() {
                 let position = Position(staged.taken as u64 + 1);
-                let change = live.get(position).expect("the log holds its positions");
+                let mut frames = StoredFrames::new(conn);
+                let change = live.change_at(position, &mut frames);
+                frames.finish()?;
+                let change = change.expect("the log holds its positions").into_owned();
+                let id = change.id();
                 let mut fold = SqlFold::staged(conn, &self.model, *space)
                     .for_space(staged.checks.space_model_id());
                 let received = staged
                     .log
-                    .receive(change.bytes(), &mut staged.checks, &mut fold);
+                    .receive_change(change, &mut staged.checks, &mut fold);
                 fold.finish()?;
                 received.map_err(Error::Receive)?;
+                // The `log` table keeps the frame (NOC-452).
+                staged.log.release(id);
                 staged.taken += 1;
                 budget -= 1;
             }
@@ -136,8 +143,8 @@ impl Rebuild {
     pub(super) fn swap(&self, conn: &Connection) -> Result<(), Error> {
         schema::swap_staging(conn, &self.model)?;
         for staged in self.spaces.values() {
-            for (_, change) in staged.log.after(Position::START) {
-                log_table::update(conn, &staged.log, change.id())?;
+            for id in staged.log.ids() {
+                log_table::update(conn, &staged.log, id)?;
             }
         }
         query::check(conn, &self.model.indexes)
