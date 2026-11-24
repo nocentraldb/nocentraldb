@@ -36,6 +36,7 @@ What the relay has confirmed is never lost with a browser copy: the relay holds 
 | The user clears only the cache in the browser's settings, keeping site data | Unknown. | unknown: All browsers · Survives clearing the cache in the browser's settings, keeping site data |
 | Storage runs low, and the copy is best effort | Everything the site stored, at once: the copy, its unconfirmed changes and the member key. Browsers delete the least recently used site first. | documented: All browsers · Eviction under storage pressure; documented: All browsers · What eviction deletes |
 | Safari, after seven days of use without the user interacting with your site | IndexedDB, so the member key, and with it the unconfirmed changes, which this browser can no longer send. Whether the SQLite copy itself is deleted too is unknown. | documented: Safari (macOS) · Seven-day deletion of script-writable storage; documented: Safari (iOS) · Seven-day deletion of script-writable storage; unknown: Safari (macOS) · Seven-day deletion reaches SQLite on OPFS; unknown: Safari (iOS) · Seven-day deletion reaches SQLite on OPFS |
+| Chromium private window: ten minutes pass with no database of your app open | The copy and the changes the relay has not confirmed. The member key in IndexedDB stays, so the browser is still the same member. `nc.open` then fails with `storageLost` (see [Private windows](#private-windows)). | measured: Chromium (Playwright) · Private window: OPFS without a file operation (off-the-record context); measured: Chromium (Playwright) · Private window: after eleven minutes without a file operation (off-the-record context) |
 | A private window closes | Everything the site stored in it. | measured: Chromium (Playwright) · Private window: after close (off-the-record context); measured: Firefox (Playwright) · Private window: after close (private browsing mode); measured: WebKit (Playwright) · Private window: after close (ephemeral context); measured: Firefox · Private window; documented: All browsers · Private browsing |
 
 ## How to reduce the risk
@@ -53,11 +54,15 @@ Your app does not open in a private window of Firefox or Safari, and in Chromium
 
 - **Firefox and WebKit** offer no OPFS in a private window: opening it fails, while IndexedDB works (measured: Firefox (Playwright) · Private window: storage (private browsing mode); measured: WebKit (Playwright) · Private window: storage (ephemeral context)). The SDK does not open the database there: `nc.open` fails with `storageUnavailable` ([RFC 0006, "Durability of a browser copy"](rfc/0006-local-view.md#durability-of-a-browser-copy)). A copy in memory would live only in the tab that owns the database, and go with that tab when it closes or is hidden, together with the changes the relay had not confirmed.
 - **Chromium** offers OPFS in a private window and deletes it when the window closes (measured: Chromium (Playwright) · Private window: storage (off-the-record context); measured: Chromium (Playwright) · Private window: after close (off-the-record context)). The SDK cannot tell such a window from a normal one, so it reports `best-effort` there.
+- **Chromium drops a private window's OPFS after about ten minutes without a file operation**, while the window stays open: in Chromium 157, OPFS was kept after 450 s of quiet and gone after 600 s, and IndexedDB, with the member key, stayed (measured: Chromium (Playwright) · Private window: OPFS without a file operation (off-the-record context); measured: Chromium (Playwright) · Private window: after eleven minutes without a file operation (off-the-record context)).
+  - **While a database is open**, the SDK's worker touches OPFS once a minute, so the copy stays (NOC-444).
+  - **Once your app has closed every database**, nothing touches OPFS, and after ten minutes the copy is gone, with the changes the relay had not confirmed. The SDK records each database it opened in IndexedDB too, so the next `nc.open` notices: it fails with `storageLost` instead of opening an empty copy in silence. Tell your users with the storage-lost text below. Then open with `nc.open({ model, lock, ifStorageLost: "open-empty" })`: the database starts empty under the same member key, and with a relay it fetches again what the relay holds ([RFC 0006, "What the SDK reports"](rfc/0006-local-view.md#what-the-sdk-reports)).
+  - **Playwright's `browser.newContext()` is such a private window.** A test suite that runs longer than ten minutes, or closes a database and opens it again much later, loses its copy there. Use `launchPersistentContext` for such tests.
 - **IndexedDB**, where the member key lives, survives a reload within one open private session in all three engines (measured: Chromium (Playwright) · Private window: survives a reload (off-the-record context); measured: Firefox (Playwright) · Private window: survives a reload (private browsing mode); measured: WebKit (Playwright) · Private window: survives a reload (ephemeral context)). So in Chromium's private window, where the SDK opens, a reload is not a new device.
 - **Firefox** as a branded browser has no OPFS in a private window either, and what IndexedDB held was gone once the private window closed (measured: Firefox · Private window). Whether IndexedDB lasts across a reload in branded Firefox, Safari, Chrome and Edge has not been checked by hand; only Playwright's builds measured it.
 - **Safari, Chrome and Edge** as branded browsers: unknown (unknown: Safari (macOS) · Private window; unknown: Safari (iOS) · Private window; unknown: Chrome, Edge (desktop) · Private window (Incognito, InPrivate)).
 
-Each private session of Chromium is a new device: its member key is created in the session, kept across reloads in it, and deleted with it (measured: Chromium (Playwright) · Private window: after close (off-the-record context)), so the person pairs it again every time. When `nc.open` fails with `storageUnavailable`, tell your users with the private-window text below.
+Each private session of Chromium is a new device: its member key is created in the session, kept across reloads in it, and deleted with it (measured: Chromium (Playwright) · Private window: after close (off-the-record context)), so the person pairs it again every time. When `nc.open` fails with `storageUnavailable`, tell your users with the private-window text below; when it fails with `storageLost`, with the storage-lost text.
 
 ## A write too large for the tab's memory
 
@@ -128,4 +133,12 @@ Show it while `waitingForTab` is true, and hide it when it turns false.
 
 ```text
 Another tab of {appName} is open in this browser, and {appName} can't save here until that tab runs again. Your changes here wait and are saved then. Switch to the other tab for a moment, or close it. Until then, keep this tab open.
+```
+
+### Storage lost
+
+Show it when `nc.open` fails with `storageLost`, before you open again with `ifStorageLost: "open-empty"`.
+
+```text
+This browser deleted what {appName} kept here, as private windows do after some minutes with {appName} closed. Changes that reached the server come back from there. Changes not yet sent are lost. To keep your data in this browser, use {appName} in a normal window.
 ```

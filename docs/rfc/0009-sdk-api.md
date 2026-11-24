@@ -74,6 +74,7 @@ const db = await nc.open({
   relay: "wss://relay.example.com",   // optional; without it, the database stays local
   name: "default",                    // in a browser, which database; "default" if left out
   persistentStorage: "on-open",       // RFC 0006; or "on-request"
+  ifStorageLost: "refuse",            // RFC 0006; or "open-empty"
   warnings: true,                     // RFC 0006
 });
 
@@ -98,7 +99,7 @@ await db.close();
 
 **Spaces of another model.** A space records the `model.id` it was created with in its genesis ([RFC 0008, "What it names"](0008-membership.md#what-it-names)). `nc.open` does not fail because one space belongs to another model. That space's changes are not folded, nothing is written into it, and `db.spaces.get` on it throws `spaceOfAnotherModel`, an error that names both model ids, as NOC-57 builds it. `db.spaces.list()` shows the space with that state, so an app can tell its user which spaces it cannot open.
 
-**Persistent storage the browser has not granted** is not an error: a browser copy opens as `best-effort`, and `db.durability` reports it ([RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)). **No OPFS at all**, as in a private window of Firefox or Safari, is: `nc.open` fails with `storageUnavailable`, since the copy could live only in one tab's memory (2026-11-16, NOC-347). A full disk or quota fails a write with `storageFull`, never silently ([RFC 0006, "The browser"](0006-local-view.md#the-browser)).
+**Persistent storage the browser has not granted** is not an error: a browser copy opens as `best-effort`, and `db.durability` reports it ([RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)). **No OPFS at all**, as in a private window of Firefox or Safari, is: `nc.open` fails with `storageUnavailable`, since the copy could live only in one tab's memory (2026-11-16, NOC-347). A full disk or quota fails a write with `storageFull`, never silently ([RFC 0006, "The browser"](0006-local-view.md#the-browser)). **A database whose files the browser dropped** while IndexedDB kept the SDK's record of it, as Chromium does with a private window's OPFS after about ten minutes with no database open, is refused with `storageLost`, until the app opens with `ifStorageLost: "open-empty"`, which starts it empty under the same member key (NOC-445; [RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)).
 
 **The relay URL in a browser** is `wss://`, except for `ws://localhost` while developing: a page served over `https://` cannot open a `ws://` connection, and the browser refuses it. The SDK adds no rule of its own; a `ws://` URL the browser refuses leaves the database offline.
 
@@ -603,6 +604,7 @@ The SDK throws one error class, `nc.Error`, with a string `code`, the ids it con
 | `storageFailed` | writes, reads, `nc.open`, `Db::open` | Any other storage failure, such as a damaged database file, or an existing database whose key file or keystore entry is gone or does not read as a key record ([The Rust SDK](#the-rust-sdk)). Freeing space would not help, so it is not `storageFull`, at the cost of one more code. In a browser tab, also a write that the owning tab took and never answered because its tab ended without giving the database up, as when it crashed: the message says the write may or may not have run, and the SDK does not send it again, which could apply it twice; the app reads and decides (NOC-177; [RFC 0006, "The browser"](0006-local-view.md#the-browser)). A new error code for that case, such as `ownerClosed`, was not taken. |
 | `keyStoreUnavailable` | `nc.open` in Node.js, `Db::open` | No platform keystore is reachable and the app named no key file. The message names the key-file option, `keyFile` or `key_file` ([Open and close](#open-and-close)). |
 | `storageUnavailable` | `nc.open` in a browser | The browser window has no OPFS, as a private window of Firefox or Safari: the database would live only in one tab's memory, so it does not open, and the app tells its user to use a normal window (2026-11-16, NOC-347; [RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)). |
+| `storageLost` | `nc.open` in a browser | This browser had the database open before, and the browser has since dropped its files on OPFS while IndexedDB kept the SDK's record of it, as Chromium does with a private window's OPFS after ten minutes with no database open. Nothing is opened; the app tells its user, and opens with `ifStorageLost: "open-empty"` to start an empty copy (NOC-445; [RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)). TypeScript only: the Rust SDK opens no browser database. |
 | `closed` | every call | The database was closed. |
 | `notFound` | `space.update`, `delete`, `restore`, `db.spaces.get`, writes, queries, `members.remove`, `members.setRole` | The copy holds no such object or space, or a call names a collection, field or index the lock does not have. TypeScript catches the latter when it compiles; Rust, which names them by text, cannot. A membership call is `notFound` when its member id is not a current member of the space, because it never was or was removed already; the SDK writes no removal the fold would take as a no-op (NOC-169). |
 | `personKeyNotHeld` | writes | A personal field's person has a person key this device does not hold yet; the app retries once sync has fetched it (2026-11-12, NOC-255; [Personal fields](#personal-fields)). |
@@ -776,6 +778,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 | `storageFull`, `storageFailed`, `closed`, `notFound`, `cursorOfAnotherModel` | Errors of the view | [RFC 0006, "Ordered pages"](0006-local-view.md#ordered-pages) |
 | `keyStoreUnavailable` | Error of opening: no platform keystore and no key file | [RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) |
 | `storageUnavailable` | Error of opening in a browser window without OPFS | [RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports) |
+| `storageLost` | Error of opening a browser database whose files the browser dropped | [RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports) |
 | `invalidValue`, `deprecated`, `noPerson`, `personKeyNotHeld` | Errors of a write | [RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model) |
 | `moved` | Error of a write to a moved object | [RFC 0016, "The SDK call and its notice"](0016-moving-an-object.md#the-sdk-call-and-its-notice) |
 | `unknownType` | Error of a write to a plugin field whose type is not registered | [RFC 0011, "A type that is not registered"](0011-plugin-field-types.md#a-type-that-is-not-registered) |
@@ -892,6 +895,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - **2026-11-23 · Any member may lower its own role with `members.setRole`; only an admin changes another member's role or removes another member.** ([decision](../../factory/decisions/2026-11-23-NOC-453-any-member-may-lower-its-own-role.md))
 - **2026-11-22 · Moving an object: `space.move` (`move_objects` in Rust), `space.moves`, the notice `objectMoved`, the error `moved` and the link status `"moved"`.** (NOC-447)
 - **2026-11-23 · `space.moves` computes later edits from the old space's log when the app asks.** (NOC-475)
+- **2026-11-23 · A browser database whose files the browser dropped is refused with `storageLost`, until the app opens it with `ifStorageLost: "open-empty"`.** ([decision](../../factory/decisions/2026-11-23-NOC-445-a-browser-database-whose-files-were-dropped-is-refused-with-storagelost.md))
 
 ## History
 
@@ -948,3 +952,4 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - 2026-11-23 · RFC 0009 gains RFC 0016's move: space.move, space.moves, the notice objectMoved, the error moved and the link status moved (NOC-474, #474)
 - 2026-11-23 · Both SDKs gain the `admission` option and the account's identity, as RFC 0015 decides (NOC-469)
 - 2026-11-23 · Inline attributions keep the date and the ticket and name nobody who decided; the decision log records it (NOC-481, #475)
+- 2026-11-23 · nc.open takes ifStorageLost and refuses a browser database whose files the browser dropped with storageLost (NOC-445)

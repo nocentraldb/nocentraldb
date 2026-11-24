@@ -2604,6 +2604,13 @@
       "when": "ncdb model build, on a model whose nc.set is of something other than a basic value."
     },
     {
+      "id": "ts.storageLost",
+      "kind": "ts",
+      "code": "storageLost",
+      "text": "the browser dropped the storage of the database {name}, which this browser had open before, as Chromium does with a private window's storage after ten minutes with no database open; its changes the relay had not confirmed are lost. Tell the user, then open with ifStorageLost: \"open-empty\" to start an empty copy",
+      "when": "nc.open in a browser, when this browser context had the database open before and its files on OPFS are gone while IndexedDB kept the record, as after Chromium drops a private window's OPFS (NOC-445)."
+    },
+    {
       "id": "ts.workerFailed",
       "kind": "ts",
       "code": "storageFailed",
