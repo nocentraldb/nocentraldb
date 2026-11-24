@@ -413,3 +413,4 @@ It builds a member on the Rust SDK of [RFC 0009](0009-sdk-api.md) and pairs it a
 ## History
 
 - 2026-11-23 · First published (NOC-485)
+- 2026-11-24 · The names of declared tools are decided: the lock at format 2, `nc.tool`, `nc.param` and `nc.op`, tool names as written, and `--generic-tools` with `list_spaces` always listed (NOC-504, #487)
