@@ -13,7 +13,7 @@ use ncdb_core::membership::{
 use ncdb_core::seal;
 
 use crate::error::ErrorCode;
-use crate::known::Memory;
+use crate::known::{Known, Memory};
 use crate::large::PushFrame;
 use crate::record;
 use crate::store::{
@@ -322,6 +322,7 @@ impl<S: RelayStore> Relay<S> {
                 effects,
                 added,
                 shredded,
+                known,
             } = checked;
             let entry = NewEntry {
                 change: change.id(),
@@ -330,12 +331,27 @@ impl<S: RelayStore> Relay<S> {
                 kind: header.kind,
                 frame: frame.clone(),
             };
+            let accepted_at = entry.accepted_at;
             match self
                 .store
                 .append(space, expected_head, vec![entry], effects)
                 .await?
             {
                 AppendOutcome::Appended { head } => {
+                    // The space's memory now holds the change it appended,
+                    // so the next request reads and resolves nothing more.
+                    if let Some(mut known) = known {
+                        let appended = LogEntry {
+                            position: head,
+                            change: change.id(),
+                            accepted_at,
+                            author: header.author,
+                            kind: header.kind,
+                            frame,
+                        };
+                        known.entries.push((appended, change));
+                        self.keep(space, known);
+                    }
                     // A shred is final when accepted, so its record goes
                     // now (RFC 0008, "A shred is final when accepted"). The
                     // append stands whatever the deletion does; the next
@@ -514,6 +530,7 @@ impl<S: RelayStore> Relay<S> {
                 .extend(dropped.into_iter().map(Effect::Member));
             checked
         });
+        known.resolved = resolved;
         // An add or a statement entry may bring a newer statement.
         if let Ok(checked) = &mut checked
             && let Some(statement) = statement_in(&control_body(change)?.entry)
@@ -522,10 +539,13 @@ impl<S: RelayStore> Relay<S> {
                 .effects
                 .extend(self.standing(statement).await?.effect());
         }
-        // The resolver remembers a refused change's judgement too; it is
-        // forgotten with the space rather than kept.
-        if checked.is_ok() {
-            self.keep(space, known);
+        // The memory is kept once the change is appended, with it (see
+        // `push_frame`). The resolver remembers a refused change's
+        // judgement too, and a change another append beat to the head is
+        // not in the log; both are forgotten with the space rather than
+        // kept.
+        if let Ok(checked) = &mut checked {
+            checked.known = Some(known);
         }
         checked
     }
@@ -604,6 +624,9 @@ struct Checked {
     effects: Vec<Effect>,
     added: Vec<MemberId>,
     shredded: BTreeSet<[u8; 16]>,
+    /// The space's memory with this change resolved, to keep once the
+    /// change is appended.
+    known: Option<Known>,
 }
 
 impl Checked {
@@ -628,6 +651,7 @@ impl Checked {
             effects,
             added,
             shredded,
+            known: None,
         }
     }
 }
