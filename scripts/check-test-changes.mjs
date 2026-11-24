@@ -45,7 +45,7 @@ function parseArgs(argv) {
       flag
     ];
     if (name) {
-      if (argv[i + 1] === undefined) return null;
+      if (!argv[i + 1]) return null;
       i += 1;
       args[name] = argv[i];
     } else {
