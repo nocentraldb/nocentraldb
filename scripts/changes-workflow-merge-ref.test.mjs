@@ -16,29 +16,17 @@
 // worktree is checked instead: it must be the merge commit's first parent.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import {
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
-import { parse } from "yaml";
-import { GIT_ENV, makeRepo } from "./release/lib/test-repo.mjs";
+import {
+  FEATURE,
+  MAIN_BREAKS,
+  packageRepo,
+  runStep,
+  step,
+} from "./lib/changes-fixture.mjs";
+import { GIT_ENV } from "./release/lib/test-repo.mjs";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const steps = parse(
-  readFileSync(join(root, ".github/workflows/changes.yml"), "utf8"),
-).jobs.changes.steps;
-const step = (pred, what) => {
-  const found = steps.find(pred);
-  assert.ok(found, `changes.yml has no ${what} step`);
-  return found;
-};
 const baselineStep = step((s) => s.id === "base-worktree", "baseline");
 const apiStep = step((s) => s.id === "api", "API report");
 const fragmentsStep = step(
@@ -46,55 +34,13 @@ const fragmentsStep = step(
   "required-fragment",
 );
 
-const FEATURE =
-  "---\ntype: feature\ntickets: [mt08.1qaz]\ncomponents: [core]\n---\n## Problem\na\n## Use\nb\n";
-const BREAKING =
-  "---\ntype: breaking\ntickets: [mt08.1qaz]\ncomponents: [core]\n---\n## Problem\na\n## Use\nb\n## Migration\nc\n";
-
-const A = "export const name = (): string => 'sdk';\n";
-const B =
-  "export const other = (): number => 1;\nexport const more = (): number => 2;\n";
-
-const writeReport = (repo) => {
-  const result = spawnSync(
-    process.execPath,
-    [join(root, "scripts/release/api-report.mjs"), "--write"],
-    { cwd: repo.dir, env: GIT_ENV, encoding: "utf8" },
-  );
-  assert.equal(result.status, 0, result.stderr);
-};
-
 /**
  * A repository at a GitHub merge ref: main at `base` when the PR was pushed,
  * the PR's commit (`pr` files), then main's newer commit (`main` files), and
  * the merge commit checked out detached, its first parent main's new tip.
- * The API report is regenerated in each commit, as the gate requires.
  */
 const mergeRef = (t, { pr, main }) => {
-  const repo = makeRepo();
-  t.after(() => repo.dispose());
-  repo.write(
-    "tsconfig.base.json",
-    readFileSync(join(root, "tsconfig.base.json"), "utf8"),
-  );
-  repo.write(
-    "packages/sdk/tsconfig.json",
-    `${JSON.stringify({ extends: "../../tsconfig.base.json", include: ["src"] })}\n`,
-  );
-  repo.write(
-    "packages/sdk/src/index.ts",
-    'export * from "./a.ts";\nexport * from "./b.ts";\n',
-  );
-  repo.write("packages/sdk/src/a.ts", A);
-  repo.write("packages/sdk/src/b.ts", B);
-  // The workflow runs `node scripts/release/...` from the repository root.
-  symlinkSync(join(root, "scripts"), join(repo.dir, "scripts"));
-  writeFileSync(join(repo.dir, ".git/info/exclude"), "/scripts\n");
-  const commitWith = (message, files) => {
-    for (const [file, text] of Object.entries(files)) repo.write(file, text);
-    writeReport(repo);
-    return repo.commit(message);
-  };
+  const { repo, commitWith, report } = packageRepo(t);
   const base = commitWith("base", {});
   repo.run("checkout", "-q", "-b", "pr");
   const head = commitWith("pr", pr);
@@ -107,35 +53,10 @@ const mergeRef = (t, { pr, main }) => {
   });
   // GitHub merges the report textually; regenerating it gives the same text
   // and resolves a conflict between two edits of it.
-  writeReport(repo);
+  report();
   repo.run("add", "-A");
   repo.run("commit", "-q", "-m", "merge pr into main");
   return { repo, base, head, mainTip };
-};
-
-/** Runs one step's script as GitHub does; returns its status and outputs. */
-const runStep = (t, repo, theStep, values) => {
-  const temp = mkdtempSync(join(tmpdir(), "changes-runner-"));
-  t.after(() => rmSync(temp, { recursive: true, force: true }));
-  const output = join(temp, "output");
-  writeFileSync(output, "");
-  const env = { ...GIT_ENV, RUNNER_TEMP: temp, GITHUB_OUTPUT: output };
-  for (const [name, expression] of Object.entries(theStep.env ?? {})) {
-    assert.ok(expression in values, `unknown expression ${expression}`);
-    env[name] = values[expression];
-  }
-  const result = spawnSync(
-    "bash",
-    ["--noprofile", "--norc", "-eo", "pipefail", "-c", theStep.run],
-    { cwd: repo.dir, env, encoding: "utf8" },
-  );
-  const outputs = Object.fromEntries(
-    readFileSync(output, "utf8")
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => line.split("=", 2)),
-  );
-  return { ...result, outputs, temp };
 };
 
 /** The expressions of the steps' env, as the event and earlier steps set them. */
@@ -167,12 +88,6 @@ const runChanges = (t, fixture) => {
     breaking: api.outputs.breaking,
     fragments,
   };
-};
-
-// Main's breaking change: it removes `other`, with its own breaking fragment.
-const MAIN_BREAKS = {
-  "packages/sdk/src/b.ts": "export const more = (): number => 2;\n",
-  "changes/main-drops-other.md": BREAKING,
 };
 
 test("main's breaking change after the PR's push is in the baseline, and the PR passes", (t) => {
