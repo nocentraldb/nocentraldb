@@ -61,6 +61,9 @@ pub enum NoticeCode {
     /// A provisional erasure was taken back, from
     /// `space.erasures().take_back` (Carsten, 2026-11-15, on NOC-326, Q7).
     TakenBack,
+    /// Objects were moved to another space, from `Space::move_objects`
+    /// (RFC 0016, "The SDK call and its notice").
+    ObjectMoved,
 }
 
 impl Notice {
@@ -98,6 +101,12 @@ impl Notice {
     pub(crate) const AD_HOC_SPACE_CREATED: Notice = Notice {
         code: NoticeCode::AdHocSpaceCreated,
         text: crate::texts::notice::AD_HOC_SPACE_CREATED,
+    };
+
+    /// The notice of [`Space::move_objects`](crate::Space::move_objects).
+    pub(crate) const OBJECT_MOVED: Notice = Notice {
+        code: NoticeCode::ObjectMoved,
+        text: crate::texts::notice::OBJECT_MOVED,
     };
 
     /// The notice of [`Members::add`](crate::Members::add).

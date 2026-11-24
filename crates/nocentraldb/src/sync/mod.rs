@@ -116,7 +116,13 @@ pub struct SyncStatus {
     /// `unsupported_version`, or `upload_failed` while a large change's
     /// upload URL refuses its upload, which keeps the connection and
     /// retries the upload after a backoff until one goes through (Carsten,
-    /// 2026-11-16, NOC-349). A code the relay sent that
+    /// 2026-11-16, NOC-349). While the relay's endpoint refuses the
+    /// connection with HTTP 401 or 403, as an authorizer on `$connect`
+    /// refuses a token that expired, it is `connect_refused`; while the
+    /// app's function of [`OpenOptions::relay_with`](crate::OpenOptions::relay_with)
+    /// fails or gives no relay URL, `relay_url_failed`. Both keep the SDK
+    /// retrying with backoff, and a connection that goes through clears
+    /// them (NOC-496). A code the relay sent that
     /// RFC 0007 does not list shows as `unknown_error`, so the relay's own
     /// text never reaches the app (NOC-146). Once the relay answered
     /// `not_member` or `removed_member` for a space, that code stays here,

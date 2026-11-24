@@ -3,6 +3,16 @@
 
 //! Pieces of the messages of [`crate::Error`], such as a reason.
 
+/// `connectRefused`: SyncStatus::error (db.sync().current().error) while the
+/// relay's endpoint refuses the WebSocket handshake with HTTP 401 or 403, as an
+/// authorizer on $connect does for a token that expired or is wrong. The SDK
+/// retries with backoff, and asks the relay function, when the app gave one,
+/// for the URL again before each connect; a connect that goes through clears
+/// it. A browser does not tell the SDK why a WebSocket failed, so there a
+/// refused connect shows as offline without it. NOC-496.
+pub(crate) const CONNECT_REFUSED: &str =
+    "connect_refused";
+
 /// `databaseDirectoryNotFound`: What failed, in ioFailed: the database's
 /// directory could not be found.
 pub(crate) const DATABASE_DIRECTORY_NOT_FOUND: &str =
@@ -239,6 +249,14 @@ pub(crate) const KIND_TEXT: &str =
 /// time (Timestamp).
 pub(crate) const KIND_TIMESTAMP: &str =
     "a point in time";
+
+/// `relayUrlFailed`: SyncStatus::error (db.sync().current().error) while the
+/// app's relay function (relay_with in Rust, a function as nc.open's relay in
+/// TypeScript) fails, or gives a URL that is neither ws:// nor wss://. The SDK
+/// calls it again after a backoff; a connect that goes through clears it. What
+/// the function failed with is never shown. NOC-496.
+pub(crate) const RELAY_URL_FAILED: &str =
+    "relay_url_failed";
 
 /// `roleAdmin`: The role needed, in roleRequired: an admin.
 pub(crate) const ROLE_ADMIN: &str =

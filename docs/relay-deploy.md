@@ -259,6 +259,7 @@ An app can run its own relay in its own AWS account, with the construct `Relay` 
      settings: {
        relayId: "…", // 32 hex digits, drawn once: openssl rand -hex 16
        allowedAccounts: ["…"], // the identities of section 1.3
+       admissionKeys: ["…"], // optional: your app's admission key, public half, 64 hex digits
      },
      lambdaPackage: "vendor/nocentraldb/target/lambda/ncdb-relay-lambda",
    });
@@ -269,7 +270,8 @@ An app can run its own relay in its own AWS account, with the construct `Relay` 
 What the construct takes and gives:
 
 - **`stage`** names the tables (`ncdb-<stage>-log` and so on), the API and its stage. Table names are fixed, so two relays in one account and region need two stages.
-- **`settings`** is what the relay itself is told: `relayId`, which never changes once members use the relay, and `allowedAccounts`, as in section 1.3. They become the function's `NCDB_*` variables (`infra/aws/src/relay-settings.ts`), and the construct refuses malformed values when it synthesizes.
+- **`settings`** is what the relay itself is told: `relayId`, which never changes once members use the relay, `allowedAccounts`, as in section 1.3, and `admissionKeys`, below. They become the function's `NCDB_*` variables (`infra/aws/src/relay-settings.ts`), and the construct refuses malformed values when it synthesizes.
+- **`admissionKeys`**, optional, lets an app with open signup admit its own users without listing them ([RFC 0015, "Admission tokens"](rfc/0015-relay-admission.md#admission-tokens)). Your app's backend holds an Ed25519 admission key and signs an admission for each user's identity; the relay takes the admissions that verify under one of these public halves, 64 lowercase hex digits each, and sets `NCDB_ADMISSION_KEYS` from them. Left out or empty, the relay takes none. A leaked admission key admits any identity until you remove it; each admitted identity's record names the key that signed it, so you find what it admitted.
 - **`addAlarms()`** adds the four alarms of "What it costs" and returns the SNS topic they notify. Without it there are none. The project's budget of 20 USD is part of `RelayStack`, not of the construct; set your own.
 - **Public properties:** `api` (the WebSocket API), `stage`, `connectRoute` (the `$connect` route), `handler` (the function), `logGroup` and `url`.
 
@@ -349,8 +351,8 @@ The same pattern takes any token your app can check, for example a delegation to
 
 - **It decides who may connect, not who may create spaces.** The relay still admits only the accounts in `allowedAccounts` to create spaces, and checks every member's signatures and membership as before.
 - **It checks the token once, when the connection opens.** A connection that is open when the token expires stays open until it closes; API Gateway closes every connection after at most two hours, and after ten idle minutes.
-- **The SDK keeps the URL it was opened with.** It reconnects with the same URL, so once the token has expired, reconnects are refused and the database stops syncing. It keeps working on its own copy and syncs again when your app opens it with a URL that carries a fresh token. The SDK has no option yet to fetch a new token for a reconnect.
-- **A token in a URL can land in logs.** API Gateway's WebSocket access logs have no variable for the query string, so they cannot hold it. But anything else that sees the URL can log it: a proxy in front of the relay, your app's own logging, an authorizer that logs its event (AWS's own `$connect` examples log `queryStringParameters`), or your app logging the TypeScript SDK's sync status, which names the relay's URL with its query string. Use short-lived tokens.
+- **Give the SDK a function for the URL, not a fixed URL.** With a fixed URL, the SDK reconnects with the token it was opened with, so once that token has expired, every reconnect is refused and the database stops syncing until your app opens it again. Pass `relay` a function that returns the URL with a fresh token (`relay_with` in Rust): the SDK calls it before each connect. While it throws, `db.sync.current().error` is `relay_url_failed` and the SDK calls it again after a backoff. The Rust SDK reports a connection your authorizer refuses, with 401 or 403, as `connect_refused`; a browser does not tell the SDK why a WebSocket failed, so the TypeScript SDK shows it as offline.
+- **A token in a URL can land in logs.** API Gateway's WebSocket access logs have no variable for the query string, so they cannot hold it. But anything else that sees the URL can log it: a proxy in front of the relay, your app's own logging, an authorizer that logs its event (AWS's own `$connect` examples log `queryStringParameters`), or a function of your app that logs the URL it gives the SDK. The SDK never shows the query string: the TypeScript SDK's sync status names the relay's URL without it. Use short-lived tokens.
 
 ## What the relay logs, and what to leave off around it
 
