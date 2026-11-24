@@ -560,6 +560,13 @@ pub(crate) fn recovery_code_unreadable(why: impl std::fmt::Display) -> String {
 pub(crate) const RECOVERY_ONTO_EXISTING: &str =
     "the database exists: a recovery code recovers the account onto a new one";
 
+/// `recoveryWordWrong` (invalidValue): RecoveryCode::confirm (code.confirm)
+/// when a word typed back is not the code's word at its position; it names the
+/// position, never a word.
+pub(crate) fn recovery_word_wrong(position: impl std::fmt::Display) -> String {
+    format!("word {position} does not match the recovery code, which stays until two of its words match")
+}
+
 /// `relayNoLongerServes` (notMember): A write to a space the relay no longer
 /// serves this member: it was removed.
 pub(crate) fn relay_no_longer_serves(id: impl std::fmt::Display) -> String {

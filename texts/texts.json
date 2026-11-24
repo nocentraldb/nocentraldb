@@ -1204,6 +1204,13 @@
       "when": "The bridge, on a request from the TypeScript SDK: open (nc.open) given neither."
     },
     {
+      "id": "error.bridgeRecoveryAnswers",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "confirming the recovery code takes two of its words, at two different positions from 1 to 12",
+      "when": "The bridge, on a request from the TypeScript SDK: account.confirmRecoveryCode (code.confirm) given answers that are not two words at two different positions from 1 to 12."
+    },
+    {
       "id": "error.bridgeRelayAnswerTakesARequest",
       "kind": "error",
       "code": "invalidValue",
@@ -1846,6 +1853,13 @@
       "code": "invalidValue",
       "text": "the database exists: a recovery code recovers the account onto a new one",
       "when": "Opening with a recovery code when the database exists: a recovery code recovers the account onto a new database only."
+    },
+    {
+      "id": "error.recoveryWordWrong",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "word {position} does not match the recovery code, which stays until two of its words match",
+      "when": "RecoveryCode::confirm (code.confirm) when a word typed back is not the code's word at its position; it names the position, never a word."
     },
     {
       "id": "error.relayNoLongerServes",

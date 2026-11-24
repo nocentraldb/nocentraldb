@@ -20,13 +20,24 @@ const identityOf = (answer: unknown): string | null => {
   return typeof identity === "string" ? identity : null;
 };
 
-/** A recovery code whose words only `words()` gives: its string, JSON and Node's inspect forms are redacted (RFC 0009). */
-const recoveryCodeOf = (words: readonly string[], ask: Ask): RecoveryCode => {
+/** A recovery code whose words only `words()` gives: its string, JSON and Node's inspect forms are redacted (RFC 0009). `challenge` holds the two positions the core picked (NOC-502). */
+const recoveryCodeOf = (
+  words: readonly string[],
+  challenge: readonly [number, number],
+  ask: Ask,
+): RecoveryCode => {
   const kept = Object.freeze([...words]);
+  const asked = Object.freeze([...challenge]) as readonly [number, number];
   const code = {
     words: () => kept,
-    confirm: async () => {
-      await ask("account.confirmRecoveryCode", {});
+    challenge: () => asked,
+    confirm: async (answers: readonly [string, string]) => {
+      await ask("account.confirmRecoveryCode", {
+        answers: asked.map((position, i) => ({
+          position,
+          word: answers[i],
+        })),
+      });
     },
     toString: () => REDACTED,
     toJSON: () => REDACTED,
@@ -46,9 +57,14 @@ export const accountOf = (ask: Ask, opened: Cbor) => {
     recoveryCode: async (): Promise<RecoveryCode | null> => {
       const answer = (await ask("account.recoveryCode", {})) as {
         words?: unknown;
+        challenge?: unknown;
       } | null;
-      return Array.isArray(answer?.words)
-        ? recoveryCodeOf(answer.words as string[], ask)
+      return Array.isArray(answer?.words) && Array.isArray(answer?.challenge)
+        ? recoveryCodeOf(
+            answer.words as string[],
+            answer.challenge as [number, number],
+            ask,
+          )
         : null;
     },
     recovered: async (): Promise<Notice | null> =>

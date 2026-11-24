@@ -1,7 +1,8 @@
 // file: account.d.ts
 export interface RecoveryCode {
     words(): readonly string[];
-    confirm(): Promise<void>;
+    challenge(): readonly [number, number];
+    confirm(answers: readonly [string, string]): Promise<void>;
 }
 export interface PairingAnswer {
     toString(): string;

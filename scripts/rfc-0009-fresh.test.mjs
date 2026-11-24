@@ -284,7 +284,8 @@ test("accounts: RFC 0010's names, and the per-database account key", () => {
       /`db\.account\.pair\(\{ kind, invitation \}\)`/,
       /`db\.account\.completePairing\(answer\)`/,
       /`nc\.open\(\{ model, lock, recover \}\)`/,
-      /`confirm\(\)`/,
+      /`challenge\(\)`/,
+      /`confirm\(answers\)`/,
       /principle 5/,
       /blocks every space/,
     ],
@@ -293,6 +294,7 @@ test("accounts: RFC 0010's names, and the per-database account key", () => {
   const names = part("public-names");
   for (const name of [
     "db.account.completePairing",
+    "challenge",
     "confirm",
     "invalidCertificate",
     "alreadyMember",
