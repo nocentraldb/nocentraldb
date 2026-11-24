@@ -6,14 +6,13 @@
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
-use ncdb_core::change::{Change, Payload, WriterModel};
+use ncdb_core::change::{Change, WriterModel};
 use ncdb_core::checks::SealChecks;
 use ncdb_core::envelope;
 use ncdb_core::ids::{ObjectId as CoreObjectId, SpaceId as CoreSpaceId};
 use ncdb_core::keys::SpaceKey;
 use ncdb_core::log::State;
 use ncdb_core::membership::{self, ControlBody, Entry, Genesis, Role};
-use ncdb_core::seal;
 use ncdb_core::view::View;
 
 use crate::db::{Db, Inner, SpaceState, lock};
@@ -50,7 +49,8 @@ impl std::fmt::Debug for Space {
 /// of the objects it created, in order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Written {
-    /// The change's id.
+    /// The change's id. For a write split into several changes, the last
+    /// part's, which depends on every other part.
     pub change: ChangeId,
     /// The ids of the objects the write created, in the order of its
     /// creates.
@@ -259,6 +259,17 @@ impl Space {
     /// and folded into the view in one SQLite transaction. It returns when
     /// the change is folded, so a read right after it sees the write.
     ///
+    /// A write whose change would exceed the relay's limit of 16 MiB is
+    /// split, between objects, into several changes, each within the limit
+    /// (NOC-431). On this device it stays atomic: every part is folded in
+    /// the one SQLite transaction. **On other devices it is not atomic**:
+    /// the parts arrive and fold one by one, so another member can see
+    /// part of the write before the rest arrives, and a part the relay
+    /// refuses leaves the others standing. One operation, or the operations
+    /// of one object, that do not fit into one change are refused with
+    /// `TooLarge`, before anything is written. A write well below the limit,
+    /// such as a few hundred objects, is always one change.
+    ///
     /// `record` records; it does not read, and must not call the database.
     /// When it returns an error, or a recorded write is refused, nothing is
     /// written.
@@ -322,6 +333,21 @@ pub(crate) fn write_change(
         Role::Writer,
         crate::texts::part::DOING_WRITE,
     )?;
+    // A change above the relay's limit is split between objects; an
+    // object that does not fit into one change is refused before anything
+    // is made (NOC-421).
+    let heads = next::next(
+        &mut inner.view,
+        space,
+        &inner.spaces[&space].checks,
+        member.id(),
+    )
+    .heads
+    .len();
+    let parts = crate::split::plan(
+        operations,
+        crate::split::base_length(heads + drawn.len(), writer),
+    )?;
     let wall = crate::clock::now_millis();
     let Inner {
         view,
@@ -340,26 +366,31 @@ pub(crate) fn write_change(
     let next = next::next(view, space, &state.checks, member.id());
     let generation = next.generation.expect("a writable space has a generation");
     state.clock.observe(next.seen);
-    let clock = state.clock.now(wall).map_err(|error| {
-        Error::new(
-            ErrorCode::StorageFailed,
-            crate::texts::error::space_clock(error),
-        )
-    })?;
-    let mut payload = Payload::new(clock, next.heads, operations);
-    payload.set_writer_model(writer);
     let key = state
         .checks
         .space_key(generation)
         .expect("a writable space's key is held");
-    let change = seal::seal(&member, key, space, next.sequence, generation, &payload);
-    // The fold reads the operations from the change; the payload's own,
-    // as large as the change's operations in memory, go first (NOC-422).
-    drop(payload);
-    let id = ChangeId(change.id());
+    let sealing = crate::split::Seal {
+        member: &member,
+        key,
+        space,
+        generation,
+        sequence: next.sequence,
+        heads: next.heads,
+        writer,
+    };
+    let clock = &mut state.clock;
+    let changes = crate::split::seal_parts(parts, sealing, || {
+        clock.now(wall).map_err(|error| {
+            Error::new(
+                ErrorCode::StorageFailed,
+                crate::texts::error::space_clock(error),
+            )
+        })
+    })?;
     // What other folds of the space touched before is not this write's.
     view.take_touched(space);
-    fold_change(view, &mut state.checks, change)?;
+    let id = ChangeId(crate::split::fold_all(view, &mut state.checks, changes)?);
     let objects = view.take_touched(space);
     crate::personal::refresh(view, space, state).map_err(storage)?;
     touched(

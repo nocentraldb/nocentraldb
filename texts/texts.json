@@ -1729,6 +1729,13 @@
       "when": "Space::write (space.write) to an object this copy reads as moved (RFC 0016, \"The SDK call and its notice\")."
     },
     {
+      "id": "error.objectTooLarge",
+      "kind": "error",
+      "code": "tooLarge",
+      "text": "the operations of the object {id} of {collection} take {size} bytes, more than one change can carry under the relay's limit of {limit} bytes; a write is split into several changes only between objects",
+      "when": "Space::write (space.write) when the operations of one object together do not fit into one change under the relay's change limit, though each one alone would."
+    },
+    {
       "id": "error.onlyAgentAddsSubAgent",
       "kind": "error",
       "code": "notAllowed",
@@ -1741,6 +1748,13 @@
       "code": "invalidValue",
       "text": "a database at a name opens only in a dedicated Web Worker",
       "when": "nc.open in a browser, when a database at a name is opened outside a dedicated Web Worker, where OPFS cannot be used."
+    },
+    {
+      "id": "error.operationTooLarge",
+      "kind": "error",
+      "code": "tooLarge",
+      "text": "the field {name} of the object {id} of {collection} takes {size} bytes in its change, more than one change can carry under the relay's limit of {limit} bytes",
+      "when": "Space::write (space.write) when one operation alone does not fit into one change under the relay's change limit."
     },
     {
       "id": "error.optionsBrowserAndPath",

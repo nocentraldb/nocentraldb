@@ -90,6 +90,7 @@ interface Change {
 
 /** What a write answers: its change id and the ids of the objects it created, in order. */
 interface Written {
+  /** The change's id; for a write split into several changes, the last part's, which depends on every other part. */
   readonly change: string;
   readonly ids: readonly Id[];
 }
@@ -138,7 +139,11 @@ export interface Space {
     /** Calls `listener` with the report at once, and again whenever it changes. */
     subscribe(listener: (status: SpaceStatus) => void): Stop;
   };
-  /** Records the writes of `record` and turns them into one change of this space. */
+  /**
+   * Records the writes of `record` and turns them into one change of this space.
+   *
+   * A write whose change would exceed the relay's limit of 16 MiB is split, between objects, into several changes, each within the limit (NOC-431). On this device it stays atomic: every part is folded in one transaction. **On other devices it is not atomic**: the parts arrive and fold one by one, so another member can see part of the write before the rest arrives, and a part the relay refuses leaves the others standing. One operation, or the operations of one object, that do not fit into one change are refused with `tooLarge`, before anything is written. A write well below the limit, such as a few hundred objects, is always one change.
+   */
   write(record: (tx: Tx) => void): Promise<Written>;
   /** A write with one create. */
   create<C extends AnyCollection>(

@@ -526,13 +526,18 @@ impl View {
         self.receive_all_at(frames, checks, Some(written_at))
     }
 
-    fn receive_all_at(
+    /// Receives every change of `changes`, changes the member wrote
+    /// itself, as [`View::receive_all_own`] does, without decoding their
+    /// frames again: the log keeps these changes, so changes of megabytes
+    /// are held once (NOC-422). A write split into several changes folds
+    /// them so, all or none (NOC-421).
+    pub fn receive_all_own_changes(
         &mut self,
-        frames: &[&[u8]],
+        changes: Vec<Change>,
         checks: &mut impl Checks,
-        written_at: Option<u64>,
+        written_at: u64,
     ) -> Result<Vec<Appended>, Error> {
-        let result = self.receive_batch(frames, checks, written_at);
+        let result = self.receive_batch(changes, checks, Some(written_at));
         if result.is_err() {
             // The transaction rolled back; the logs in memory follow it.
             self.logs = log_table::load(&self.conn)?;
@@ -540,7 +545,7 @@ impl View {
         result
     }
 
-    fn receive_batch(
+    fn receive_all_at(
         &mut self,
         frames: &[&[u8]],
         checks: &mut impl Checks,
@@ -551,9 +556,23 @@ impl View {
             .map(|bytes| Change::decode(bytes))
             .collect::<Result<Vec<_>, _>>()
             .map_err(|error| Error::Receive(ReceiveError::Decode(error)))?;
+        let result = self.receive_batch(changes, checks, written_at);
+        if result.is_err() {
+            // The transaction rolled back; the logs in memory follow it.
+            self.logs = log_table::load(&self.conn)?;
+        }
+        result
+    }
+
+    fn receive_batch(
+        &mut self,
+        changes: Vec<Change>,
+        checks: &mut impl Checks,
+        written_at: Option<u64>,
+    ) -> Result<Vec<Appended>, Error> {
         let tx = self.conn.transaction()?;
-        let mut appended = Vec::with_capacity(frames.len());
-        let mut touched = Vec::with_capacity(frames.len());
+        let mut appended = Vec::with_capacity(changes.len());
+        let mut touched = Vec::with_capacity(changes.len());
         for change in changes {
             let space = change.header().space;
             let (one, its) = append(

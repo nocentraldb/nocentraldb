@@ -74,6 +74,51 @@ test("space.write takes a value of more than 1 MiB, and a get reads it back", as
   assert.deepEqual(errors, []);
 });
 
+// A write above the relay's change limit of 16 MiB (NOC-421; NOC-431, B′):
+// many objects are split into several changes and the write goes through,
+// every object readable at once; one value above the limit is refused with
+// the nc.Error `tooLarge` before anything is written.
+test("space.write splits many objects above 16 MiB, and refuses one value above it with tooLarge", async () => {
+  const opened = await (await browser.newContext()).newPage();
+  const errors = [];
+  opened.on("pageerror", (error) => errors.push(error));
+  await opened.goto(`${server.url}/`);
+  await opened.waitForFunction(() => window.ready === true);
+
+  const result = await opened.evaluate(
+    async ({ lock, MODEL }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      const db = await nc.open({ model, lock, name: "split" });
+      const project = await db.spaces.create();
+      const title = (n) => `${n}`.padStart(8, "0") + "x".repeat(256 * 1024);
+      const { ids } = await project.write((tx) => {
+        for (let n = 0; n < 72; n++)
+          tx.create(model.tasks, { title: title(n) });
+      });
+      let same = 0;
+      for (const [n, id] of ids.entries()) {
+        const task = await project.get(model.tasks, id);
+        if (task?.title === title(n)) same++;
+      }
+      const huge = "x".repeat(16 * 1024 * 1024 + 1);
+      const refused = await project
+        .write((tx) => {
+          tx.create(model.tasks, { title: huge });
+        })
+        .then(
+          () => "written",
+          (e) => (e instanceof nc.Error ? e.code : `${e.name}: ${e.message}`),
+        );
+      await db.close();
+      return { ids: ids.length, same, refused };
+    },
+    { lock, MODEL },
+  );
+  assert.deepEqual(result, { ids: 72, same: 72, refused: "tooLarge" });
+  assert.deepEqual(errors, []);
+});
+
 // A value too large for the core's memory: Chromium's core runs out of
 // WebAssembly memory from about 200 MiB and the write fails with
 // `storageFailed`. Where an engine's core holds 256 MiB, the write goes
@@ -116,10 +161,13 @@ test("a write too large for the core fails with an nc.Error that has a code", as
 // broken for good, so every later call fails with `storageFailed` and a
 // text that says to open the database again; `db.close()` succeeds, and the
 // database opened again works and holds what was written before. Where the
-// engine's core holds the value, the write goes through, or the browser's
-// storage refuses it with `storageFull` (WebKit's, since NOC-422 made the
-// core hold it); either way the core runs on and the later call simply
-// works. In no case does anything reach the page as an uncaught error.
+// engine's core holds the value, the SDK refuses it with `tooLarge`, since
+// one value of 256 MiB does not fit into one change under the relay's limit
+// (NOC-421), or the browser's storage refuses it with `storageFull`
+// (WebKit's, since NOC-422 made the core hold it); in each case the core
+// runs on and the later call simply works. coreGuard.test.ts holds what
+// follows a trap without a real core. In no case does anything reach the
+// page as an uncaught error.
 test("after a write too large for the core, later calls say to open the database again, and it opens again", async () => {
   const opened = await (await browser.newContext()).newPage();
   const errors = [];
@@ -166,7 +214,11 @@ test("after a write too large for the core, later calls say to open the database
   assert.deepEqual(errors, []);
   assert.equal(result.closed, "ok");
   assert.equal(result.title, "before");
-  if (result.written === "ok" || result.written.startsWith("storageFull: ")) {
+  if (
+    result.written === "ok" ||
+    result.written.startsWith("tooLarge: ") ||
+    result.written.startsWith("storageFull: ")
+  ) {
     assert.equal(result.later, "ok");
   } else {
     assert.match(result.written, /^storageFailed: /);

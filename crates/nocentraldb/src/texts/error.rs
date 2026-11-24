@@ -462,6 +462,13 @@ pub(crate) fn object_moved(id: impl std::fmt::Display, space: impl std::fmt::Dis
     format!("the object {id} moved to the space {space}; write to it there")
 }
 
+/// `objectTooLarge` (tooLarge): Space::write (space.write) when the operations
+/// of one object together do not fit into one change under the relay's change
+/// limit, though each one alone would.
+pub(crate) fn object_too_large(id: impl std::fmt::Display, collection: impl std::fmt::Display, size: impl std::fmt::Display, limit: impl std::fmt::Display) -> String {
+    format!("the operations of the object {id} of {collection} take {size} bytes, more than one change can carry under the relay's limit of {limit} bytes; a write is split into several changes only between objects")
+}
+
 /// `onlyAgentAddsSubAgent` (notAllowed): Members::add (members.add) with a
 /// sub-agent's invitation, version 3, on a device's or a sub-agent's database:
 /// only an agent signs a sub-agent's certificate (NOC-320 Q2).
@@ -472,6 +479,12 @@ pub(crate) const ONLY_AGENT_ADDS_SUB_AGENT: &str =
 /// a name is opened outside a dedicated Web Worker, where OPFS cannot be used.
 pub(crate) const OPEN_OUTSIDE_WORKER: &str =
     "a database at a name opens only in a dedicated Web Worker";
+
+/// `operationTooLarge` (tooLarge): Space::write (space.write) when one
+/// operation alone does not fit into one change under the relay's change limit.
+pub(crate) fn operation_too_large(name: impl std::fmt::Display, id: impl std::fmt::Display, collection: impl std::fmt::Display, size: impl std::fmt::Display, limit: impl std::fmt::Display) -> String {
+    format!("the field {name} of the object {id} of {collection} takes {size} bytes in its change, more than one change can carry under the relay's limit of {limit} bytes")
+}
 
 /// `optionsBrowserAndPath` (invalidValue): Opening with options that name a
 /// browser database together with a path, a key file or in_memory().

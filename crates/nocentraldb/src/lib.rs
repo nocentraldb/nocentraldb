@@ -63,6 +63,7 @@ mod personal;
 mod query;
 mod relay;
 mod space;
+mod split;
 mod status;
 mod subscribe;
 mod sync;
@@ -125,6 +126,10 @@ mod restore_tests;
 mod shorthand_tests;
 #[cfg(test)]
 mod shred_gap_tests;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod split_sync_tests;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod split_tests;
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests;
 #[cfg(test)]

@@ -82,6 +82,13 @@ pub enum ErrorCode {
     /// message names that space, where the object lives on (RFC 0016,
     /// "The SDK call and its notice").
     Moved,
+    /// One operation of a write, or the operations of one object together,
+    /// do not fit into one change under the relay's change limit, 16 MiB
+    /// (RFC 0007, "Large changes"). A write above the limit is split into
+    /// several changes, but only between objects, so one object must fit
+    /// into one change; the message names the object, its size and the
+    /// limit (NOC-431, B′).
+    TooLarge,
 }
 
 impl Error {
