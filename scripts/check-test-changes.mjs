@@ -2,7 +2,7 @@
 // The test-change check (NOC-508): a pull request that removes a test, skips
 // one, removes an assertion or changes an expected value in one is flagged.
 //
-// usage: check-test-changes [--base <rev>] [--head <rev>]
+// usage: check-test-changes [--base <rev>] [--head <rev>] [--pr-head <rev>]
 //
 // Without --base (the gate task repo:test-changes in `pnpm gates`) the base
 // is origin/main; a checkout without it, such as CI's shallow gates job,
@@ -17,6 +17,13 @@
 // reason has at least two words; the check then prints the findings and the
 // reasons, for pm's review and the daily note.
 //
+// In GitHub's merge queue (NOC-511) the `changes` check runs on the queue's
+// commit, which squashes the pull request onto main: --base HEAD^1 --head
+// HEAD, and --pr-head the pull request's head. The findings come from
+// base..head as always, but the trailers from base..pr-head, the pull
+// request's own commits, since the squash commit's message does not keep
+// them as trailers.
+//
 // Exit 0 when nothing is flagged or a reason is given, 1 with one line per
 // finding (a git error is a failure too, never a pass), 2 on a usage error.
 import { realpathSync } from "node:fs";
@@ -27,17 +34,20 @@ import { scan } from "./lib/test-changes/scan.mjs";
 import { changedPaths, fileAt, git, mergeBase } from "./release/lib/git.mjs";
 
 const NAME = "check-test-changes";
-const USAGE = `usage: ${NAME} [--base <rev>] [--head <rev>]`;
+const USAGE = `usage: ${NAME} [--base <rev>] [--head <rev>] [--pr-head <rev>]`;
 const DEFAULT_BASE = "origin/main";
 
 function parseArgs(argv) {
   const args = { head: "HEAD" };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
-    if (flag === "--base" || flag === "--head") {
+    const name = { "--base": "base", "--head": "head", "--pr-head": "prHead" }[
+      flag
+    ];
+    if (name) {
       if (argv[i + 1] === undefined) return null;
       i += 1;
-      args[flag.slice(2)] = argv[i];
+      args[name] = argv[i];
     } else {
       return null;
     }
@@ -120,7 +130,7 @@ export function main(argv) {
   const paths = changedPaths(args.base, args.head).filter(kindOf);
   const findings = compare(scansAt(from, paths), scansAt(args.head, paths));
   if (findings.length === 0) return 0;
-  const given = reasons(args.base, args.head);
+  const given = reasons(args.base, args.prHead ?? args.head);
   const print = given.length ? console.log : console.error;
   for (const f of findings) print(`${NAME}: ${f.path}: ${f.text}`);
   if (given.length === 0) {
