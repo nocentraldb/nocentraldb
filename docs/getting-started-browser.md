@@ -650,6 +650,25 @@ console.log(notice.text);
 
 Each space in `removed` comes with the notice `memberRemoved`. `askAdmins` lists the spaces where no device of the account is an admin, whose admins your app asks to remove it. The notice `accountKeyRenewed` says that members that have not learnt the new account key yet still accept the old one. The words are never logged; a code that is not this account's fails with `notAllowed`, and nothing is removed.
 
+The recovery code restores the account, not its spaces. The relay holds only ciphertext, so a space comes back only when another of its members adds the new device. A space whose only member was the lost device is lost for good. A space's status says when this device is that only member, so your app can warn the person:
+
+```ts
+import { nc } from "@nocentraldb/sdk";
+import { model } from "../model.ts";
+
+const lock: unknown = await (await fetch("/model.lock.json")).json();
+const db = await nc.open({ model, lock, name: "laptop" });
+const project = await db.spaces.create();
+
+project.status.subscribe((status) => {
+  if (status.onlyMember) {
+    console.warn("Only this device holds this space. Losing it loses the space.");
+  }
+});
+```
+
+`onlyMember` turns false once a second member joins the space and true again when it leaves or is removed. To keep a space safe, add a second member (step 10): another person, or an agent that runs elsewhere. A second device of your own account counts too: pairing adds it to every space this device administers (step 15).
+
 ## What the browser SDK does not do yet
 
 RFC 0009 names more than the browser SDK has today. This guide leaves out what it lacks:

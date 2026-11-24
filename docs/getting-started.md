@@ -399,6 +399,25 @@ Letter case and spacing do not matter. A word that does not match fails with `In
 
 The code prints as `RecoveryCode(redacted)`, so it never reaches a log by accident. On a new device, open a new database with `.recover("twelve words …")`. It keeps the account's fingerprint, and the other members add the device to their spaces again.
 
+Recovery restores the account, not its spaces. The relay holds only ciphertext, so a space comes back only when another of its members adds the new device. A space whose only member was the lost device is lost for good. The space's status says when this device is that only member, so your app can warn the person:
+
+```rust no_run
+use nocentraldb::{Db, OpenOptions};
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let lock = std::fs::read_to_string("model.lock.json")?;
+    let db = Db::open(OpenOptions::new(&lock).path("laptop")).await?;
+    let project = db.spaces().create().await?;
+    if project.status().current().only_member {
+        println!("Only this device holds this space. Losing it loses the space.");
+    }
+    Ok(())
+}
+```
+
+`only_member` turns false once a second member joins the space and true again when it leaves or is removed; `space.status().subscribe()` follows it. To keep a space safe, add a second member: another person, or an agent that runs elsewhere. A second device of your own account counts too: pairing adds it to every space this device administers (step 9).
+
 ## Where to go next
 
 - [apps/tasks-rust](../apps/tasks-rust/README.md) runs all of this from the command line, with a test that runs two devices end to end.

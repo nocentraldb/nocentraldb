@@ -2,12 +2,18 @@
 # allowlist in scripts/release/check-fragments.mjs must add a fragment under
 # changes/, unless it carries the label skip-changes. The label is read from
 # the event payload, so labeled/unlabeled re-run the check. Read-only; the
-# full history is fetched so the merge base with the PR's base exists.
+# full history is fetched so the merge ref's parents exist.
+#
+# The checkout is the PR's merge ref: the PR's head merged into main's tip as
+# it stands when the job runs, which may be newer than the event's base.sha.
+# Every comparison therefore starts at the merge commit's first parent,
+# HEAD^1, and the PR's changes are HEAD^1..HEAD: a change main gained after
+# the PR's last push is in the baseline and never counted against the PR
+# (NOC-505). The baseline step first checks that HEAD's second parent is the
+# event's head, so a checkout that is not the PR's merge ref fails the job.
 #
 # Breaking-change detection: cargo-semver-checks compares the workspace
-# crates with the merge base of the PR's base and head, not the base's tip, so
-# a PR behind main is never compared with API main changed after it forked
-# (NOC-503). The merge base is checked out as a worktree (action input
+# crates with HEAD^1. It is checked out as a worktree (action input
 # `baseline-root`; `baseline-rev` would extract the base as an archive, which
 # refuses the repository's symlink that points outside the tree), with
 # `rust-toolchain: manual`, so it uses the toolchain rust-toolchain.toml pins,
@@ -15,15 +21,17 @@
 # the fragment step still runs and turns its finding into a requirement; a
 # warning then says that a failure without a failed lint is the tool's own
 # and wants a re-run, not a breaking fragment. The TypeScript API report is
-# diffed against the report committed at the same merge base (exit 3: a
-# removed or changed line). Either finding adds --require-breaking, which
-# the skip-changes label never waives.
+# diffed against the report committed at HEAD^1 (exit 3: a removed or
+# changed line). Either finding adds --require-breaking, which the
+# skip-changes label never waives.
 #
 # Test changes (NOC-508): the last step flags a pull request that removes a
 # test, skips one, removes an assertion or changes an expected value, unless
 # one of its commits carries a `Test-change: <reason>` trailer. It runs after
 # a failed step too, so one run reports both, and no label waives it.
-# scripts/changes-workflow.test.mjs asserts these rules.
+# scripts/changes-workflow.test.mjs asserts these rules by structure, and
+# scripts/changes-workflow-merge-ref.test.mjs runs the steps that pick the
+# baseline and the range against a fixture merge ref.
 name: changes
 
 on:
@@ -61,9 +69,10 @@ jobs:
       - name: Base for the Rust API
         id: base-worktree
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
-        run: git worktree add --detach "$RUNNER_TEMP/baseline" "$(git merge-base "$BASE" "$HEAD")"
+        run: |
+          test "$(git rev-parse HEAD^2)" = "$HEAD"
+          git worktree add --detach "$RUNNER_TEMP/baseline" HEAD^1
       - run: rustup toolchain install --no-self-update
       # Only the publishable crates the base also has: a crate new in the
       # pull request has no baseline, and the tool's failure on it would read
@@ -86,23 +95,18 @@ jobs:
         run: 'echo "::warning title=cargo-semver-checks failed::Its log above shows which item broke. If it shows no failed lint, the tool itself failed (a download or build error): re-run the job instead of adding a breaking fragment."'
       - name: TypeScript API against the base
         id: api
-        env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set +e
-          node scripts/release/api-report.mjs --base "$(git merge-base "$BASE" "$HEAD")"
+          node scripts/release/api-report.mjs --base HEAD^1
           code=$?
           set -e
           echo "breaking=$([ "$code" = 3 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           [ "$code" = 0 ] || [ "$code" = 3 ]
       - name: Required fragment
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
           SKIP: ${{ contains(github.event.pull_request.labels.*.name, 'skip-changes') && '--skip' || '' }}
           BREAKING: ${{ (steps.semver.outcome == 'failure' || steps.api.outputs.breaking == 'true') && '--require-breaking' || '' }}
-        run: node scripts/release/check-fragments.mjs --base "$BASE" --head "$HEAD" $SKIP $BREAKING
+        run: node scripts/release/check-fragments.mjs --base HEAD^1 --head HEAD $SKIP $BREAKING
       - name: Test changes
         if: ${{ !cancelled() }}
         env:
