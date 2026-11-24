@@ -76,7 +76,11 @@ fn the_first_open_hands_the_recovery_code_until_it_is_confirmed() {
     );
     // The key file no longer holds the code.
     let keys = std::fs::read(dir.join("laptop.keys")).unwrap();
-    assert_eq!(stored_code(&keys), None, "confirming removes the code field");
+    assert_eq!(
+        stored_code(&keys),
+        None,
+        "confirming removes the code field"
+    );
 }
 
 /// The recovery code's field in a key record of format 2 whose database
