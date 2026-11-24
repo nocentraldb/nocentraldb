@@ -7,8 +7,10 @@
 // It names nobody who decided; the decision log does. The public names that
 // declared tools add were decided a day later (NOC-504): they stand in the
 // sections they belong to, with the other options under "Options not
-// taken", a short entry each under "Decisions" and a second History line. These tests check that each part is there;
-// whether the design is right was the owner's review.
+// taken", a short entry each under "Decisions" and a second History line.
+// The tests that asked for an "Open questions" section and for one History
+// line were rewritten for the decided text then. These tests check that
+// each part is there; whether the design is right was the owner's review.
 import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
