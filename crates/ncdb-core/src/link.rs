@@ -48,6 +48,10 @@ pub enum Status {
     Missing,
     /// The copy holds the target, in a collection the field does not allow.
     WrongCollection,
+    /// The copy holds the target as the trace of a move to this space
+    /// (RFC 0016, "Links to the moved object"). It reads moved whether or
+    /// not the trace was deleted too: the object lives on in that space.
+    Moved(SpaceId),
 }
 
 /// The objects of one space's copy that links resolve against.
@@ -78,7 +82,8 @@ fn in_space(space: SpaceId, target: Target) -> Result<ObjectId, OtherSpace> {
 
 /// The status of the target `value` names, in a field that allows
 /// `collections`. A value that is no object id names no object the copy can
-/// hold. A deleted target reads deleted whatever its collection.
+/// hold. A moved target reads moved, and a deleted one deleted, whatever
+/// its collection.
 pub(crate) fn status(
     collections: &BTreeSet<String>,
     value: &Value,
@@ -93,6 +98,9 @@ pub(crate) fn status(
     let Some(object) = object.filter(|o| o.exists()) else {
         return Status::Missing;
     };
+    if let Some(space) = object.moved_to() {
+        return Status::Moved(space);
+    }
     if object.is_deleted() {
         return Status::Deleted;
     }
