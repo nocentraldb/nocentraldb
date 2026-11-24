@@ -60,6 +60,12 @@ fn the_first_open_hands_the_recovery_code_until_it_is_confirmed() {
     let db = open(at(&dir, "laptop"));
     let code = code(&db).expect("the code stays until it is confirmed");
     assert_eq!(code.words(), words);
+    let keys = std::fs::read(dir.join("laptop.keys")).unwrap();
+    assert_eq!(
+        stored_code(&keys).map(<[u8]>::len),
+        Some(16),
+        "until it is confirmed, the key file holds the code as its 16 bytes"
+    );
     now(code.confirm(answers(&code))).unwrap();
     assert!(self::code(&db).is_none());
     drop(db);
@@ -68,9 +74,33 @@ fn the_first_open_hands_the_recovery_code_until_it_is_confirmed() {
         self::code(&db).is_none(),
         "confirming forgets the code for good"
     );
-    // The key file no longer holds the words, and never held them as text.
+    // The key file no longer holds the code.
     let keys = std::fs::read(dir.join("laptop.keys")).unwrap();
-    assert!(!String::from_utf8_lossy(&keys).contains(words[0]));
+    assert_eq!(stored_code(&keys), None, "confirming removes the code field");
+}
+
+/// The recovery code's field in a key record of format 2 whose database
+/// holds the account key (`keys/mod.rs`): the 16 bytes after the code byte
+/// `1`, or `None` after the code byte `0`, which ends the record. Panics on
+/// a record of any other shape, so that the test reads the stored format
+/// instead of searching random key material for text.
+fn stored_code(record: &[u8]) -> Option<&[u8]> {
+    const MAGIC: &[u8] = b"nocentraldb-keys";
+    // The format byte, the member's two secrets.
+    let rest = record.strip_prefix(MAGIC).expect("a key record");
+    let (&format, rest) = rest.split_first().unwrap();
+    assert_eq!(format, 2, "a key record of format 2");
+    let rest = &rest[2 * 32..];
+    // The account byte `1`, the account key and its statement: the
+    // recovery key, the number and the signature.
+    let (&account, rest) = rest.split_first().unwrap();
+    assert_eq!(account, 1, "the record holds the account key");
+    let rest = &rest[32 + 32 + 8 + 64..];
+    match rest {
+        [0] => None,
+        [1, bits @ ..] if bits.len() == 16 => Some(bits),
+        _ => panic!("no code field of format 2: {} bytes left", rest.len()),
+    }
 }
 
 #[test]
