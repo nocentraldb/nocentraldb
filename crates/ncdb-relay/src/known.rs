@@ -7,8 +7,11 @@
 //! resolved from scratch on each request, a space with many persons costs
 //! a read and a resolve of all its control changes on every new person. A
 //! warm process, such as a Lambda instance between invocations, now reads
-//! only the control changes appended since, and the resolver judges only
-//! those.
+//! only the control changes appended since, and keeps the change it
+//! appends itself. The resolver adds a person-key entry written after the
+//! whole space to the fold it holds, reading no other control change
+//! (NOC-497); any other new control change is resolved with all of them,
+//! and the resolver judges only the new ones.
 //!
 //! The relay stays stateless in what it answers: the memory holds nothing
 //! the log does not, the resolver returns `resolve`'s state exactly, and
@@ -162,8 +165,9 @@ impl<S: RelayStore> Relay<S> {
     }
 
     /// Reads the control changes after the last one `known` holds, and
-    /// resolves them all if there are new ones. False, reading nothing,
-    /// when the store no longer holds that last one at its position.
+    /// adds the new ones to its resolve, or resolves them all when the
+    /// resolver cannot add them. False, reading nothing, when the store no
+    /// longer holds that last one at its position.
     async fn read_new(&self, space: SpaceId, known: &mut Known) -> Result<bool, ErrorCode> {
         let last = known
             .entries
@@ -195,9 +199,15 @@ impl<S: RelayStore> Relay<S> {
             return Ok(false);
         }
         if !new.is_empty() {
+            let added = known.resolver.add(new.iter().map(|(_, change)| change));
             known.entries.append(&mut new);
-            let changes = known.entries.iter().map(|(_, change)| change);
-            known.resolved = known.resolver.resolve(changes);
+            known.resolved = match added {
+                Some(resolved) => resolved,
+                None => {
+                    let changes = known.entries.iter().map(|(_, change)| change);
+                    known.resolver.resolve(changes)
+                }
+            };
         }
         Ok(true)
     }

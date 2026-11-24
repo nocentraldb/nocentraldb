@@ -514,9 +514,16 @@ impl<S: RelayStore> Relay<S> {
             return Err(ErrorCode::SpaceExists);
         }
         let mut known = self.known(space).await?;
-        let mut controls: Vec<&Change> = known.entries.iter().map(|(_, c)| c).collect();
-        controls.push(change);
-        let resolved = known.resolver.resolve(controls);
+        // A person-key entry after the whole space is added to the fold
+        // the memory holds (NOC-497); anything else resolves the space.
+        let resolved = match known.resolver.add([change]) {
+            Some(resolved) => resolved,
+            None => {
+                let mut controls: Vec<&Change> = known.entries.iter().map(|(_, c)| c).collect();
+                controls.push(change);
+                known.resolver.resolve(controls)
+            }
+        };
         let before = &known.resolved;
         let checked = match verdict(resolved.verdict(change.id())) {
             Ok(()) => self.not_too_early(space, change, &resolved).await,
