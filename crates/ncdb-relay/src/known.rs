@@ -204,6 +204,9 @@ impl<S: RelayStore> Relay<S> {
 }
 
 #[cfg(test)]
+mod warm;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
