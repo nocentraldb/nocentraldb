@@ -14,8 +14,10 @@
 # scripts/release-workflow-publish.test.mjs (verify, build, publish and
 # commit-back), scripts/release-workflow-registries.test.mjs (publish-crates
 # and publish-npm, which publish betas and releases to crates.io and stage
-# them on npm) and scripts/release-ruleset.test.mjs (the release app's token
-# in commit-back and app-token-check).
+# them on npm), scripts/release-ruleset.test.mjs (the release app's token
+# in commit-back and app-token-check) and
+# scripts/release-workflow-memory.test.mjs (the memory budget guard, which
+# verify runs for beta and stable tags only).
 name: release
 
 on:
@@ -34,6 +36,12 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # Playwright's image at the pinned playwright version, by digest, as
+  # browser-view.yml names it: verify runs the memory budget's browser guard
+  # in it.
+  PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
 
 jobs:
   alpha:
@@ -238,7 +246,7 @@ jobs:
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-alpha.'))
       || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     # One group for every job of the publish side, per ref: two runs of one
     # tag (a re-run while one is in flight) never run two of these jobs at
     # once, so they never overlap in publish or commit-back. A running job is
@@ -294,6 +302,42 @@ jobs:
       # The full gate on the tagged commit itself: ci does not run on pushes
       # to release branches, and the tag may sit on a commit no PR ran.
       - run: pnpm gates
+      # The memory budget of one change (NOC-479; Carsten, 2026-11-23,
+      # NOC-451): a change at the 16 MiB limit fits in 256 MiB of core memory,
+      # natively and in a browser tab's WebAssembly memory
+      # (docs/bulk-import.md, "A change near the limit"). It runs only here,
+      # for beta and stable tags and in the publish dry run, never for an
+      # alpha and never in PR CI.
+      - name: The memory budget, natively
+        if: ${{ !contains(env.TAG, '-alpha.') }}
+        run: cargo test --release --locked -p nocentraldb --test memory_budget -- --ignored
+      # The TypeScript SDK and the local relay, built on the runner as
+      # browser-view.yml builds them, for the guard in the image below.
+      - name: The TypeScript SDK and the local relay, for the browser guard
+        if: ${{ !contains(env.TAG, '-alpha.') }}
+        run: |
+          moon run repo:wasm-runner
+          node scripts/sdk-browser/build.mjs
+      # A registry that does not answer fails the pull in 4 minutes, and the
+      # pull is tried once more.
+      - name: Playwright's image, with a short timeout and one retry
+        if: ${{ !contains(env.TAG, '-alpha.') }}
+        timeout-minutes: 10
+        run: |
+          for attempt in 1 2; do
+            if timeout 240 docker pull "$PLAYWRIGHT_IMAGE"; then exit 0; fi
+            echo "docker pull failed (attempt $attempt)"
+            sleep 15
+          done
+          exit 1
+      - name: The memory budget in Chromium
+        if: ${{ !contains(env.TAG, '-alpha.') }}
+        run: >-
+          docker run --rm --ipc=host
+          -v "$PWD:/work" -w /work
+          -e SDK_BROWSER_PREBUILT=1
+          "$PLAYWRIGHT_IMAGE"
+          node --test scripts/memory-budget/browser.test.mjs
 
   build:
     needs: verify

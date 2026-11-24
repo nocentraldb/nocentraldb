@@ -27,8 +27,10 @@ concurrency:
 jobs:
   gates:
     runs-on: ubuntu-latest
-    # A hung step stops here instead of at GitHub's 6-hour default.
-    timeout-minutes: 30
+    # A hung step stops here instead of at GitHub's 6-hour default. The gate
+    # tasks take about 29 minutes since the rich-text tasks joined them, and
+    # the cache save comes after, so 30 cancelled every run (NOC-503).
+    timeout-minutes: 45
     steps:
       # Default (shallow) checkout depth on purpose: CI runs every task of
       # every project and uses no moon affected detection, so it needs no history.

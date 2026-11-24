@@ -5,9 +5,10 @@
 //! Every check of a control change and every put of person-key records
 //! needs RFC 0008's `resolve` of the space's control changes. Read and
 //! resolved from scratch on each request, a space with many persons costs
-//! the square of its control changes on every new person. A warm process,
-//! such as a Lambda instance between invocations, now reads only the
-//! control changes appended since, and the resolver judges only those.
+//! a read and a resolve of all its control changes on every new person. A
+//! warm process, such as a Lambda instance between invocations, now reads
+//! only the control changes appended since, and the resolver judges only
+//! those.
 //!
 //! The relay stays stateless in what it answers: the memory holds nothing
 //! the log does not, the resolver returns `resolve`'s state exactly, and
@@ -18,17 +19,20 @@
 //! space is read again from the start. A process without the memory, a
 //! cold start, resolves the space from scratch, as before.
 //!
-//! The memory a space takes grows with the square of its control changes,
-//! since the resolver keeps each one's causal past: a test process that
-//! held one space of 800 persons was 38 MB resident on Linux (NOC-427). A Lambda instance has 256 MB, so
-//! the memory holds at most [`SPACES`] spaces and at most [`WEIGHT`], the
-//! sum of the squares of their control changes, which is about the memory
-//! of one space of 1,200. It forgets the spaces used least recently first,
-//! and keeps no space heavier than all of it: such a space is resolved
-//! from scratch on every request, as before. A request takes a
-//! space's memory out while it works and puts it back when done, so two
-//! requests never share one; a second request on the same space meanwhile
-//! starts from scratch.
+//! The memory a space takes grows with its control changes, since the
+//! resolver keeps each one's causal past as a range of node numbers
+//! (NOC-442): about 7.7 KiB per control change on Linux, 75 MiB held for
+//! a space of 10,000 persons, and a cold request on such a space allocates
+//! at most about 104 MiB at once (NOC-492). A Lambda instance has 256 MB,
+//! so the memory holds at most [`SPACES`] spaces and at most [`WEIGHT`]
+//! control changes over all of them, about the memory of one space of
+//! 10,000 persons: what it holds and one request's work on a space it
+//! would keep take about 185 MiB, which leaves the rest to the process.
+//! It forgets the spaces used least recently first, and keeps no space
+//! heavier than all of it: such a space is resolved from scratch on every
+//! request, as before. A request takes a space's memory out while it works
+//! and puts it back when done, so two requests never share one; a second
+//! request on the same space meanwhile starts from scratch.
 
 use std::collections::VecDeque;
 use std::fmt;
@@ -46,10 +50,10 @@ use crate::store::{Entry as LogEntry, Epoch, RelayStore};
 /// The most spaces the relay remembers at once.
 pub const SPACES: usize = 16;
 
-/// The most weight the memory holds: the sum over its spaces of the square
-/// of their control changes: about the memory of one space of 1,200
-/// control changes.
-pub const WEIGHT: usize = 1_200 * 1_200;
+/// The most weight the memory holds: the control changes of all its
+/// spaces, about 77 MiB (NOC-492). It holds a space of 10,000 persons and
+/// the control changes beside them.
+pub const WEIGHT: usize = 10_240;
 
 /// A space's control changes as the relay last read them, and their
 /// resolve.
@@ -96,7 +100,7 @@ impl Memory {
 
     /// Puts the memory of `space` back, as the one used last.
     fn keep(&self, space: SpaceId, known: Known) {
-        let weight = known.entries.len().saturating_pow(2);
+        let weight = known.entries.len();
         self.keep_weighed(space, known, weight);
     }
 

@@ -8,6 +8,7 @@
 
 import { accountOf } from "./accountCalls.ts";
 import { createAdHoc, lookupsOf, readObjects } from "./adHoc.ts";
+import { admissionOf } from "./admission.ts";
 import { type Cbor, decode, encode } from "./cbor.ts";
 import {
   type Change,
@@ -23,12 +24,14 @@ import { SetElements } from "./elements.ts";
 import { erasureCallsOf, signOffOf, takeBackOf } from "./eraseCalls.ts";
 import { NcError } from "./error.ts";
 import { lockOutOfDate } from "./lockCheck.ts";
+import { browserMarkers } from "./markers.ts";
 import type { Notice } from "./members.ts";
 import { membersOf, ownInvitation } from "./membership.ts";
 import { Cursor, queryState } from "./query.ts";
 import { notify, spaceStatusOf, syncStatusOf } from "./reports.ts";
 import { spaceListOf } from "./spaceList.ts";
 import type { SpaceStatus } from "./status.ts";
+import { guardLoss } from "./storageLost.ts";
 import type { SyncStatus } from "./sync.ts";
 import { browserPage, type Platform, tabCore } from "./tabs.ts";
 import * as texts from "./texts.ts";
@@ -59,21 +62,26 @@ export const connectWorker = async (options: OpenOptions): Promise<Db> => {
   // lock was not built from (NOC-323; RFC 0009, "Open and close").
   const outOfDate = lockOutOfDate(options.model, options.lock);
   if (outOfDate !== undefined) throw new NcError("lockOutOfDate", outOfDate);
-  const core =
-    typeof navigator !== "undefined" &&
-    navigator.locks !== undefined &&
-    typeof BroadcastChannel !== "undefined"
-      ? await tabCore(options.name ?? "default", {
-          locks: navigator.locks as unknown as Platform["locks"],
-          channel: (name) =>
-            new BroadcastChannel(name) as unknown as ReturnType<
-              Platform["channel"]
-            >,
-          startWorker,
-          page: browserPage(),
-        })
-      : startWorker();
-  return connect(core, options);
+  const name = options.name ?? "default";
+  // Before the worker starts, so that a database the browser dropped is
+  // refused, not opened empty in silence (NOC-445, storageLost.ts).
+  return guardLoss(browserMarkers(), name, options.ifStorageLost, async () => {
+    const core =
+      typeof navigator !== "undefined" &&
+      navigator.locks !== undefined &&
+      typeof BroadcastChannel !== "undefined"
+        ? await tabCore(name, {
+            locks: navigator.locks as unknown as Platform["locks"],
+            channel: (name) =>
+              new BroadcastChannel(name) as unknown as ReturnType<
+                Platform["channel"]
+              >,
+            startWorker,
+            page: browserPage(),
+          })
+        : startWorker();
+    return connect(core, options);
+  });
 };
 
 const checkName = (name: string | undefined) => {
@@ -142,6 +150,7 @@ export const connect = async (
       relay: options.relay,
       pairing: options.pairing === "request" ? true : undefined,
       recover: options.recover,
+      admission: options.admission ? true : undefined,
     });
   } catch (error) {
     core.terminate();
@@ -211,6 +220,7 @@ export const connect = async (
     return space(id);
   };
 
+  const admitted = admissionOf(ask, options.admission);
   // The identity of this database, which its cursors carry.
   const identity = {};
   const subscriptions = new Set<Subscription>();
@@ -227,6 +237,7 @@ export const connect = async (
       synced(message.status);
       return;
     }
+    if (message.event === "admission") return admitted(message);
     if (message.event === "durability") {
       reports.durabilityChanged(
         (message as { durability?: unknown }).durability,
@@ -644,7 +655,7 @@ export const connect = async (
         }
       },
     },
-    account: { ...accountOf(ask), signOff: signOffOf(ask) },
+    account: Object.assign(accountOf(ask, opened), { signOff: signOffOf(ask) }),
     ...erasureCallsOf(ask, read),
     durability: reports.durability,
     view: reports.view,

@@ -24,6 +24,8 @@ Playwright's builds are not the branded browsers. Its WebKit is not Safari: it h
 | Chromium (Playwright) | Private window: storage (off-the-record context) | SQLite on OPFS works; IndexedDB works | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-09 |
 | Chromium (Playwright) | Private window: survives a reload (off-the-record context) | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-09 |
 | Chromium (Playwright) | Private window: after close (off-the-record context) | SQLite lost, IndexedDB lost | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-09 |
+| Chromium (Playwright) | Private window: OPFS without a file operation (off-the-record context) | kept after 450 s, gone after 600 s: every access handle fails, and SQLite reports a disk I/O error; a call on a file or directory handle once a minute keeps it | measured: manual check 2026-11-22 · Chromium 157 (Playwright), off-the-record context, linux x64 |
+| Chromium (Playwright) | Private window: after eleven minutes without a file operation (off-the-record context) | OPFS lost; IndexedDB, sessionStorage and localStorage kept | measured: manual check 2026-11-23 · Chromium 157.0.8103.78 (Playwright), off-the-record context, linux x64 |
 | Firefox (Playwright) | `persist()` | no answer within 5 s: the browser waits for the user | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-09 |
 | Firefox (Playwright) | `persisted()` after `persist()` | false | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-09 |
 | Firefox (Playwright) | `estimate()` | usage 576 KiB, quota 10 GiB | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-09 |
@@ -204,4 +206,21 @@ Storage info (2026-11-09T14:18:55.592Z):
   "opfs": "error: SecurityError: Security error when calling GetDirectory" }
 Write (2026-11-09T14:19:26.667Z): { "sqlite": "error: SecurityError: Security error when calling GetDirectory", "idb": "ok" }
 Read (2026-11-09T14:20:00.037Z): { "sqlite": "error: SecurityError: Security error when calling GetDirectory", "idb": null }
+```
+
+### 2026-11-22 · Chromium 157 (Playwright), off-the-record context, linux x64
+
+- Check: not a checklist step. NOC-444 looked into "SQLite failed: disk I/O error" after a database had been open for a long time in Playwright's `browser.newContext()`, an off-the-record context, as a Chromium private window is.
+- Method: on 2026-11-22, a database opened through the SDK in Chromium 157 (Playwright) on linux x64 was left without a call for different times, then written to. The raw output was not kept; this entry restates the measurement as the NOC-444 decision records it ([decision](../factory/decisions/2026-11-22-NOC-444-a-browser-worker-touches-opfs-every-minute-while-a-database-is-open.md)).
+- Saw: after 450 s without a file operation the files were there; after 600 s every access handle failed, the write failed with a disk I/O error, and the database opened again was empty. A call on a file or directory handle once a minute kept OPFS, even a call that found nothing; `getDirectory()` and `estimate()` alone did not.
+
+### 2026-11-23 · Chromium 157.0.8103.78 (Playwright), off-the-record context, linux x64
+
+- Check: not a checklist step. NOC-445 asked what of a site's storage stays when Chromium drops a private window's OPFS.
+- Method: on 2026-11-23, a one-off Playwright script in a cloud session opened a page on `http://localhost` in `browser.newContext()`, wrote a file into the directory `.opfs-sahpool` on OPFS, a record into IndexedDB, and an item into sessionStorage and localStorage (07:06:31 UTC), then made no call for 660 s and read all four back in the same page (07:17:31).
+- Saw: the directory on OPFS was gone (`NotFoundError`); IndexedDB, sessionStorage and localStorage still held what was written, and `indexedDB.databases()` still listed the database.
+
+```text
+setup ok 2026-11-23T07:06:31.299Z
+check {"opfs":"NotFoundError","session":"1","local":"1","idb":"v","dbs":["nocentraldb/x"]} 2026-11-23T07:17:31.324Z
 ```

@@ -384,6 +384,11 @@ where
                 let put = relay.put_person_keys(member, space, records).await;
                 self.answer(call, req, put.map(|()| wire::ok(req))).await
             }
+            Request::Admit { req, admission } => {
+                let admitted = relay.admit(&self.relay_id, &admission).await;
+                self.answer(call, req, admitted.map(|()| wire::ok(req)))
+                    .await
+            }
             Request::Ping { req } => self.send(call, wire::pong(req)).await,
             Request::Hello { .. } | Request::Auth { .. } => {
                 self.fail(call, None, ErrorCode::Malformed).await
@@ -560,6 +565,7 @@ pub fn kind(request: &Request) -> &'static str {
         Request::Keys { .. } => "keys",
         Request::PersonKeys { .. } => "person-keys",
         Request::PutPersonKeys { .. } => "put-person-keys",
+        Request::Admit { .. } => "admit",
         Request::Ping { .. } => "ping",
     }
 }

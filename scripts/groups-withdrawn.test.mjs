@@ -23,7 +23,7 @@ const DECISIONS = "factory/decisions";
 
 const WITHDRAWING =
   /#(amendment-\d+-)?groups-leave-the-design\)|(0008-membership\.md)?#groups\)/;
-const WITHDRAWN = /withdrawn by the owner \(Carsten, 2026-11-09\)/i;
+const WITHDRAWN = /withdrawn by the owner \(2026-11-09\)/i;
 
 /**
  * Uses of the word "group" that are not the withdrawn feature: an auditor's

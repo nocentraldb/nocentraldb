@@ -280,6 +280,8 @@ export interface Db {
   };
   /** This member's account: its recovery code, and whether this open recovered it (RFC 0009, "Accounts and devices"). */
   readonly account: {
+    /** The account's identity, its recovery key in hexadecimal: public, the same on every device and agent of the account and after a recovery, and what the app's backend signs an admission for (RFC 0015, "In the SDK"). `null` while the database waits to be paired. */
+    readonly identity: string | null;
     /** The recovery code while the person has not confirmed they stored it, else `null`; shown again on every open until then. */
     recoveryCode(): Promise<RecoveryCode | null>;
     /** `accountRecovered` on the open that recovered the account with `recover`, else `null`. */
@@ -336,16 +338,20 @@ interface OpenOptions {
   model: Record<string, any>;
   /** `model.lock.json`: the rules the core folds by. */
   lock: unknown;
-  /** The relay's URL; without it, the database stays local. */
+  /** The relay's URL; without it, the database stays local. A token for the relay belongs in the query string, never in the path, since the sync status shows the path (NOC-495). */
   relay?: string;
   /** Which database: 1 to 64 of a–z, 0–9, `-` and `_`; `"default"` when left out. */
   name?: string;
   /** `"on-open"`, the default: ask the browser for persistent storage on open, without waiting; `"on-request"`: only when the app calls `db.durability.requestPersistent()` (RFC 0006). */
   persistentStorage?: "on-open" | "on-request";
+  /** What `nc.open` does when this browser had the database open before and the browser has since dropped its files, as Chromium does with a private window's OPFS after ten minutes with no database open: `"refuse"`, the default, fails with `storageLost`; `"open-empty"` opens an empty copy under the same member keys (RFC 0006, NOC-445). */
+  ifStorageLost?: "refuse" | "open-empty";
   /** `"request"`: open a new database to be paired to an account; its invitation carries no certificate yet (RFC 0010). */
   pairing?: "request";
   /** The twelve words of a recovery code, as the person typed them: recovers the account on a new database (RFC 0010). Never logged. */
   recover?: string;
+  /** Fetches an admission from the app's backend for the account's identity, `db.account.identity`, and answers its text, `ncdb-admit-1:...` (RFC 0015, "In the SDK"). The SDK calls it when the relay refuses a new space, presents the answer and pushes the space again, once; a function that throws leaves the space refused. The app handles a string, never a key. */
+  admission?: (identity: string) => Promise<string>;
 }
 
 /** Opens this member's database in the browser. */

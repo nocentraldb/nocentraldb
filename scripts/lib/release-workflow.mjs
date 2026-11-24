@@ -4,9 +4,10 @@
 // scripts/release-workflow.test.mjs (the rules for every job),
 // scripts/release-workflow-alpha.test.mjs (the alpha job) and
 // scripts/release-workflow-publish.test.mjs (verify, build, publish and
-// commit-back), scripts/release-workflow-npm.test.mjs (alpha-npm) and
+// commit-back), scripts/release-workflow-npm.test.mjs (alpha-npm),
 // scripts/release-workflow-registries.test.mjs (publish-crates and
-// publish-npm).
+// publish-npm) and scripts/release-workflow-memory.test.mjs (the memory
+// budget guard in verify).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
