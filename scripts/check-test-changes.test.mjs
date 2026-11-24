@@ -402,6 +402,17 @@ test("a --pr-head that does not exist is an error, never a pass", () => {
   assert.match(out, /nowhere/);
 });
 
+test("an empty --base, --head or --pr-head is a usage error, never a pass", () => {
+  // In CI an empty value means the step that should set it failed.
+  const dir = squashed([{ files: REMOVED[1], message: "NOC-1: drop" }]);
+  for (const flag of ["--base", "--head", "--pr-head"]) {
+    const args = { "--base": "HEAD^1", "--head": "HEAD", "--pr-head": "pr" };
+    args[flag] = "";
+    const { status, out } = check(dir, Object.entries(args).flat());
+    assert.equal(status, 2, `${flag}\n${out}`);
+  }
+});
+
 test("a pull request that only adds tests passes untouched", () => {
   const { status, out } = pr(
     { [RS]: rust(rustTest("one")), [TS]: ts(tsTest("one")) },
