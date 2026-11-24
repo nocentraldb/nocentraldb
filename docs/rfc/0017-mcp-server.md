@@ -8,7 +8,7 @@ It builds on the Rust SDK of [RFC 0009](0009-sdk-api.md) and on the agents and p
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0017 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Decided, 2026-11-23. Nothing of it is built, and its build is not scheduled yet. The names that declared tools add to the schema and the lock are proposed in [Declared tools](#declared-tools), and [Open questions](#open-questions) holds their alternatives until they are decided.
+**Status.** Decided, 2026-11-23. Nothing of it is built, and its build is not scheduled yet.
 
 **At 0.1.** Not built. Release 0.1 has no MCP server; an agent reaches its data only through the Rust SDK or the TypeScript SDK in a browser.
 
@@ -157,7 +157,7 @@ The host syncs as the Rust SDK does: one connection to the relay, pulling and pu
 
 ## Declared tools
 
-The app declares its agent tools in its schema module, next to its model. `ncdb model build` checks them against the model and writes them into the lock, and `ncdb-mcp` serves them. A declared tool is data, not code: the binary never runs the app's TypeScript, so a tool can only read through a declared index or by id, and write a fixed list of operations filled from its parameters. The names in this section are the ones proposed; [Open questions](#open-questions) holds their alternatives.
+The app declares its agent tools in its schema module, next to its model. `ncdb model build` checks them against the model and writes them into the lock, and `ncdb-mcp` serves them. A declared tool is data, not code: the binary never runs the app's TypeScript, so a tool can only read through a declared index or by id, and write a fixed list of operations filled from its parameters.
 
 ### In the schema
 
@@ -199,6 +199,7 @@ export const tools = nc.tools(model, {
 ```
 
 - **`nc.tools(model, { name: tool })`** takes the model and the tools by name. The schema module exports it as `tools`, beside `model`; `ncdb model build` reads both. A module without `tools` declares none.
+- **A tool's name is its key, as the app writes it,** such as `closeTask`. The model, the client and the logs show what the developer typed, and no two keys can turn into one name. MCP prescribes no case; an app that wants `close_task` writes it so.
 - **`nc.tool.find(index, { description, equal, fields, take })`** reads a page of a declared index, as `db.find` does. `equal` fixes some of the index's leading fields to constants; the leading fields the index's `equal` asks for and the tool does not fix become the tool's parameters, typed as their fields. An index with `scope: "space"` adds a `space` parameter. The model passes `take`, up to the tool's `take`, 20 by default and at most 100, and `after`, a cursor handle.
 - **`nc.tool.get(collection, { description, fields })`** reads one object, as `space.get` does. Its parameters are `space` and `id`.
 - **`fields`** names the fields a find or a get returns, and nothing else is returned. The app chooses what the model sees: a personal field reaches the model only when a tool names it. A rich-text field reads as `{ markdown, version }`, the version an action's text edits name ([RFC 0013, "An agent: anchored edits"](0013-rich-text.md#an-agent-anchored-edits)).
@@ -208,7 +209,7 @@ export const tools = nc.tools(model, {
 
 ### In the lock
 
-`ncdb model build` writes the tools under `tools`, beside `collections`, in the lock's canonical form ([RFC 0005, "Canonical form"](0005-schema-and-model-lock.md#canonical-form)):
+`ncdb model build` writes the tools under `tools`, beside `collections`, in the lock's canonical form ([RFC 0005, "Canonical form"](0005-schema-and-model-lock.md#canonical-form)). A lock that declares tools has `format` 2; a lock that declares none stays at format 1. Every SDK reads format 2 and ignores `tools`, which only `ncdb-mcp` reads. An SDK that reads only format 1 refuses a lock with tools openly, as RFC 0005 has a reader do with a format it does not know, rather than ignoring what it cannot read; an app that declares tools therefore needs a current SDK.
 
 ```json
 {
@@ -268,6 +269,10 @@ Every refusal of the core applies as to any write: a member added as a reader is
 - **A query language in a tool,** such as a filter on any field. A query runs only through a declared index ([GENESIS.md, principle 6](../../factory/GENESIS.md#principles-in-priority-order)); a tool that needs another order declares another index.
 - **Returning every field.** The app would not choose what reaches the model's provider; naming the fields keeps personal fields out unless a tool asks for them, and keeps results small.
 - **Tools in a file of their own, apart from the schema module.** They name the model's collections, fields and indexes, and the build checks them against the model; written beside it, TypeScript checks the names as the developer types them.
+- **A generated file of their own, `model.tools.json`, beside the lock.** The lock's format would stay as it is, but there would be a second generated file to commit and to check, and a second path for `ncdb-mcp` to take and keep in step with the lock, which can drift from it.
+- **`tools` in the lock at format 1.** Nothing new to pass around, but every reader of format 1 would have to ignore a top-level key it does not know, which format 1 never promised; each SDK's reader would need checking and new tests, and an old reader would silently skip what it cannot read.
+- **One namespace, `nc.agent`,** with `nc.agent.tools`, `nc.agent.find`, `nc.agent.action`, `nc.agent.create` and the rest. Everything for agents would sit in one place, at the cost of longer names, and `nc.agent.create` reads like creating an agent, a mistake the API would carry for good. `nc.tool`, `nc.param` and `nc.op` each say what they hold.
+- **Tool names converted to snake case,** `close_task` for `closeTask`, the usual form in MCP. The model and the logs would show a name the developer never typed, and two keys could turn into one name, which the build would then have to refuse.
 
 ## The tools
 
@@ -317,6 +322,8 @@ A tool that fails returns a result with `isError` and `{ "code", "message" }`. T
 
 - **One generic tool,** `call`, taking an SDK call by name. It saves tool definitions but gives the model no schema per call, and annotations would not tell a read from a write.
 - **A tool per collection,** such as `find_tasks`, made from the lock without the app's say. The tools would follow the lock's structure, not the app's tasks, and would carry no description of what they are for.
+- **`list_spaces` behind `--generic-tools` too,** so that only the app's tools are listed without the flag. The model would learn which spaces it may act in, and how fresh each is, only from the `$space` and `sync` of what it reads; how current a space is belongs to the member, not to the app, and an app could declare no tool that gives it.
+- **The flag named `--dev`.** Short, but it says nothing of what it turns on, and may later be wanted for something else; `--generic-tools` says what it adds.
 - **The generic tools always listed** beside the declared ones. The model would choose between `closeTask` and a generic `write` that can do the same and more, and personal fields the app keeps out of its tools would be one call away.
 - **Text only, without structured content.** Clients and frameworks that check results against a schema could not, and a model gets nothing it does not get from the text beside it.
 - **MCP resources for objects.** The clients' support for resources differs (Claude Code offers them as @-mentions, Codex as tools of its own), and a resource names a fixed object; the tools serve every client the same way.
@@ -381,7 +388,7 @@ Alphas carry no binaries; betas and releases do, as they carry the crates.
 
 ## Follow-up tickets
 
-These tickets build the design. None is scheduled yet, and the declared tools wait for the answers to [Open questions](#open-questions):
+These tickets build the design. None is scheduled yet:
 
 - **Declared tools in the schema and the lock**: `nc.tools` and its parts in the TypeScript SDK, the build's check in Rust, the lock's `tools` and RFC 0005's text on them, with a test per refusal of [What the build checks](#what-the-build-checks).
 - **The server's skeleton**: the crate `ncdb-mcp`, `init`, `pair`, `token`, the host with its lock file, `stdio` that forwards or hosts, and `serve`, with tests that two `stdio` commands share one host and that the last client's exit ends a host `stdio` started.
@@ -392,28 +399,16 @@ These tickets build the design. None is scheduled yet, and the declared tools wa
 - **Shipping**: the binaries, checksums and attestations in the release workflow, signing and notarization, and `ncdb-mcp` on crates.io.
 - **The docs**: a page on declaring tools, and one that sets the server up for Claude Code and Codex and says what it does not do.
 
-## Open questions
-
-The design above uses the first option of each question. Each is a public name or format, and is settled before the declared tools are built.
-
-1. **Where the declarations live.**
-   - *In `model.lock.json`, under `tools`, with the lock's `format` raised to 2 for a lock that declares tools.* One file for the build to write, for CI to check and for `ncdb-mcp` to read. Cost: every SDK must read format 2 and ignore `tools`, and an SDK that reads only format 1 refuses a lock with tools, so an app that declares tools needs a current SDK.
-   - *In a file of their own, `model.tools.json`, beside the lock.* The lock's format stays as it is. Cost: a second generated file to commit and to check, and a second path for `ncdb-mcp` to take and keep in step with the lock.
-   - *In `model.lock.json` under `tools`, with format 1.* Nothing new to pass around. Cost: every reader of format 1 must ignore a top-level key it does not know, which format 1 does not promise today, so each SDK's reader must be checked and its tests extended.
-2. **The names in the schema.**
-   - *`nc.tools`, `nc.tool.find`, `nc.tool.get`, `nc.tool.action`, `nc.param.object`, `nc.param.textEdits`, and `nc.op.create`, `nc.op.update`, `nc.op.delete`, with the error `toolsRefused`.* Short, and each says what it is. Cost: three new namespaces under `nc`.
-   - *One namespace, `nc.agent`: `nc.agent.tools`, `nc.agent.find`, `nc.agent.get`, `nc.agent.action`, `nc.agent.object`, `nc.agent.textEdits`, `nc.agent.create`, `nc.agent.update`, `nc.agent.delete`, with the same error.* Everything for agents in one place a developer finds. Cost: longer names, and `nc.agent.create` reads like creating an agent.
-3. **The tool names the model sees.**
-   - *The keys of `nc.tools` as written,* such as `closeTask`, in the case the app chose. What the developer types is what the model sees. Cost: tools in camel case, where most MCP servers use snake case.
-   - *Converted to snake case,* `close_task`. The usual form in MCP. Cost: the model and the logs show a name the developer never typed, and two keys could convert to one name, which the build then refuses.
-4. **The developer flag and what stays without it.**
-   - *`--generic-tools`, with `list_spaces` always listed.* The flag says what it adds. Cost: one tool beside the app's that the app did not declare.
-   - *`--generic-tools`, with `list_spaces` only behind it too.* Only the app's tools without the flag. Cost: the model learns spaces and their freshness only from the `$space` and `sync` of what it reads, and an app that wants a list declares nothing that gives one.
-   - *`--dev`.* Short. Cost: says nothing of what it turns on, and may later be wanted for something else.
-
 ## How this RFC relates to the others
 
 It builds a member on the Rust SDK of [RFC 0009](0009-sdk-api.md) and pairs it as an agent of [RFC 0010](0010-accounts.md); it adds declared tools to the schema and the lock of [RFC 0005](0005-schema-and-model-lock.md), which the follow-up ticket writes into RFC 0005's text; it reads the view of [RFC 0006](0006-local-view.md) and syncs through the relay of [RFC 0007](0007-relay.md) as any member does; it keeps the keys as [RFC 0003](0003-keys-and-cryptography.md) keeps them; and it exposes the anchored edits of [RFC 0013](0013-rich-text.md).
+
+## Decisions
+
+- **2026-11-24 · Declared tools live in `model.lock.json` under `tools`, and a lock that declares tools has `format` 2.** ([decision](../../factory/decisions/2026-11-24-NOC-504-declared-tools-live-in-the-lock-under-tools-with-lock-format-2.md))
+- **2026-11-24 · The schema declares tools with `nc.tools`, `nc.tool.*`, `nc.param.*` and `nc.op.*`, and a lock with bad tools is refused with `toolsRefused`.** ([decision](../../factory/decisions/2026-11-24-NOC-504-the-schema-declares-tools-with-nc-tool-nc-param-and-nc-op.md))
+- **2026-11-24 · A declared tool's name is its key in `nc.tools`, as the app writes it.** ([decision](../../factory/decisions/2026-11-24-NOC-504-a-declared-tool-s-name-is-its-key-as-the-app-writes-it.md))
+- **2026-11-24 · The generic tools wait behind `--generic-tools`, and `list_spaces` is always listed.** ([decision](../../factory/decisions/2026-11-24-NOC-504-generic-tools-wait-behind-generic-tools-and-list-spaces-is-always-listed.md))
 
 ## History
 
