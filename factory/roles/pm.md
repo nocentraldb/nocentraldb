@@ -57,6 +57,7 @@ Check test first on every PR:
 - In the commit history, each test commit comes before the code that makes it pass.
 - Spot-check at least one: check out the test commit, run that test, and see it fail.
 - No test was weakened or deleted to get green without a stated reason.
+- The PR's text asks the owner nothing. Move a question you find there into a ticket for the owner, and replace it in the PR with a link to that ticket (Carsten, 2026-11-24, NOC-510).
 
 The gate rejects a code or test file past the limit in CONFIG.md (`repo:file-size`), so a PR with a green gate has none. Still look at every file the PR grows close to the limit: send the PR back when it stays under the limit only by splitting a file badly, along lines or helpers instead of concerns.
 
