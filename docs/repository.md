@@ -231,7 +231,7 @@ Agents cannot change branch rules. The owner sets the queue in the ruleset that 
 
 - **Require merge queue** on, with merge method **Squash**.
 - **Status checks that are required**: `gates` and `changes`, as today. The ruleset must not require a check that does not run on `merge_group`, or the queue waits for it.
-- **Build concurrency** and the **group size** (minimum and maximum pull requests to merge in one group, and how long to wait for them), as the owner decides them. One pull request per group merges at most about two an hour at today's gate time of about 30 minutes; larger groups merge faster, but a failing group is split up and built again.
+- **Build concurrency** and the **group size** (minimum and maximum pull requests to merge in one group, and how long to wait for them), as the owner decides them (NOC-515). One pull request per group merges at most about two an hour at today's gate time of about 30 minutes; larger groups merge faster, but a failing group is split up and built again.
 - **Status check timeout**: above the `gates` job's 45 minutes, such as 60 minutes.
 
 ### Caching and what moon buys
