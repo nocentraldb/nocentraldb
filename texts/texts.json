@@ -800,6 +800,12 @@
       "when": "In core.viewCorrupt, as `what`, when the database holds a pending link whose change id it cannot read."
     },
     {
+      "id": "core.unreadablePendingMove",
+      "kind": "core",
+      "text": "pending move",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a pending move it cannot read."
+    },
+    {
       "id": "core.unreadablePluginState",
       "kind": "core",
       "text": "plugin state",
@@ -1443,6 +1449,48 @@
       "when": "Members::remove (members.remove) when the member to remove is this member: leaving is Space::leave."
     },
     {
+      "id": "error.moveAlreadyMoved",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "the object {id} has moved to another space already; move it from the space it is in now",
+      "when": "Space::move_objects (space.move) when an object to move reads as moved in this space (RFC 0016, \"The SDK call and its notice\")."
+    },
+    {
+      "id": "error.moveIntoItsOwnSpace",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "a move needs another space than the one its objects are in",
+      "when": "Space::move_objects (space.move) when the destination is the space the call is made on."
+    },
+    {
+      "id": "error.moveNamedTwice",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "the object {id} is named twice",
+      "when": "Space::move_objects (space.move) when the same object is in the list twice."
+    },
+    {
+      "id": "error.moveOfAnotherSpace",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "the object {id} is in the space {space}; a move takes only objects of the space it is called on",
+      "when": "Space::move_objects (space.move) when an object to move was read from another space (RFC 0016, \"The SDK call and its notice\")."
+    },
+    {
+      "id": "error.movePersonalLater",
+      "kind": "error",
+      "code": "notAllowed",
+      "text": "the object {id} holds a personal value, and an object with personal values cannot be moved yet",
+      "when": "Space::move_objects (space.move) when an object to move holds a personal value: sealing it again in the new space comes with NOC-477 (RFC 0016, \"Its personal fields\")."
+    },
+    {
+      "id": "error.movePluginLater",
+      "kind": "error",
+      "code": "notAllowed",
+      "text": "the object {id} has a value in the plugin field {name}, and a plugin's value cannot be moved yet",
+      "when": "Space::move_objects (space.move) when an object to move has a set plugin field: a plugin's read is no value its write takes, so the move cannot carry it yet (NOC-475)."
+    },
+    {
       "id": "error.newerAccountKeyNotTaken",
       "kind": "error",
       "code": "invalidValue",
@@ -1637,6 +1685,13 @@
       "code": "noPerson",
       "text": "the object is not a person's: it has no personal field",
       "when": "Db::erasure_request with an object that has no personal field, so it names no person to erase (NOC-325)."
+    },
+    {
+      "id": "error.objectMoved",
+      "kind": "error",
+      "code": "moved",
+      "text": "the object {id} moved to the space {space}; write to it there",
+      "when": "Space::write (space.write) to an object this copy reads as moved (RFC 0016, \"The SDK call and its notice\")."
     },
     {
       "id": "error.objectTooLarge",
@@ -1994,6 +2049,13 @@
       "code": "memberRemoved",
       "text": "The removed member keeps its copy of everything it received before now.",
       "when": "Members::remove (members.remove) returns it once a member is removed and the space key rotated: the removed member keeps what it already received. RFC 0009's text."
+    },
+    {
+      "id": "notice.objectMoved",
+      "kind": "notice",
+      "code": "objectMoved",
+      "text": "The members of the old space keep the history of these objects and their state at the move, and see no change after it. The members of the new space read them from the move on, not their history.",
+      "when": "Space::move_objects (space.move) returns it once both changes are written. The text is RFC 0016's, decided by the owner on 2026-11-22."
     },
     {
       "id": "notice.roleSet",

@@ -25,6 +25,7 @@ mod log_table;
 mod migrate;
 pub mod model;
 mod pending_links;
+mod pending_moves;
 mod person_keys;
 mod plugin;
 mod query;
@@ -63,6 +64,7 @@ pub use model::{
     Direction, Field, FieldState, Index, Invalid, Model, PluginField, RESERVED, Reserved, Scope,
     reserved_name,
 };
+pub use pending_moves::PendingMove;
 pub use query::{Cursor, Page, QueryError};
 pub use read::Row;
 pub use rebuild::RebuildProgress;

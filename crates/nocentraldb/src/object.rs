@@ -25,6 +25,9 @@ pub struct Object {
     /// Its collection, which an ad-hoc space's copy reads its source by.
     collection: String,
     deleted: bool,
+    /// The space it moved to, when this copy holds it as the trace of a
+    /// move (RFC 0016, "What the members of the old space keep").
+    moved_to: Option<SpaceId>,
     /// Every field of the collection, with its value when it is set.
     fields: BTreeMap<String, Option<Value>>,
     /// The person id of `$person`, when the object is a person (RFC 0005,
@@ -45,6 +48,7 @@ impl std::fmt::Debug for Object {
             .field("id", &self.id)
             .field("space", &self.space)
             .field("deleted", &self.deleted)
+            .field("moved_to", &self.moved_to)
             .field("set", &set)
             .finish()
     }
@@ -70,6 +74,13 @@ impl Object {
     /// Whether the object is deleted.
     pub fn deleted(&self) -> bool {
         self.deleted
+    }
+
+    /// The space the object moved to, when this space keeps only its
+    /// trace: it then shows no fields, and lives on in that space (RFC
+    /// 0016, "The SDK call and its notice": `$moved`).
+    pub fn moved_to(&self) -> Option<SpaceId> {
+        self.moved_to
     }
 
     /// The value of the field `name`, as `T`, or `None` when the field is
@@ -159,6 +170,7 @@ impl Object {
             space: SpaceId(space),
             collection: collection.to_owned(),
             deleted: row.object.is_deleted(),
+            moved_to: row.object.moved_to().map(SpaceId),
             fields,
             person,
             erased,

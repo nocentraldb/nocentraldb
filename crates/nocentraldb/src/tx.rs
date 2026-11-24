@@ -60,6 +60,10 @@ enum Record {
     /// A delete (`true`) or a restore (`false`): delete (4) with that
     /// boolean (RFC 0004, "Creating and deleting an object").
     Delete(String, CoreObjectId, bool),
+    /// A move of the object to a space (RFC 0016, "Formats"): move (6).
+    Move(String, CoreObjectId, CoreSpaceId),
+    /// The space a created object came from: a set of `$movedFrom`.
+    MovedFrom(String, CoreObjectId, CoreSpaceId),
 }
 
 /// What one field of one object becomes in the change.
@@ -213,6 +217,28 @@ impl<'a> Transaction<'a> {
         Ok(())
     }
 
+    /// Records the move of the object `id` of `collection` to `to`, which
+    /// fails as an update does when the copy holds no such object, or holds
+    /// it moved.
+    pub(crate) fn move_to(
+        &mut self,
+        collection: &str,
+        id: CoreObjectId,
+        to: CoreSpaceId,
+    ) -> Result<(), Error> {
+        self.fields(collection, [])?;
+        self.records
+            .push(Record::Move(collection.to_owned(), id, to));
+        Ok(())
+    }
+
+    /// Records that the object `id` of `collection`, which this
+    /// transaction creates, came from the space `from`.
+    pub(crate) fn moved_from(&mut self, collection: &str, id: CoreObjectId, from: CoreSpaceId) {
+        self.records
+            .push(Record::MovedFrom(collection.to_owned(), id, from));
+    }
+
     /// The values, each for a field `collection` has.
     fn fields<'v>(
         &self,
@@ -290,6 +316,49 @@ impl<'a> Transaction<'a> {
                     )
                     .expect("a boolean is a deletion's value");
                     operations.push(field_op::delete(id, &collection, &write));
+                    continue;
+                }
+                Record::Move(collection, id, to) => {
+                    held(view, space, &created, &collection, id, prefix)?;
+                    // The move replaces every live move the copy holds:
+                    // the winner and each conflict.
+                    let replaces = match view
+                        .get(space, &format!("{prefix}{collection}"), id)
+                        .map_err(storage)?
+                    {
+                        Some(row) => {
+                            let moving = row.object.moving();
+                            moving
+                                .value
+                                .into_iter()
+                                .chain(moving.conflicts)
+                                .map(|entry| entry.id)
+                                .collect()
+                        }
+                        None => Default::default(),
+                    };
+                    let write = ncdb_core::basic::Write {
+                        id: Site::ID,
+                        author,
+                        stamp: Site::STAMP,
+                        value: cbor::Value::Bytes(to.0.to_vec()),
+                        replaces,
+                    };
+                    operations.push(field_op::move_object(id, &collection, &write));
+                    continue;
+                }
+                Record::MovedFrom(collection, id, from) => {
+                    let value = cbor::Value::Map(
+                        [(cbor::Key::Unsigned(1), cbor::Value::Bytes(from.0.to_vec()))].into(),
+                    );
+                    let write = ncdb_core::basic::Write {
+                        id: Site::ID,
+                        author,
+                        stamp: Site::STAMP,
+                        value,
+                        replaces: Default::default(),
+                    };
+                    operations.push(field_op::moved_from(id, &collection, &write));
                     continue;
                 }
             };
@@ -460,6 +529,15 @@ fn held(
             if row.object.collection().value.map(|e| e.value)
                 == Some(cbor::Value::Text(in_view)) =>
         {
+            // The trace of a move takes no write: the object lives on in
+            // the space it moved to (RFC 0016, "The SDK call and its
+            // notice").
+            if let Some(to) = row.object.moved_to() {
+                return Err(Error::new(
+                    ErrorCode::Moved,
+                    crate::texts::error::object_moved(ObjectId(object), crate::id::SpaceId(to)),
+                ));
+            }
             Ok(row.object.deletion().clone())
         }
         _ if created.contains(&(object, collection.to_owned())) => Ok(Default::default()),

@@ -188,6 +188,22 @@ tasks:
       - "/crates/ncdb-core/src/**/*"
       - "/packages/sdk/src/**/*"
       - "/docs/rfc/0009-sdk-api.md"
+  test-changes:
+    # NOC-508: a pull request that removes a test, skips one, removes an
+    # assertion or changes an expected value passes only with a
+    # `Test-change: <reason>` trailer in one of its commits. Here it compares
+    # HEAD with origin/main, so an agent sees it before pushing; a checkout
+    # without origin/main (CI's shallow gates job) compares nothing and says
+    # so. The `changes` check (.github/workflows/changes.yml) runs it with the
+    # pull request's base and head. Never cached: its answer depends on the
+    # git history, which is no input.
+    command: "node scripts/check-test-changes.mjs"
+    inputs:
+      - "/scripts/check-test-changes.mjs"
+      - "/scripts/lib/test-changes/**/*"
+      - "/scripts/release/lib/git.mjs"
+    options:
+      cache: false
   version:
     # The one version of the project: Cargo.toml [workspace.package] holds a
     # plain X.Y.Z, every crate inherits it, inter-crate dependencies are
@@ -384,6 +400,7 @@ tasks:
       - "~:test"
       - "~:fragments"
       - "~:decisions"
+      - "~:test-changes"
       - "~:texts"
       - "~:version"
       - "~:api-report"
