@@ -174,6 +174,27 @@ fn the_resolver_refuses_to_add_a_change_another_held_change_depends_on() {
 }
 
 #[test]
+fn the_resolver_refuses_to_add_a_person_key_whose_signature_does_not_verify() {
+    let mut s = Space::new(ALICE);
+    let g = s.genesis.clone();
+    let p1 = s.person_key(ALICE, 1, 1, &[&g]);
+    // The same header under another signature has the same change id.
+    let mut bytes = p1.bytes().to_vec();
+    let last = bytes.len() - 1;
+    bytes[last] ^= 1;
+    let forged = Change::decode(&bytes).expect("a change that decodes");
+    assert_eq!(forged.id(), p1.id());
+    let mut resolver = Resolver::new(s.space);
+    resolver.resolve([&g, &p1]);
+    resolver.resolve([&g]);
+    assert!(resolver.add([&forged]).is_none(), "the resolver refuses it");
+    assert_eq!(
+        resolver.resolve([&g, &forged]),
+        oracle(&s, &[g, forged.clone()])
+    );
+}
+
+#[test]
 fn after_a_refusal_and_a_resolve_the_resolver_adds_again() {
     let mut s = Space::new(ALICE);
     let g = s.genesis.clone();
