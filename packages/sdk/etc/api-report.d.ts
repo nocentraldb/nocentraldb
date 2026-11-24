@@ -195,6 +195,7 @@ interface OpenOptions {
     relay?: string;
     name?: string;
     persistentStorage?: "on-open" | "on-request";
+    ifStorageLost?: "refuse" | "open-empty";
     pairing?: "request";
     recover?: string;
     admission?: (identity: string) => Promise<string>;
