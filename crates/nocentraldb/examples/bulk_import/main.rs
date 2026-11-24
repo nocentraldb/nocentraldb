@@ -17,7 +17,10 @@
 //! device. With `--island`, the second device is paired first and goes
 //! offline; the first device writes the burst offline, reconnects and
 //! pushes it; then the second device comes back and pulls it. It prints
-//! what each step took and what the relay received.
+//! what each step took and what the relay received. At the end, the first
+//! device opens its database again without a relay and writes one more
+//! record; the bytes it then holds on Rust's heap are what an open space
+//! keeps in memory (NOC-452).
 //! Everything lives in a temporary directory, removed at the end, or in
 //! `--dir`, a new directory that stays for a look at the databases.
 //! `docs/bulk-import.md` explains the numbers.
@@ -34,6 +37,9 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use second::Second;
+
+#[global_allocator]
+static COUNTING: memory::Counting = memory::Counting;
 
 const USAGE: &str = "usage: bulk_import [--operations <n>] [--batch <creates per change>] \
      [--island] [--relay-bin <path>] [--dir <path>]";
@@ -218,6 +224,8 @@ async fn measure(args: Args) -> Result<(), String> {
     let laptop_peak = memory::own_peak();
     let received = relay.received()?;
     let caught_up = tablet.caught_up(space, written.last)?;
+    drop(laptop);
+    let open_heap = reopened(&dir.0, space).await?;
 
     let peak = |bytes: Option<u64>| bytes.map_or("not reported".to_owned(), megabytes);
     let (scenario, from) = if args.island {
@@ -242,6 +250,7 @@ async fn measure(args: Args) -> Result<(), String> {
         database(device::size(&dir.0.join("laptop")))
     );
     println!("first device's peak RSS:  {}", peak(laptop_peak));
+    println!("open space on the heap:   {}", megabytes(open_heap));
     println!("relay log entries:        {}", received.changes);
     println!("relay frame bytes:        {}", megabytes(received.bytes));
     println!("largest frame:            {} bytes", received.largest);
@@ -268,4 +277,27 @@ async fn measure(args: Args) -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+/// The bytes the first device holds on Rust's heap once it opened its
+/// database again, without a relay, and wrote one more record into
+/// `space`: the write reads the log's tips, which a reopened log reads
+/// once.
+async fn reopened(dir: &std::path::Path, space: nocentraldb::SpaceId) -> Result<u64, String> {
+    let before = memory::heap();
+    let laptop = device::open(dir, "laptop", None, false).await?;
+    let on = laptop
+        .spaces()
+        .get(space)
+        .await
+        .map_err(|e| e.to_string())?;
+    on.write(|tx| {
+        tx.create("tasks", import::fields(u64::MAX))?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    let held = memory::heap().saturating_sub(before);
+    drop((on, laptop));
+    Ok(held)
 }
