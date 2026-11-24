@@ -110,7 +110,7 @@ fn a_person_key_of_a_reader_is_added_as_resolve_rejects_it() {
     let g = s.genesis.clone();
     let bob = s.add(ALICE, BOB, Role::Reader, &[&g]);
     let by_reader = s.person_key(BOB, 1, 1, &[&bob]);
-    let resolved = added_one_by_one(&s, &[g, bob], &[by_reader.clone()]);
+    let resolved = added_one_by_one(&s, &[g, bob], std::slice::from_ref(&by_reader));
     assert_ne!(resolved.verdict(by_reader.id()), Some(&Verdict::Accepted));
 }
 
