@@ -1,0 +1,6 @@
+{
+  "id": "core.clockAhead",
+  "kind": "core",
+  "text": "a change by member {author} has a clock {ahead_millis} ms ahead of the local wall clock",
+  "when": "The core's warning when a received change's clock is more than a minute ahead of the local wall clock; `author` is the member id in hex. Not shown to a developer today: the SDK does not ask the core for it."
+}

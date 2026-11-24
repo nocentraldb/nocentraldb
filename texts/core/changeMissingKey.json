@@ -1,0 +1,6 @@
+{
+  "id": "core.changeMissingKey",
+  "kind": "core",
+  "text": "key {key} is missing",
+  "when": "Inside core.receiveDecode or core.openPayload, which no developer sees today (the SDK and the relay replace a change's decode error with their own): a map of a change lacks a required key."
+}

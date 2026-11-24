@@ -1,0 +1,7 @@
+{
+  "id": "error.pageSize",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the page size is 0 or above 1000",
+  "when": "A query whose page size is 0 or above 1000."
+}

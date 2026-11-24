@@ -1,0 +1,6 @@
+{
+  "id": "cli.outOfDate",
+  "kind": "cli",
+  "text": "{lock}: out of date; run ncdb model build. It would write {would}",
+  "when": "`ncdb model check` when the lock differs from what `ncdb model build` would write; `would` is what build would report, or `cli.rewriteCanonical`."
+}

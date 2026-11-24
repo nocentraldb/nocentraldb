@@ -1,0 +1,7 @@
+{
+  "id": "error.carryOverToSeveralSpaces",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "these later edits belong to objects that moved to different spaces; carry them over one space at a time",
+  "when": "space.moves().carry_over (space.moves.carryOver) when the edits given are of objects that moved to more than one space (RFC 0016, \"Later edits\": one write in the new space)."
+}

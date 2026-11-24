@@ -1,0 +1,6 @@
+{
+  "id": "cli.newModel",
+  "kind": "cli",
+  "text": "model version 1, a new model ({id})",
+  "when": "`ncdb model build`, after the lock's name, when it wrote the first lock of a model; `id` is the new model id. A line per collection follows."
+}

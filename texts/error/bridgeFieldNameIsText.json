@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeFieldNameIsText",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "a field's name is text",
+  "when": "The bridge, on a request from the TypeScript SDK: a write whose values name a field by something that is not text."
+}

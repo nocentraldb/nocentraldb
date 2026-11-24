@@ -1,0 +1,6 @@
+{
+  "id": "core.envelopeOpen",
+  "kind": "core",
+  "text": "the key envelope does not open",
+  "when": "The core's reason when a key envelope does not open. Not shown to a developer today: the core and the SDK drop it. HPKE does not open the envelope with this member's key."
+}

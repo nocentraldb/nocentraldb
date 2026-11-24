@@ -1,0 +1,7 @@
+{
+  "id": "error.noSuchObject",
+  "kind": "error",
+  "code": "notFound",
+  "text": "the copy holds no object {object} in {collection}",
+  "when": "An update, a delete or a restore of an object this copy does not hold in that collection."
+}

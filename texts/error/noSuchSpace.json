@@ -1,0 +1,7 @@
+{
+  "id": "error.noSuchSpace",
+  "kind": "error",
+  "code": "notFound",
+  "text": "the copy holds no space {space}",
+  "when": "A call that names a space this database holds no copy of: Space::erasures, Members::list, and every write or read of a space."
+}

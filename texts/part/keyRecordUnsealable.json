@@ -1,0 +1,6 @@
+{
+  "id": "part.keyRecordUnsealable",
+  "kind": "part",
+  "text": "the key record cannot be sealed",
+  "when": "What failed, in webCryptoFailed: WebCrypto could not seal the record of the member's keys."
+}

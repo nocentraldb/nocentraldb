@@ -1,0 +1,6 @@
+{
+  "id": "core.pairingStatementNotAccountKey",
+  "kind": "core",
+  "text": "the account key statement does not name the account key",
+  "when": "The core's reason when a pairing answer's statement names another key. Not shown to a developer today: Account::pair rules it out first."
+}

@@ -17,9 +17,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { generate, generateCli, review } from "./texts.mjs";
 import { generateCore } from "./texts-core.mjs";
 import { entryPath, readTexts, readTextsAt } from "./texts-files.mjs";
-import { generate, generateCli, review } from "./texts.mjs";
 import { generateTs } from "./texts-ts.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -99,20 +99,6 @@ test("a text's file holds one entry, at its id's path, one field per line", () =
   }
 });
 
-/** Two new texts of `kind` whose ids are neighbours: nothing sorts between them. */
-const neighbours = (texts, kind, prefix) => {
-  const pair = ["A", "B"].map((x) => ({
-    id: `${kind}.${prefix}MergeNeighbour${x}`,
-    kind,
-    ...(kind === "error" ? { code: "notFound" } : {}),
-    text: `the text ${x}`,
-    when: `A test adds text ${x}.`,
-  }));
-  const [a, b] = pair.map((t) => t.id);
-  assert.ok(!texts.some((t) => t.id > a && t.id < b));
-  return pair;
-};
-
 /** `git merge-file` of three versions: the number of conflicts and the result. */
 const merge3 = (dir, base, ours, theirs) => {
   for (const [name, content] of Object.entries({ base, ours, theirs }))
@@ -125,37 +111,63 @@ const merge3 = (dir, base, ours, theirs) => {
   return { conflicts: run.status, merged: run.stdout };
 };
 
-test("two texts added in parallel, neighbours by id, merge without a conflict, in every generated module", () => {
+/**
+ * Pairs of new texts of `kind` whose ids are neighbours, nothing sorting
+ * between them: `<name>Merge1` and `<name>Merge2` after each of the first
+ * `count` texts of the kind, as two pull requests on one feature add them.
+ */
+const neighbourPairs = (texts, kind, count) =>
+  texts
+    .filter((t) => t.kind === kind)
+    .slice(0, count)
+    .map((t) => {
+      const pair = ["1", "2"].map((x) => ({
+        ...t,
+        id: `${t.id}Merge${x}`,
+        text: `the text ${x}`,
+      }));
+      const [a, b] = pair.map((p) => p.id);
+      assert.ok(!texts.some((u) => u.id > a && u.id < b), a);
+      return pair;
+    });
+
+test("two texts added in parallel, neighbours by id, merge without a conflict, in the texts and nearly always in the generated modules", () => {
   const { texts } = readTexts(ROOT);
   const dir = temp();
   try {
-    for (const [kind, prefix, gen] of [
-      ["error", "move", generate],
-      ["cli", "model", (t) => ({ "texts.rs": generateCli(t) })],
-      ["ts", "lock", (t) => ({ "texts.ts": generateTs(t) })],
-      ["core", "view", generateCore],
+    for (const [kind, gen] of [
+      ["error", generate],
+      ["cli", (t) => ({ "texts.rs": generateCli(t) })],
+      ["ts", (t) => ({ "texts.ts": generateTs(t) })],
+      ["core", generateCore],
     ]) {
-      const [a, b] = neighbours(texts, kind, prefix);
-      // The texts: two new files, at different paths, and nothing else.
-      assert.notEqual(entryPath(a), entryPath(b));
-      for (const t of [a, b])
-        assert.ok(!existsSync(join(ROOT, entryPath(t))), entryPath(t));
-      // The generated modules: each merges by itself to what the merged
-      // texts generate.
+      const pairs = neighbourPairs(texts, kind, 25);
       const base = gen(texts);
-      const ours = gen([...texts, a]);
-      const theirs = gen([...texts, b]);
-      const both = gen([...texts, a, b]);
-      for (const name of Object.keys(both)) {
-        const { conflicts, merged } = merge3(
-          dir,
-          base[name],
-          ours[name],
-          theirs[name],
-        );
-        assert.equal(conflicts, 0, `${kind}: ${name} conflicts`);
-        assert.equal(merged, both[name], `${kind}: ${name}`);
+      let conflicted = 0;
+      for (const [a, b] of pairs) {
+        // The texts: two new files, at different paths, and nothing else.
+        assert.notEqual(entryPath(a), entryPath(b));
+        for (const t of [a, b])
+          assert.ok(!existsSync(join(ROOT, entryPath(t))), entryPath(t));
+        // The generated modules: each merges by itself to what the merged
+        // texts generate, unless the two land in the same gap by chance.
+        const ours = gen([...texts, a]);
+        const theirs = gen([...texts, b]);
+        const both = gen([...texts, a, b]);
+        let clean = true;
+        for (const name of Object.keys(both)) {
+          const merged = merge3(dir, base[name], ours[name], theirs[name]);
+          if (merged.conflicts !== 0) clean = false;
+          else assert.equal(merged.merged, both[name], `${a.id}: ${name}`);
+        }
+        if (!clean) conflicted++;
       }
+      // In id order every pair conflicts; in hash order a pair lands in the
+      // same gap about once in as many texts as the module holds.
+      assert.ok(
+        conflicted <= Math.ceil(pairs.length / 10),
+        `${kind}: ${conflicted} of ${pairs.length} pairs conflict`,
+      );
     }
   } finally {
     rmSync(dir, { recursive: true, force: true });

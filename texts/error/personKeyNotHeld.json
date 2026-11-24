@@ -1,0 +1,7 @@
+{
+  "id": "error.personKeyNotHeld",
+  "kind": "error",
+  "code": "personKeyNotHeld",
+  "text": "this member does not hold the person's key yet; try again once sync has fetched it",
+  "when": "A write of a personal field whose person's key this device does not hold yet: it holds it once it fetched the key's record."
+}

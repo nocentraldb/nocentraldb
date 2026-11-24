@@ -1,0 +1,7 @@
+{
+  "id": "error.pluginStateUnreadable",
+  "kind": "error",
+  "code": "storageFailed",
+  "text": "the database holds an unreadable plugin state",
+  "when": "A write to a plugin's field whose stored state the plugin cannot read."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "error.takeBackNotPending",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the shred is not a provisional erasure of this space that can still be taken back",
+  "when": "Erasures::take_back with a shred that is final, already finalized or taken back, or not of the space (NOC-325)."
+}

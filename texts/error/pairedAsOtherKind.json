@@ -1,0 +1,7 @@
+{
+  "id": "error.pairedAsOtherKind",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the invitation asks to be paired as the other kind",
+  "when": "Account::pair (db.account.pair) when the kind it is given differs from the kind the invitation asks to be paired as."
+}

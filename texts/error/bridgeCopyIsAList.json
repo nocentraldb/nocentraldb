@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeCopyIsAList",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "copy is a list of objects, each with space, collection and id",
+  "when": "The bridge, on a request from the TypeScript SDK: spaces.createAdHoc given a copy that is not such a list."
+}

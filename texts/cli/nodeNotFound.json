@@ -1,0 +1,6 @@
+{
+  "id": "cli.nodeNotFound",
+  "kind": "cli",
+  "text": "ncdb runs the schema with Node.js {major} or later, and found no `node` on PATH.",
+  "when": "After the schema module's name, from `ncdb model build` and `ncdb model check`, when no `node` is on PATH."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "ts.databaseClosed",
+  "kind": "ts",
+  "code": "closed",
+  "text": "the database is closed",
+  "when": "Any call after db.close(), and the calls still waiting when it closes."
+}

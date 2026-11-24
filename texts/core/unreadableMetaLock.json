@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadableMetaLock",
+  "kind": "core",
+  "text": "meta lock",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a stored lock it cannot read."
+}

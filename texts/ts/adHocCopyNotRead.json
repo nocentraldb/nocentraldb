@@ -1,0 +1,7 @@
+{
+  "id": "ts.adHocCopyNotRead",
+  "kind": "ts",
+  "code": "invalidValue",
+  "text": "copy takes objects this database read, as space.get, find or subscribe gives them, not a copy of one",
+  "when": "db.spaces.createAdHoc, given in copy an object the SDK of this database did not read, such as a spread of one or an object of another database."
+}

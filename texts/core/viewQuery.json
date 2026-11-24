@@ -1,0 +1,6 @@
+{
+  "id": "core.viewQuery",
+  "kind": "core",
+  "text": "the query was refused: {error:?}",
+  "when": "The core's reason when a lookup is refused. Not shown to a developer today: Db::find and Space::find replace it with their own errors; only an internal lookup of the account's would show it after error.viewFailed's colon."
+}

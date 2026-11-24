@@ -1,0 +1,6 @@
+{
+  "id": "part.databaseFileNotFound",
+  "kind": "part",
+  "text": "the database file cannot be found",
+  "when": "What failed, in ioFailed: the database's file could not be found."
+}

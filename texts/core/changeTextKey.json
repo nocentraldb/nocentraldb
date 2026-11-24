@@ -1,0 +1,6 @@
+{
+  "id": "core.changeTextKey",
+  "kind": "core",
+  "text": "a text key where only unsigned keys are allowed",
+  "when": "Inside core.receiveDecode or core.openPayload, which no developer sees today (the SDK and the relay replace a change's decode error with their own): a map of a change has a text key."
+}

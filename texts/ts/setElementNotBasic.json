@@ -1,0 +1,6 @@
+{
+  "id": "ts.setElementNotBasic",
+  "kind": "ts",
+  "text": "{path}: a set's element is a basic value: nc.string(), nc.int(), nc.float(), nc.boolean() or nc.oneOf([...]).",
+  "when": "ncdb model build, on a model whose nc.set is of something other than a basic value."
+}

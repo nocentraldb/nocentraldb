@@ -1,0 +1,7 @@
+{
+  "id": "error.noSuchCollection",
+  "kind": "error",
+  "code": "notFound",
+  "text": "the model has no collection {collection}",
+  "when": "A read or a write that names a collection the model does not have."
+}

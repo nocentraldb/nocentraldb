@@ -1,0 +1,7 @@
+{
+  "id": "notice.erasurePending",
+  "kind": "notice",
+  "code": "erasurePending",
+  "text": "Personal fields were erased on a device of this account. The erasure becomes final after 7 days; until then an admin of this account can take it back.",
+  "when": "No call returns it: the space status gives it with each provisional erasure (provisional_erasures, provisionalErasures), on every device of the account, while an erasure in a space with one account waits out its 7 days. pm's text, NOC-234."
+}

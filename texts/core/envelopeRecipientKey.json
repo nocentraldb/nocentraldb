@@ -1,0 +1,6 @@
+{
+  "id": "core.envelopeRecipientKey",
+  "kind": "core",
+  "text": "the recipient's agreement key does not take a key envelope",
+  "when": "The core's reason when a key envelope does not open. Not shown to a developer today: the core and the SDK drop it. The recipient's X25519 key is not one HPKE can encapsulate to, such as a point of small order."
+}

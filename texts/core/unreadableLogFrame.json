@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadableLogFrame",
+  "kind": "core",
+  "text": "log frame",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a change in the log that does not decode."
+}

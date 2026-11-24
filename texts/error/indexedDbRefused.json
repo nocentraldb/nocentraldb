@@ -1,0 +1,7 @@
+{
+  "id": "error.indexedDbRefused",
+  "kind": "error",
+  "code": "storageFull | keyStoreUnavailable | storageFailed",
+  "text": "{what}: {name}{hint}",
+  "when": "nc.open in a browser, when IndexedDB refuses to open, read, write or use the member's keys: what failed, the browser's error name and a hint."
+}

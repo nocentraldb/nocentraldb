@@ -1,0 +1,7 @@
+{
+  "id": "error.indexScope",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "an index that runs in one space is read with space.find, any other with db.find",
+  "when": "A query of a space-scoped index with db.find, or of any other index with space.find."
+}

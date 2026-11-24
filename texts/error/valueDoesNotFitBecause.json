@@ -1,0 +1,7 @@
+{
+  "id": "error.valueDoesNotFitBecause",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the value does not fit the field {field} of {collection}: {why}",
+  "when": "A write to a plugin's field whose plugin refuses the value; the plugin's reason follows."
+}

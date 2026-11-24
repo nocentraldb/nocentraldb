@@ -1,0 +1,7 @@
+{
+  "id": "error.indexRowWithoutObject",
+  "kind": "error",
+  "code": "storageFailed",
+  "text": "an index row has no object",
+  "when": "A query whose index names an object the view does not hold: the view is damaged."
+}

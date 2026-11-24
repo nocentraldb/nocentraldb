@@ -1,0 +1,6 @@
+{
+  "id": "core.valueOutsideSchema",
+  "kind": "core",
+  "text": "the value is outside the field's schema",
+  "when": "The core's reason when a value does not fit its field's kind. Not shown to a developer today: the SDK replaces it with error.valueDoesNotFit."
+}

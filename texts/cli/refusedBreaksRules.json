@@ -1,0 +1,6 @@
+{
+  "id": "cli.refusedBreaksRules",
+  "kind": "cli",
+  "text": "{lock}: refused, the model breaks the rules (no lock is written)",
+  "when": "`ncdb model build` and `ncdb model check` when the core refuses a first model; each refusal follows on a line of its own."
+}

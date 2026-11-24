@@ -1,0 +1,6 @@
+{
+  "id": "core.viewInvalidUnsortableKey",
+  "kind": "core",
+  "text": "index {index} orders by a field without a single sortable value.",
+  "when": "An index orders by a field its collection does not have, or by one without a single sortable value: from opening (Db::open; nc.open), after error.lockInvalid's colon; a lock that `ncdb model build` wrote does not reach it."
+}

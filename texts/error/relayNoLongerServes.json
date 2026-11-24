@@ -1,0 +1,7 @@
+{
+  "id": "error.relayNoLongerServes",
+  "kind": "error",
+  "code": "notMember",
+  "text": "the relay no longer serves this member the space {id}",
+  "when": "A write to a space the relay no longer serves this member: it was removed."
+}

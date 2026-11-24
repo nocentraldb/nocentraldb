@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeDeviceJoinsWithRole",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "a device joins with a role",
+  "when": "The bridge, on a request from the TypeScript SDK: members.add of a device without a role."
+}

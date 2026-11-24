@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeNotARole",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "a role is reader, writer or admin",
+  "when": "The bridge, on a request from the TypeScript SDK: a membership call given a role that is none of them."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "error.valueDoesNotFit",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the value does not fit the field {field} of {collection}",
+  "when": "A write whose value is not of the field's type."
+}

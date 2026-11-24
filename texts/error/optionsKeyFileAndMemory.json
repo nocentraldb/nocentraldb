@@ -1,0 +1,7 @@
+{
+  "id": "error.optionsKeyFileAndMemory",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the options name both a key file and in_memory(); keys in memory need no file",
+  "when": "Opening with options that name both a key file and in_memory()."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "error.relayUrlScheme",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the relay URL must start with wss:// or ws://",
+  "when": "Opening, when the relay URL starts with neither wss:// nor ws://."
+}

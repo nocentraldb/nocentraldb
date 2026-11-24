@@ -1,0 +1,7 @@
+{
+  "id": "error.certificateDoesNotHold",
+  "kind": "error",
+  "code": "invalidCertificate",
+  "text": "the invitation's certificate does not hold",
+  "when": "Members::add and Account::pair (members.add, db.account.pair) when the invitation's certificate does not verify, or certifies another member."
+}

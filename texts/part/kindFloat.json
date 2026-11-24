@@ -1,0 +1,6 @@
+{
+  "id": "part.kindFloat",
+  "kind": "part",
+  "text": "a float",
+  "when": "What the read asked for, in fieldDoesNotHold: a float (f64)."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "core.bodyMalformed",
+  "kind": "core",
+  "text": "malformed control body: {error}",
+  "when": "The core's reason when a control change's body cannot be read. Not shown to a developer today: the core turns it into a rejection reason, the relay into a wire code. The body is malformed; `error` is a core.change* text."
+}

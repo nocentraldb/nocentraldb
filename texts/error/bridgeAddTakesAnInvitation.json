@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeAddTakesAnInvitation",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "members.add takes at least one invitation",
+  "when": "The bridge, on a request from the TypeScript SDK: members.add with an empty list of invitations."
+}

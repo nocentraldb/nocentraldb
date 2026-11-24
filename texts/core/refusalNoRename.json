@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalNoRename",
+  "kind": "core",
+  "text": "a field under the new name",
+  "when": "In core.refusalFieldRemoved, as `rename`, when the collection has no one new field of the removed field's type."
+}

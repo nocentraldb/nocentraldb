@@ -1,19 +1,17 @@
-// The texts of texts/texts.json follow docs/glossary.md and say one thing in
+// The texts of texts/ follow docs/glossary.md and say one thing in
 // one way (NOC-359). Each rule names the glossary row or the texts it keeps
 // consistent; the review itself is the owner's, with `pnpm texts`.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readTexts } from "./texts-files.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const TEXTS = JSON.parse(
-  readFileSync(join(ROOT, "texts/texts.json"), "utf8"),
-).texts;
+const TEXTS = readTexts(ROOT).texts;
 const text = (id) => {
   const entry = TEXTS.find((t) => t.id === id);
-  assert.ok(entry, `texts.json has no ${id}`);
+  assert.ok(entry, `texts/ has no ${id}`);
   return entry.text;
 };
 

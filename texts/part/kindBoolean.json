@@ -1,0 +1,6 @@
+{
+  "id": "part.kindBoolean",
+  "kind": "part",
+  "text": "a boolean",
+  "when": "What the read asked for, in fieldDoesNotHold: a boolean."
+}

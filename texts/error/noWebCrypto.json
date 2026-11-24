@@ -1,0 +1,7 @@
+{
+  "id": "error.noWebCrypto",
+  "kind": "error",
+  "code": "keyStoreUnavailable",
+  "text": "this browser context has no WebCrypto, which keeps the member's keys",
+  "when": "nc.open in a browser context without WebCrypto, which wraps the member's keys."
+}

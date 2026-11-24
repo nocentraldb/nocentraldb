@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeTakeIsANumber",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "take is a number",
+  "when": "The bridge, on a request from the TypeScript SDK: find given a take that is not a number."
+}

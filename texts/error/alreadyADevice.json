@@ -1,0 +1,7 @@
+{
+  "id": "error.alreadyADevice",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "the invitation's member is a device of this account already",
+  "when": "Account::pair (db.account.pair) with the invitation of a device of this account already."
+}

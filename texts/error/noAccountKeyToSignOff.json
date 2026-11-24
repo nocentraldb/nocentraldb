@@ -1,0 +1,7 @@
+{
+  "id": "error.noAccountKeyToSignOff",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "this database holds no account key; a device that holds it signs off",
+  "when": "Account::sign_off on a database that holds no account key, an agent's or one waiting to be paired (NOC-325)."
+}

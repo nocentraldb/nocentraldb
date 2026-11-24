@@ -1,0 +1,7 @@
+{
+  "id": "error.notATimestamp",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "a point in time is a millisecond from 0001-01-01T00:00:00.000Z to 9999-12-31T23:59:59.999Z",
+  "when": "Timestamp::from_millis or Timestamp::try_from(SystemTime) outside the years 1 to 9999, and the bridge given such a value, or no integer, for an nc.timestamp field."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "part.connectRefused",
+  "kind": "part",
+  "text": "connect_refused",
+  "when": "SyncStatus::error (db.sync().current().error) while the relay's endpoint refuses the WebSocket handshake with HTTP 401 or 403, as an authorizer on $connect does for a token that expired or is wrong. The SDK retries with backoff, and asks the relay function, when the app gave one, for the URL again before each connect; a connect that goes through clears it. A browser does not tell the SDK why a WebSocket failed, so there a refused connect shows as offline without it. NOC-496."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "part.erasureTextBase64",
+  "kind": "part",
+  "text": "it is not unpadded base64url",
+  "when": "Why a text is not an erasure request or a set of sign-offs: what follows its prefix is not unpadded base64url."
+}

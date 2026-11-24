@@ -1,0 +1,7 @@
+{
+  "id": "error.adHocLocalLater",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "a local ad-hoc space is not built yet; create a synced one",
+  "when": "Spaces::create_ad_hoc (db.spaces.createAdHoc) with `local`: local ad-hoc spaces wait for a ticket of their own (Carsten, 2026-11-15, NOC-320 Q3)."
+}

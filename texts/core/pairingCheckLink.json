@@ -1,0 +1,6 @@
+{
+  "id": "core.pairingCheckLink",
+  "kind": "core",
+  "text": "the link statement does not hold for this member",
+  "when": "After error.pairingAnswerDoesNotHold's colon, from Account::complete_pairing (db.account.completePairing): the link signature does not verify for this member's old account key, or the answer carries a link this member does not expect, or lacks one it does."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "core.changeInvalidValue",
+  "kind": "core",
+  "text": "key {key} holds a value of the wrong type or length",
+  "when": "Inside core.receiveDecode or core.openPayload, which no developer sees today (the SDK and the relay replace a change's decode error with their own): a key of a change holds a value of the wrong type or length."
+}

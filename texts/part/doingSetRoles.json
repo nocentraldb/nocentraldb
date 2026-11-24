@@ -1,0 +1,6 @@
+{
+  "id": "part.doingSetRoles",
+  "kind": "part",
+  "text": "sets roles",
+  "when": "What the member does, in roleRequired: Members::set_role on another member."
+}

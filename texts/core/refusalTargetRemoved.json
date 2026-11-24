@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalTargetRemoved",
+  "kind": "core",
+  "text": "{collection}.{field}: target {target} removed.\nExisting links into {target} would read as wrong collection, and references into it as missing, on upgraded clients only.\nKeep {target} in the targets.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a collection is removed from the targets of a link or a reference."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "error.objectMoved",
+  "kind": "error",
+  "code": "moved",
+  "text": "the object {id} moved to the space {space}; write to it there",
+  "when": "Space::write (space.write) to an object this copy reads as moved (RFC 0016, \"The SDK call and its notice\")."
+}

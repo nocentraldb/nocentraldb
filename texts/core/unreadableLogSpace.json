@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadableLogSpace",
+  "kind": "core",
+  "text": "log space",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a log entry's space id it cannot read."
+}

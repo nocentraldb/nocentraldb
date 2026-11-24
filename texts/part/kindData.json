@@ -1,0 +1,6 @@
+{
+  "id": "part.kindData",
+  "kind": "part",
+  "text": "a plugin's data",
+  "when": "What the read asked for, in fieldDoesNotHold: a plugin field's data."
+}

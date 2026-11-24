@@ -1,0 +1,7 @@
+{
+  "id": "ts.notAQueryStartOne",
+  "kind": "ts",
+  "code": "invalidValue",
+  "text": "not a query; start one from an index, such as model.tasks.indexes.byPriority",
+  "when": "db.find, space.find, or a subscription to either, given something that is not a query."
+}

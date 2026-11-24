@@ -1,0 +1,6 @@
+{
+  "id": "core.linkIntoOtherSpace",
+  "kind": "core",
+  "text": "a link cannot point into another space",
+  "when": "The core's reason when a link names an object of another space. Not shown to a developer today: the SDK replaces it with error.valueDoesNotFit."
+}

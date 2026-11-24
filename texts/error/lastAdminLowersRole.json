@@ -1,0 +1,7 @@
+{
+  "id": "error.lastAdminLowersRole",
+  "kind": "error",
+  "code": "lastAdmin",
+  "text": "the space's last admin may not lower its own role",
+  "when": "Members::set_role (members.setRole) when the space's last admin lowers its own role."
+}

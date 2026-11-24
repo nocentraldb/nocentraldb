@@ -1,0 +1,7 @@
+{
+  "id": "error.personLinkUnset",
+  "kind": "error",
+  "code": "noPerson",
+  "text": "the person link {link} of {collection} is unset",
+  "when": "A write of a personal field whose person link is unset, so the SDK cannot tell whose data it is."
+}

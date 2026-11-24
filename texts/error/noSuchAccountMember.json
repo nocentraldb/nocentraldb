@@ -1,0 +1,7 @@
+{
+  "id": "error.noSuchAccountMember",
+  "kind": "error",
+  "code": "notFound",
+  "text": "the account space records no such member of the account",
+  "when": "Account::remove_member (db.account.removeMember) when the account space records no member of the account with that id."
+}

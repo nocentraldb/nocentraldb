@@ -1,0 +1,7 @@
+{
+  "id": "error.roleRequired",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "only {role} of the space {doing}",
+  "when": "A membership call or a write by a member whose role does not allow it: which role is needed, and for what."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadablePendingLinkChangeId",
+  "kind": "core",
+  "text": "pending link change id",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a pending link whose change id it cannot read."
+}

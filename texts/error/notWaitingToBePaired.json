@@ -1,0 +1,7 @@
+{
+  "id": "error.notWaitingToBePaired",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "this database is not waiting to be paired",
+  "when": "Account::complete_pairing (db.account.completePairing) on a database not opened for pairing."
+}

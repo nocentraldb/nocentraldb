@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalIndexEqualTooLarge",
+  "kind": "core",
+  "text": "index {collection}.{index}: equal is {equal}, but the index has {fields} fields.\nNo query could fix more fields than the index has.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: an index's equal is larger than its number of fields. Opening with such a lock shows it after error.lockInvalid's colon."
+}

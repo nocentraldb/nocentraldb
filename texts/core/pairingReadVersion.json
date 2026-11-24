@@ -1,0 +1,6 @@
+{
+  "id": "core.pairingReadVersion",
+  "kind": "core",
+  "text": "its version is not one this database knows",
+  "when": "After error.notAPairingAnswer's colon, from parsing a pairing answer (PairingAnswer::from_str; the bridge's account.completePairing): the answer's version is not 1."
+}

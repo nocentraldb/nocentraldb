@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalOtherModel",
+  "kind": "core",
+  "text": "model.id: {next} is not {previous}.\nThe lock belongs to another model; it is not a successor of the previous one.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: the next lock is of another lineage. `next` and `previous` are the model ids."
+}

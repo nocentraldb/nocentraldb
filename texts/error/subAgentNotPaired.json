@@ -1,0 +1,7 @@
+{
+  "id": "error.subAgentNotPaired",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "a sub-agent is not paired into an account: its parent agent adds it to the spaces it works in",
+  "when": "Account::pair (db.account.pair) with a sub-agent's invitation, version 3 (NOC-320 Q1)."
+}

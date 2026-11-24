@@ -1,0 +1,7 @@
+{
+  "id": "error.adHocPersonalLater",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "personal fields are not copied into an ad-hoc space yet, as an erasure would not reach the copy",
+  "when": "Spaces::create_ad_hoc (db.spaces.createAdHoc) with `personal`: copies of personal fields wait until an erasure reaches a copy in another space (Carsten, 2026-11-15, NOC-320 Q8)."
+}

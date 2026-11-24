@@ -1,0 +1,7 @@
+{
+  "id": "notice.spaceLeft",
+  "kind": "notice",
+  "code": "spaceLeft",
+  "text": "This member keeps its copy of everything it received before now. Until an admin rotates the space key, the others write under a key it still holds.",
+  "when": "Space::leave (space.leave) returns it once this member's removal of itself is written: it keeps its copy, and the space key changes only when an admin rotates. The owner's text, NOC-219."
+}

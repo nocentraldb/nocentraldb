@@ -1,0 +1,7 @@
+{
+  "id": "ts.workerFailed",
+  "kind": "ts",
+  "code": "storageFailed",
+  "text": "the database's Web Worker failed: {message}",
+  "when": "Every call waiting on the SDK's worker when the worker fails, with the browser's own message."
+}

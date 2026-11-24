@@ -1,0 +1,6 @@
+{
+  "id": "part.invitationLength",
+  "kind": "part",
+  "text": "its length does not match its statement byte",
+  "when": "Why, in notAnInvitation: its length is not the one its statement byte gives."
+}

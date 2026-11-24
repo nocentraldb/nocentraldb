@@ -1,0 +1,6 @@
+{
+  "id": "cli.nodeTooOld",
+  "kind": "cli",
+  "text": "ncdb runs the schema with Node.js {major} or later, and the `node` on PATH is {version}.",
+  "when": "After the schema module's name, when the `node` on PATH is older than Node.js 24, or does not say its version; `version` is its version, or `cli.nodeVersionUnknown`."
+}

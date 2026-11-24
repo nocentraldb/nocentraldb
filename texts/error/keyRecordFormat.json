@@ -1,0 +1,7 @@
+{
+  "id": "error.keyRecordFormat",
+  "kind": "error",
+  "code": "storageFailed",
+  "text": "the key record of the database holds no keys of this SDK's format",
+  "when": "nc.open in a browser when the database's key record holds no keys of this SDK's format."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "error.objectIsNoPerson",
+  "kind": "error",
+  "code": "noPerson",
+  "text": "the object is not a person's: it has no personal field",
+  "when": "Db::erasure_request with an object that has no personal field, so it names no person to erase (NOC-325)."
+}

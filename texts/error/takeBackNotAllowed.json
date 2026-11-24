@@ -1,0 +1,7 @@
+{
+  "id": "error.takeBackNotAllowed",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "only an admin of the performer's account takes an erasure back",
+  "when": "Erasures::take_back by a member that is not an admin of the account that performed the erasure (NOC-325)."
+}

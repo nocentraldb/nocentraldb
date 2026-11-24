@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadableMetaFormat",
+  "kind": "core",
+  "text": "meta format",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a view format version it cannot read."
+}

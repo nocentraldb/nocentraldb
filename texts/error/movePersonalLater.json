@@ -1,0 +1,7 @@
+{
+  "id": "error.movePersonalLater",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "the object {id} holds a personal value, and an object with personal values cannot be moved yet",
+  "when": "Space::move_objects (space.move) when an object to move holds a personal value: sealing it again in the new space comes with NOC-477 (RFC 0016, \"Its personal fields\")."
+}

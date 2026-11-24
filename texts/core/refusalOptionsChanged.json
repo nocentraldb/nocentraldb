@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalOptionsChanged",
+  "kind": "core",
+  "text": "{collection}.{field}: options change from [{from}] to [{to}].\nStored values name options, and their order may become sort order.\nKeep every option where it is, and append new options at the end.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a choice's options are not the previous ones with new ones appended. `from` and `to` are the options, separated by commas."
+}

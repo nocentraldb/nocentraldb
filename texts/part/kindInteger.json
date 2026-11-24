@@ -1,0 +1,6 @@
+{
+  "id": "part.kindInteger",
+  "kind": "part",
+  "text": "an integer",
+  "when": "What the read asked for, in fieldDoesNotHold: an integer (i64)."
+}

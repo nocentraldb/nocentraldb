@@ -1,0 +1,7 @@
+{
+  "id": "error.lockInvalid",
+  "kind": "error",
+  "code": "modelRefused",
+  "text": "the lock is refused: {invalid}",
+  "when": "Opening, when the lock breaks the rules RFC 0005 gives a lock: the lock's refusals follow, one core.refusal* text after another, or a core.viewInvalid* text."
+}

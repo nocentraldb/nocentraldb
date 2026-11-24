@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeArgumentIsText",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "{key} is text",
+  "when": "The bridge, on a request from the TypeScript SDK: a request whose argument, such as space or lock, is missing or not text."
+}

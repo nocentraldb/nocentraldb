@@ -1,0 +1,7 @@
+{
+  "id": "error.signOffDoesNotHold",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "a sign-off does not hold for this erasure in its space; nothing was erased",
+  "when": "Db::erase when one of the sign-offs would not hold in its space by RFC 0008's rules; it writes no shred in any space (NOC-325)."
+}

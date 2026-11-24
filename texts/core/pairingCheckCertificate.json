@@ -1,0 +1,6 @@
+{
+  "id": "core.pairingCheckCertificate",
+  "kind": "core",
+  "text": "the certificate is not this member's, or not signed by the account key",
+  "when": "After error.pairingAnswerDoesNotHold's colon, from Account::complete_pairing (db.account.completePairing): the answer's certificate is for another member, of another kind, or not signed by the account key."
+}

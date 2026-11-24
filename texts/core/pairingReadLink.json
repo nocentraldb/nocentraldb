@@ -1,0 +1,6 @@
+{
+  "id": "core.pairingReadLink",
+  "kind": "core",
+  "text": "its link byte is neither 0 nor 1",
+  "when": "After error.notAPairingAnswer's colon, from parsing a pairing answer (PairingAnswer::from_str; the bridge's account.completePairing): the answer's link byte is neither."
+}

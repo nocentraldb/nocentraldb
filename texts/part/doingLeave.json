@@ -1,0 +1,6 @@
+{
+  "id": "part.doingLeave",
+  "kind": "part",
+  "text": "leaves it",
+  "when": "What the member does, in roleRequired: Space::leave."
+}

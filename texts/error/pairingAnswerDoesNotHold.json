@@ -1,0 +1,7 @@
+{
+  "id": "error.pairingAnswerDoesNotHold",
+  "kind": "error",
+  "code": "invalidCertificate",
+  "text": "the pairing answer does not hold for this database: {why}",
+  "when": "Account::complete_pairing (db.account.completePairing) when the answer is not for this database or does not verify; the core's reason follows."
+}

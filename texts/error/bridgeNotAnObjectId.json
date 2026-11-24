@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeNotAnObjectId",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "not an object id",
+  "when": "The bridge, on a request from the TypeScript SDK: a call given an object id that is not one."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "core.receiveDecode",
+  "kind": "core",
+  "text": "the frame does not decode: {error}",
+  "when": "After error.viewFailed's colon, when a change the view folds again does not decode, as at opening with a log this core cannot read; `error` is a core.change* text. Sync drops it."
+}

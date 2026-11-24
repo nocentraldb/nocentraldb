@@ -1,0 +1,6 @@
+{
+  "id": "cli.cannotBeOpened",
+  "kind": "cli",
+  "text": "cannot be opened: {error}",
+  "when": "After the schema module's name, when its path cannot be resolved; `error` is the system's reason."
+}

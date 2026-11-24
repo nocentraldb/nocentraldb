@@ -1,0 +1,6 @@
+{
+  "id": "core.appendWrongSpace",
+  "kind": "core",
+  "text": "the change belongs to another space",
+  "when": "After error.viewFailed's colon, when a change appended to a space's log belongs to another space; a bug in the SDK, not reached in practice."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "error.noWrappingKey",
+  "kind": "error",
+  "code": "storageFailed",
+  "text": "IndexedDB holds no wrapping key for the database",
+  "when": "nc.open in a browser when the database's key record exists but its wrapping key is gone from IndexedDB."
+}

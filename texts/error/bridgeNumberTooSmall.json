@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeNumberTooSmall",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "too small",
+  "when": "The bridge, on a request from the TypeScript SDK: a write of an integer below the smallest a field holds."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "error.adHocSourceDeleted",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the object {id} is deleted, and a deleted object is not copied",
+  "when": "Spaces::create_ad_hoc (db.spaces.createAdHoc) when an object to copy is deleted (Carsten, 2026-11-15, NOC-320 Q7)."
+}

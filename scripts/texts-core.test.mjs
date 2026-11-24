@@ -1,4 +1,4 @@
-// The core's texts in texts/texts.json (NOC-329, T6): entries of kind
+// The core's texts in texts/core/ (NOC-329, T6): entries of kind
 // `core`, the module scripts/texts.mjs generates from them,
 // crates/ncdb-core/src/texts.rs, and the gate's reading of the core's code.
 import assert from "node:assert/strict";
@@ -14,6 +14,7 @@ import {
   coreFiles,
   generateCore,
 } from "./texts-core.mjs";
+import { readTexts } from "./texts-files.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFileSync(join(ROOT, path), "utf8");
@@ -186,7 +187,7 @@ test("the gate reads all of crates/ncdb-core/src, outside its tests", () => {
 });
 
 test("the core's committed module is the one the texts generate", () => {
-  const texts = JSON.parse(read("texts/texts.json")).texts;
+  const texts = readTexts(ROOT).texts;
   const generated = generateCore(texts);
   assert.deepEqual(
     readdirSync(join(ROOT, CORE_PATHS.module)).sort(),
@@ -197,7 +198,7 @@ test("the core's committed module is the one the texts generate", () => {
 });
 
 test("the core writes no text in code", () => {
-  const texts = JSON.parse(read("texts/texts.json")).texts;
+  const texts = readTexts(ROOT).texts;
   assert.deepEqual(
     checkCoreCode(
       coreFiles(ROOT),

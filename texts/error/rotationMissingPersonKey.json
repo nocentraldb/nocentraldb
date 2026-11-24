@@ -1,0 +1,7 @@
+{
+  "id": "error.rotationMissingPersonKey",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the member does not hold a person key of the space, which the rotation must re-wrap; it can rotate once it has fetched the key's record",
+  "when": "A removal, or an add after a rotation, when this member lacks a person key of the space that the rotation must re-wrap; it works once it fetched the key's record."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "error.memberRemovesItself",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "a member does not remove itself: leaving a space is space.leave()",
+  "when": "Members::remove (members.remove) when the member to remove is this member: leaving is Space::leave."
+}

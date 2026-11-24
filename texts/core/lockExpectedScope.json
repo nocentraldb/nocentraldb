@@ -1,0 +1,6 @@
+{
+  "id": "core.lockExpectedScope",
+  "kind": "core",
+  "text": "expected \"space\" or no scope",
+  "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: an index's scope is something other than \"space\"."
+}

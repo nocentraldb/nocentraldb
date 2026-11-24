@@ -1,0 +1,6 @@
+{
+  "id": "part.relayUrlFailed",
+  "kind": "part",
+  "text": "relay_url_failed",
+  "when": "SyncStatus::error (db.sync().current().error) while the app's relay function (relay_with in Rust, a function as nc.open's relay in TypeScript) fails, or gives a URL that is neither ws:// nor wss://. The SDK calls it again after a backoff; a connect that goes through clears it. What the function failed with is never shown. NOC-496."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "ts.notADay",
+  "kind": "ts",
+  "code": "invalidValue",
+  "text": "{collection}.{field} takes a day as a \"YYYY-MM-DD\" string, from 0001-01-01 to 9999-12-31",
+  "when": "A write of an nc.date() field given anything but such a string, a Date included."
+}

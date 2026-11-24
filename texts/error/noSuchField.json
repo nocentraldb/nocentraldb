@@ -1,0 +1,7 @@
+{
+  "id": "error.noSuchField",
+  "kind": "error",
+  "code": "notFound",
+  "text": "the collection {collection} has no field {name}",
+  "when": "A write that names a field the collection does not have."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "error.erasureRequestOfAnotherMember",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the erasure request is another member's",
+  "when": "Db::erase with a request another member made: only its performer erases with it (NOC-325)."
+}

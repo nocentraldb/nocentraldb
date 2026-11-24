@@ -1,0 +1,7 @@
+{
+  "id": "error.noLongerMember",
+  "kind": "error",
+  "code": "notMember",
+  "text": "the member is no longer a member of the space",
+  "when": "A membership call or a write by a member that was removed from the space, or that the relay answered not_member or removed_member for."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "error.moveNamedTwice",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the object {id} is named twice",
+  "when": "Space::move_objects (space.move) when the same object is in the list twice."
+}

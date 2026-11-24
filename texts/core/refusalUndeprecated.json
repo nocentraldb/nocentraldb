@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalUndeprecated",
+  "kind": "core",
+  "text": "{collection}.{field}: no longer deprecated.\nClients that stopped writing it would not write it again.\nKeep it deprecated, and add a new field instead.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a deprecated field is no longer deprecated."
+}

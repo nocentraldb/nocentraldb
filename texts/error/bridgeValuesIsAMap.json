@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeValuesIsAMap",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "values is a map",
+  "when": "The bridge, on a request from the TypeScript SDK: a write op whose values are not a map."
+}

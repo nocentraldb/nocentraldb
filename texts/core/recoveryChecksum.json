@@ -1,0 +1,6 @@
+{
+  "id": "core.recoveryChecksum",
+  "kind": "core",
+  "text": "the recovery code's checksum does not match: a word is wrong or out of order",
+  "when": "After error.recoveryCodeUnreadable's colon, opening with a recovery code, when its words are on the list but their checksum does not match."
+}

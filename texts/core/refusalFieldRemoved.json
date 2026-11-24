@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalFieldRemoved",
+  "kind": "core",
+  "text": "{collection}.{field}: removed. Changes name fields; data in {collection}.{field} would belong to nothing.\nTo stop using it, keep it in the schema with .deprecated(\"...\"). To rename it, add {rename}.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a field of the previous lock is missing from the next one. `rename` is the one new field of the same type in the collection, when there is exactly one, else core.refusalNoRename."
+}

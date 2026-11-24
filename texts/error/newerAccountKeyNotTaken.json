@@ -1,0 +1,7 @@
+{
+  "id": "error.newerAccountKeyNotTaken",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the account space already records a newer account key, which this device has not taken yet",
+  "when": "Account::remove_member (db.account.removeMember) while the account space records an account key newer than this device's own: the device takes it when it syncs."
+}

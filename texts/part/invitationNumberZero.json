@@ -1,0 +1,6 @@
+{
+  "id": "part.invitationNumberZero",
+  "kind": "part",
+  "text": "its account key number is 0",
+  "when": "Why, in notAnInvitation: its account key statement's number is 0."
+}

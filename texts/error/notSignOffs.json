@@ -1,0 +1,7 @@
+{
+  "id": "error.notSignOffs",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the text is not a set of sign-offs: {why}",
+  "when": "Parsing sign-offs from text (SignOffs::from_str) when the text is not one; the reason follows (NOC-325)."
+}

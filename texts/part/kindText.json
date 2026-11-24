@@ -1,0 +1,6 @@
+{
+  "id": "part.kindText",
+  "kind": "part",
+  "text": "a text",
+  "when": "What the read asked for, in fieldDoesNotHold: a text (&str)."
+}

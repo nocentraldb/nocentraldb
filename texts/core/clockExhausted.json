@@ -1,0 +1,6 @@
+{
+  "id": "core.clockExhausted",
+  "kind": "core",
+  "text": "the clock has reached its largest value",
+  "when": "After error.spaceClock's colon, from a write (Space::write and its shorthands), when the space's clock has reached its largest value, after it saw a received clock at the maximum."
+}

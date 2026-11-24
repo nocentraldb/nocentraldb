@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalUnknownTarget",
+  "kind": "core",
+  "text": "{collection}.{field}: target {target} is not a collection of the model.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a link's target is no collection of the model. Opening with such a lock shows it after error.lockInvalid's colon."
+}

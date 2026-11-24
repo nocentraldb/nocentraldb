@@ -1,0 +1,7 @@
+{
+  "id": "error.fieldDoesNotHold",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the field does not hold {asked}",
+  "when": "Object::get::<T> when the field holds another kind of value than T."
+}

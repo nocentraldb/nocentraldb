@@ -1,0 +1,7 @@
+{
+  "id": "notice.memberAdded",
+  "kind": "notice",
+  "code": "memberAdded",
+  "text": "The new member reads the whole history of this space.",
+  "when": "Members::add (members.add in TypeScript) returns it once the member is added to the space: the new member reads every change written before it joined."
+}

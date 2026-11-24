@@ -1,0 +1,7 @@
+{
+  "id": "ts.noSuchCollection",
+  "kind": "ts",
+  "code": "notFound",
+  "text": "the model has no such collection; pass a handle such as model.tasks",
+  "when": "A call given a collection that is not a handle of the model nc.open was given."
+}

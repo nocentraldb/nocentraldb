@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalPersonLinkPersonal",
+  "kind": "core",
+  "text": "{collection}.{field}: personal to {collection}.{person}, which is itself personal.\nThe link that names the person must stay readable, so the SDK can find the person's key.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a personal field's person is a link field that is itself personal. Opening with such a lock shows it after error.lockInvalid's colon."
+}

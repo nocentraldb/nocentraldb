@@ -1,0 +1,6 @@
+{
+  "id": "core.pairingForDeviceOrAgent",
+  "kind": "core",
+  "text": "a pairing answer is for a device or an agent",
+  "when": "The core's reason when a pairing answer is built for another kind of member. Not shown to a developer today: Account::pair rules it out first, and replaces the core's reasons with error.accountKeyNotSealable."
+}

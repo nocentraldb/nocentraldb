@@ -1,0 +1,6 @@
+{
+  "id": "part.invitationTooShort",
+  "kind": "part",
+  "text": "it is too short",
+  "when": "Why, in notAnInvitation: it is shorter than any version's layout."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "error.openOutsideWorker",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "a database at a name opens only in a dedicated Web Worker",
+  "when": "nc.open in a browser, when a database at a name is opened outside a dedicated Web Worker, where OPFS cannot be used."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "notice.memberRemoved",
+  "kind": "notice",
+  "code": "memberRemoved",
+  "text": "The removed member keeps its copy of everything it received before now.",
+  "when": "Members::remove (members.remove) returns it once a member is removed and the space key rotated: the removed member keeps what it already received. RFC 0009's text."
+}

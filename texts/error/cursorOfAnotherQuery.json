@@ -1,0 +1,7 @@
+{
+  "id": "error.cursorOfAnotherQuery",
+  "kind": "error",
+  "code": "cursorOfAnotherModel",
+  "text": "the cursor belongs to another model, index or equality prefix; start from the first page",
+  "when": "A query continued with a cursor of another model, index or equality prefix."
+}

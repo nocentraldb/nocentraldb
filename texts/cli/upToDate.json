@@ -1,0 +1,6 @@
+{
+  "id": "cli.upToDate",
+  "kind": "cli",
+  "text": "{lock}: up to date (model version {version})",
+  "when": "`ncdb model build` and `ncdb model check` when the lock already says what the schema says, byte for byte."
+}

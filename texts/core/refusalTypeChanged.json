@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalTypeChanged",
+  "kind": "core",
+  "text": "{collection}.{field}: type changes from {from} to {to}.\nClients would merge and read existing values differently.\nAdd a new field instead, and deprecate {collection}.{field}.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a field's type changes (for a set, its element's type)."
+}

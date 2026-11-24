@@ -1,0 +1,7 @@
+{
+  "id": "notice.roleSet",
+  "kind": "notice",
+  "code": "roleSet",
+  "text": "A member whose role was lowered keeps its copy of everything it received before now.",
+  "when": "Members::set_role (members.setRole) returns it on every role change, raised or lowered: a lowered member keeps what it received. The owner's text, NOC-203."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "error.notADay",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "a day is a date from 0001-01-01 to 9999-12-31, written YYYY-MM-DD",
+  "when": "Date::new or Date::from_str given no such day, or one outside the years 1 to 9999, and the bridge given such a text for an nc.date field."
+}

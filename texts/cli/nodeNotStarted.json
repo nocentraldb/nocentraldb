@@ -1,0 +1,6 @@
+{
+  "id": "cli.nodeNotStarted",
+  "kind": "cli",
+  "text": "cannot start Node.js: {error}",
+  "when": "After the schema module's name, when `node` is on PATH but cannot be started; `error` is the system's reason."
+}

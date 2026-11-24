@@ -1,0 +1,6 @@
+{
+  "id": "core.nameKindComputed",
+  "kind": "core",
+  "text": "computed field",
+  "when": "In core.refusalBadName and core.refusalNameClash, as `kind` or `other_kind`, for the name of a computed field."
+}

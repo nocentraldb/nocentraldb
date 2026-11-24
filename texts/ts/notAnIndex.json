@@ -1,0 +1,6 @@
+{
+  "id": "ts.notAnIndex",
+  "kind": "ts",
+  "text": "{collection}.{key}: not an index; declare it with nc.index(...).",
+  "when": "ncdb model build, on a model whose index is not declared with nc.index."
+}

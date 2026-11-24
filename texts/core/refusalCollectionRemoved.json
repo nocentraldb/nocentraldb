@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalCollectionRemoved",
+  "kind": "core",
+  "text": "collection {collection}: removed. Changes name collections; data in {collection} would belong to nothing.\nTo stop using it, keep it in the schema. To rename it, add the collection under its new name.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a collection of the previous lock is missing from the next one."
+}

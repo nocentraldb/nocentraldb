@@ -1,0 +1,7 @@
+{
+  "id": "error.notAMember",
+  "kind": "error",
+  "code": "notFound",
+  "text": "the member is not a member of the space",
+  "when": "Members::remove and Members::set_role (members.remove, members.setRole) when the member id is not a current member of the space."
+}

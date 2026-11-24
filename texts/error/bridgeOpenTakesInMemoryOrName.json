@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeOpenTakesInMemoryOrName",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "open takes inMemory: true, or a name in the browser",
+  "when": "The bridge, on a request from the TypeScript SDK: open (nc.open) given neither."
+}

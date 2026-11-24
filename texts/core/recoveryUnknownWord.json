@@ -1,0 +1,6 @@
+{
+  "id": "core.recoveryUnknownWord",
+  "kind": "core",
+  "text": "word {position} of the recovery code is not on the list",
+  "when": "After error.recoveryCodeUnreadable's colon, opening with a recovery code, when a word is not on the word list; it names the word's position, never the word."
+}

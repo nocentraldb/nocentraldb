@@ -1,0 +1,6 @@
+{
+  "id": "part.indexedDbConstraintHint",
+  "kind": "part",
+  "text": "; another context kept keys for this database meanwhile: open it again",
+  "when": "The hint of indexedDbRefused when IndexedDB answers ConstraintError: another tab or worker stored keys for this database meanwhile."
+}

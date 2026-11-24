@@ -1,0 +1,7 @@
+{
+  "id": "ts.coreFailed",
+  "kind": "ts",
+  "code": "storageFailed",
+  "text": "the database's core failed: {message}",
+  "when": "The call the SDK's worker was answering when its core failed, such as a write too large for the core's memory, with the browser's own message."
+}

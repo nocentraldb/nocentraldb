@@ -1,0 +1,7 @@
+{
+  "id": "error.unknownAccount",
+  "kind": "error",
+  "code": "unknownAccount",
+  "text": "the invitation's account is new to this database: pass its fingerprint once a person compared it",
+  "when": "Members::add (members.add) without a fingerprint when the invitation's account is new to this database; the error carries the fingerprint a person compares."
+}

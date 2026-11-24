@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadableParkedPosition",
+  "kind": "core",
+  "text": "parked position",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a parked operation's position out of range."
+}

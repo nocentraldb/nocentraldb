@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalMarkedPersonal",
+  "kind": "core",
+  "text": "{collection}.{field}: marked personal.\nIts earlier values are in the log under the space key only; erasing a person would not reach them.\nAdd a new personal field instead, and deprecate {collection}.{field}.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: an existing field is marked personal."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "error.certificateUnderReplacedKey",
+  "kind": "error",
+  "code": "invalidCertificate",
+  "text": "the invitation's certificate is under an account key its account replaced",
+  "when": "Members::add (members.add) when the invitation's certificate is under an account key its account has since replaced."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "core.pairingCheckStatement",
+  "kind": "core",
+  "text": "the account key statement does not verify",
+  "when": "After error.pairingAnswerDoesNotHold's colon, from Account::complete_pairing (db.account.completePairing): the answer's account key statement does not verify against its recovery key."
+}

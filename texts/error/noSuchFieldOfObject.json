@@ -1,0 +1,7 @@
+{
+  "id": "error.noSuchFieldOfObject",
+  "kind": "error",
+  "code": "notFound",
+  "text": "the object's collection has no field {name}",
+  "when": "Object::get when the object's collection has no field of that name."
+}

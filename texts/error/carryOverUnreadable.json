@@ -1,0 +1,7 @@
+{
+  "id": "error.carryOverUnreadable",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "the later edit {position} of the change {change} writes what this SDK cannot carry over: a personal value, a plugin's operation or a create",
+  "when": "space.moves().carry_over (space.moves.carryOver) when an edit given is one the SDK reads as Edit::Other."
+}

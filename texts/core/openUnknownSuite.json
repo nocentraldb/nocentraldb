@@ -1,0 +1,6 @@
+{
+  "id": "core.openUnknownSuite",
+  "kind": "core",
+  "text": "unknown suite {suite}",
+  "when": "The core's reason when a change does not verify or open (seal::open). Not shown to a developer today: the core turns it into a park or reject reason, and the relay into BadSignature. The change uses a suite this core does not know."
+}

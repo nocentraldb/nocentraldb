@@ -1,0 +1,6 @@
+{
+  "id": "part.wrappingKeyUnmakeable",
+  "kind": "part",
+  "text": "the wrapping key cannot be made",
+  "when": "What failed, in webCryptoFailed: WebCrypto could not make the non-extractable key that wraps the member's keys."
+}

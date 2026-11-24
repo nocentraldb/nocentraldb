@@ -1,0 +1,6 @@
+{
+  "id": "core.nameKindCollection",
+  "kind": "core",
+  "text": "collection",
+  "when": "In core.refusalBadName and core.refusalNameClash, as `kind` or `other_kind`, for the name of a collection."
+}

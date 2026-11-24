@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalConfigChanged",
+  "kind": "core",
+  "text": "{collection}.{field}: the config of {type_id} changes.\nThe config is part of the type's merge rule: members would merge existing values differently.\nAdd a new field with the new config instead, and deprecate {collection}.{field}.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a plugin field's config changes, appears or disappears."
+}

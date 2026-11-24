@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadableField",
+  "kind": "core",
+  "text": "field",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a field value it cannot read."
+}

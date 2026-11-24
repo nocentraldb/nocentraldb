@@ -1,0 +1,7 @@
+{
+  "id": "error.notARecoveryCode",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the words are not a recovery code",
+  "when": "Account::remove_member (db.account.removeMember) when the words it was given are no recovery code."
+}

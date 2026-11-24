@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadableShredTime",
+  "kind": "core",
+  "text": "shred time",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a shred's time out of range."
+}

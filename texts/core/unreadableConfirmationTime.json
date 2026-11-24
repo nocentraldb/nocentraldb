@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadableConfirmationTime",
+  "kind": "core",
+  "text": "confirmation time",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a confirmation time out of range."
+}

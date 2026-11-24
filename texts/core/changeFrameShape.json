@@ -1,0 +1,6 @@
+{
+  "id": "core.changeFrameShape",
+  "kind": "core",
+  "text": "the frame is not [version, header bytes, signature]",
+  "when": "Inside core.receiveDecode or core.openPayload, which no developer sees today (the SDK and the relay replace a change's decode error with their own): a change's frame is not an array of three items."
+}

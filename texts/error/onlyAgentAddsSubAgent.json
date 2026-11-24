@@ -1,0 +1,7 @@
+{
+  "id": "error.onlyAgentAddsSubAgent",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "only an agent adds a sub-agent: it signs the sub-agent's certificate with its own member key",
+  "when": "Members::add (members.add) with a sub-agent's invitation, version 3, on a device's or a sub-agent's database: only an agent signs a sub-agent's certificate (NOC-320 Q2)."
+}

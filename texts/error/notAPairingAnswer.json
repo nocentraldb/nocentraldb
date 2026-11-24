@@ -1,0 +1,7 @@
+{
+  "id": "error.notAPairingAnswer",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the text is not a pairing answer: {why}",
+  "when": "Account::complete_pairing (db.account.completePairing) when the text is not a pairing answer; the core's reason follows."
+}

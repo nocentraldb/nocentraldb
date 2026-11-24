@@ -1,0 +1,6 @@
+{
+  "id": "cli.schemaExportsNoModel",
+  "kind": "cli",
+  "text": "exports no model; export the model as `export const model = nc.model(...)`.",
+  "when": "After the schema module's name, when the module imports but exports no `model` made with `nc.model`."
+}

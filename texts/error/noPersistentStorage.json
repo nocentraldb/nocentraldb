@@ -1,0 +1,7 @@
+{
+  "id": "error.noPersistentStorage",
+  "kind": "error",
+  "code": "storageUnavailable",
+  "text": "this browser window has no OPFS, so the database would not outlive its tab, as in a private window of Firefox or Safari; open the app in a normal window",
+  "when": "nc.open in a browser window without OPFS, such as a private window of Safari or Firefox, where the database could live only in one tab's memory and would be lost with it."
+}

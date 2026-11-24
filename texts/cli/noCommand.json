@@ -1,0 +1,6 @@
+{
+  "id": "cli.noCommand",
+  "kind": "cli",
+  "text": "no command",
+  "when": "`ncdb` run with no arguments; the usage follows."
+}

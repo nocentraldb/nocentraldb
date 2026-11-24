@@ -1,0 +1,6 @@
+{
+  "id": "core.envelopeMalformed",
+  "kind": "core",
+  "text": "key envelope field {key} is malformed",
+  "when": "The core's reason when a key envelope does not open. Not shown to a developer today: the core and the SDK drop it. A key of the body is missing or does not hold what the envelope needs."
+}

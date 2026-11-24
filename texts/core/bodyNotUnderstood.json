@@ -1,0 +1,6 @@
+{
+  "id": "core.bodyNotUnderstood",
+  "kind": "core",
+  "text": "a control body this core does not understand",
+  "when": "The core's reason when a control change's body cannot be read. Not shown to a developer today: the core turns it into a rejection reason, the relay into a wire code. The body is of a kind this core does not know."
+}

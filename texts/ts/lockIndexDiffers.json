@@ -1,0 +1,7 @@
+{
+  "id": "ts.lockIndexDiffers",
+  "kind": "ts",
+  "code": "lockOutOfDate",
+  "text": "model.lock.json is out of date: {collection}.{index} differs from the lock in its fields or options. Run ncdb model build.",
+  "when": "nc.open, on a model whose index has other fields, another equality prefix or another scope in the lock."
+}

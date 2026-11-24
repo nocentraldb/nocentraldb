@@ -1,0 +1,7 @@
+{
+  "id": "error.alreadyMember",
+  "kind": "error",
+  "code": "alreadyMember",
+  "text": "the invitation's member is a member of the space already",
+  "when": "Members::add (members.add) when the invitation's member is a member of the space already."
+}

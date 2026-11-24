@@ -1,0 +1,7 @@
+{
+  "id": "ts.coreStopped",
+  "kind": "ts",
+  "code": "storageFailed",
+  "text": "the database's core stopped after an earlier failure, such as a write too large for its memory: close the database and open it again",
+  "when": "Every call after the SDK's worker's core failed in this tab, until the app closes the database and opens it again."
+}

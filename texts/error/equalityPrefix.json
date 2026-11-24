@@ -1,0 +1,7 @@
+{
+  "id": "error.equalityPrefix",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the query does not give one value per field of the index's equality prefix",
+  "when": "A query that does not give one value per field of the index's equality prefix."
+}

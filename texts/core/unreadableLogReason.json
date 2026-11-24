@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadableLogReason",
+  "kind": "core",
+  "text": "log reason",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a park or reject reason it does not know."
+}

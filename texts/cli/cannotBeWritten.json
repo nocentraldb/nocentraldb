@@ -1,0 +1,6 @@
+{
+  "id": "cli.cannotBeWritten",
+  "kind": "cli",
+  "text": "cannot be written: {error}",
+  "when": "After the lock's name, from `ncdb model build`, when the lock cannot be written; `error` is the system's reason."
+}

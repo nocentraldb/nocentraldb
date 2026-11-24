@@ -1,0 +1,7 @@
+{
+  "id": "error.noPlugin",
+  "kind": "error",
+  "code": "unknownType",
+  "text": "the field {name} of {collection} has the plugin type {type_id}, rule {rule}, which no plugin given to OpenOptions::plugin implements",
+  "when": "A write to a plugin field whose plugin type no plugin given to OpenOptions::plugin implements."
+}

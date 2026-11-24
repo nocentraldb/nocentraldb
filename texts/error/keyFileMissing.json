@@ -1,0 +1,7 @@
+{
+  "id": "error.keyFileMissing",
+  "kind": "error",
+  "code": "storageFailed",
+  "text": "the database exists, but its key file does not; new keys would open none of its spaces",
+  "when": "Opening a database at a path with a key file (OpenOptions::key_file) when the database exists but the key file does not."
+}

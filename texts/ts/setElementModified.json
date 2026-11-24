@@ -1,0 +1,6 @@
+{
+  "id": "ts.setElementModified",
+  "kind": "ts",
+  "text": "{path}: a set's element takes no modifiers; put them on the set.",
+  "when": "ncdb model build, on a model whose nc.set element is personal, described or deprecated."
+}

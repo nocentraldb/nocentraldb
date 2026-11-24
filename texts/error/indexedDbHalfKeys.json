@@ -1,0 +1,7 @@
+{
+  "id": "error.indexedDbHalfKeys",
+  "kind": "error",
+  "code": "storageFailed",
+  "text": "IndexedDB holds only one of the database's two key records; new keys would open none of its spaces",
+  "when": "nc.open in a browser when IndexedDB holds only one of the database's two key records, the wrapping key or the wrapped keys."
+}

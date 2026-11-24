@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalUnknownPlugin",
+  "kind": "core",
+  "text": "{collection}.{field}: {type_id} names no plugin of the model.\nA plugin's field type needs its namespace in plugins.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a plugin field type's namespace is not in the model's plugins. Opening with such a lock shows it after error.lockInvalid's colon."
+}

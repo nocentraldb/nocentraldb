@@ -1,0 +1,6 @@
+{
+  "id": "core.pairingNotSealable",
+  "kind": "core",
+  "text": "the account key could not be sealed to the device",
+  "when": "The core's reason when the account key cannot be sealed to the new device. Not shown to a developer today: Account::pair replaces it with error.accountKeyNotSealable."
+}

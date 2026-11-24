@@ -1,0 +1,7 @@
+{
+  "id": "ts.notAnInvitation",
+  "kind": "ts",
+  "code": "invalidValue",
+  "text": "the text is not an invitation, which is ncdb-invite-1: followed by unpadded base64url",
+  "when": "nc.invitation, given a text that does not start with ncdb-invite-1: or is not unpadded base64url."
+}
