@@ -61,9 +61,11 @@ const mergeRef = (t, { pr, main }) => {
 
 /** The expressions of the steps' env, as the event and earlier steps set them. */
 const expressions = ({ base, head }, breaking = "false") => ({
+  "${{ github.event_name }}": "pull_request",
   "${{ github.event.pull_request.base.sha }}": base,
   "${{ github.event.pull_request.head.sha }}": head,
-  "${{ contains(github.event.pull_request.labels.*.name, 'skip-changes') && '--skip' || '' }}":
+  "${{ github.event.merge_group.head_sha }}": "",
+  "${{ (contains(github.event.pull_request.labels.*.name, 'skip-changes') || steps.pr.outputs.skip == 'true') && '--skip' || '' }}":
     "",
   "${{ (steps.semver.outcome == 'failure' || steps.api.outputs.breaking == 'true') && '--require-breaking' || '' }}":
     breaking === "true" ? "--require-breaking" : "",

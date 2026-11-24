@@ -29,17 +29,34 @@
 # test, skips one, removes an assertion or changes an expected value, unless
 # one of its commits carries a `Test-change: <reason>` trailer. It runs after
 # a failed step too, so one run reports both, and no label waives it.
-# scripts/changes-workflow.test.mjs asserts these rules by structure, and
-# scripts/changes-workflow-merge-ref.test.mjs runs the steps that pick the
-# baseline and the range against a fixture merge ref.
+# The merge queue (NOC-511): the same job runs on merge_group, the event
+# GitHub's merge queue sends for each queued pull request. The checkout is
+# the queue's commit: the pull request squashed onto main as it stands, with
+# the pull requests ahead of it. Its first parent, HEAD^1, is main with those
+# pull requests, so every comparison starts there, as on the merge ref; the
+# baseline step checks that HEAD is the queue's commit. The event carries no
+# pull request, so the step `pr` reads its number from the queue's branch
+# (gh-readonly-queue/<branch>/pr-<number>-<sha>), fetches its head and reads
+# its skip-changes label through the API (pull-requests: read). The
+# test-change check compares HEAD^1 with HEAD and reads the trailers from the
+# pull request's own commits, since the squash commit's message does not
+# keep them as trailers.
+#
+# scripts/changes-workflow.test.mjs asserts these rules by structure;
+# scripts/changes-workflow-merge-ref.test.mjs and
+# scripts/changes-workflow-merge-group.test.mjs run the steps that pick the
+# baseline and the range against a fixture merge ref and queue commit.
 name: changes
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: changes-${{ github.ref }}
@@ -53,6 +70,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      # The pull request a merge group was built for, its head and its label.
+      - name: The pull request in the merge group
+        id: pr
+        if: github.event_name == 'merge_group'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GROUP_REF: ${{ github.event.merge_group.head_ref }}
+        run: |
+          number=$(printf '%s\n' "$GROUP_REF" | sed -nE 's#^refs/heads/gh-readonly-queue/.+/pr-([0-9]+)-[0-9a-f]+$#\1#p')
+          test -n "$number"
+          git fetch --no-tags --quiet origin "refs/pull/$number/head"
+          echo "head=$(git rev-parse FETCH_HEAD)" >> "$GITHUB_OUTPUT"
+          skip=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$number" --jq 'any(.labels[]; .name == "skip-changes")')
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
       # The toolchain from an exact-key cache; see ci.yml.
       - name: Cache the proto toolchain
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -69,9 +100,15 @@ jobs:
       - name: Base for the Rust API
         id: base-worktree
         env:
+          EVENT: ${{ github.event_name }}
           HEAD: ${{ github.event.pull_request.head.sha }}
+          GROUP_HEAD: ${{ github.event.merge_group.head_sha }}
         run: |
-          test "$(git rev-parse HEAD^2)" = "$HEAD"
+          if [ "$EVENT" = merge_group ]; then
+            test "$(git rev-parse HEAD)" = "$GROUP_HEAD"
+          else
+            test "$(git rev-parse HEAD^2)" = "$HEAD"
+          fi
           git worktree add --detach "$RUNNER_TEMP/baseline" HEAD^1
       - run: rustup toolchain install --no-self-update
       # Only the publishable crates the base also has: a crate new in the
@@ -104,12 +141,13 @@ jobs:
           [ "$code" = 0 ] || [ "$code" = 3 ]
       - name: Required fragment
         env:
-          SKIP: ${{ contains(github.event.pull_request.labels.*.name, 'skip-changes') && '--skip' || '' }}
+          SKIP: ${{ (contains(github.event.pull_request.labels.*.name, 'skip-changes') || steps.pr.outputs.skip == 'true') && '--skip' || '' }}
           BREAKING: ${{ (steps.semver.outcome == 'failure' || steps.api.outputs.breaking == 'true') && '--require-breaking' || '' }}
         run: node scripts/release/check-fragments.mjs --base HEAD^1 --head HEAD $SKIP $BREAKING
       - name: Test changes
         if: ${{ !cancelled() }}
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-        run: node scripts/check-test-changes.mjs --base "$BASE" --head "$HEAD"
+          BASE: ${{ github.event.pull_request.base.sha || 'HEAD^1' }}
+          HEAD: ${{ github.event.pull_request.head.sha || 'HEAD' }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha || steps.pr.outputs.head }}
+        run: node scripts/check-test-changes.mjs --base "$BASE" --head "$HEAD" --pr-head "$PR_HEAD"
