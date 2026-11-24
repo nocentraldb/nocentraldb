@@ -163,6 +163,12 @@ pub(crate) const OPEN_TAKES_IN_MEMORY_OR_NAME: &str =
 pub(crate) const RECOVERY_ANSWERS: &str =
     "confirming the recovery code takes two of its words, at two different positions from 1 to 12";
 
+/// `bridgeRelayAnswerTakesARequest` (invalidValue): The bridge, on a request
+/// from the TypeScript SDK: relay.answer without its request number, or with a
+/// relay that is not text or null.
+pub(crate) const RELAY_ANSWER_TAKES_AREQUEST: &str =
+    "relay.answer takes a request number and a relay URL text or null";
+
 /// `bridgeRoleIsText` (invalidValue): The bridge, on a request from the
 /// TypeScript SDK: members.add or members.setRole given a role that is not
 /// text.

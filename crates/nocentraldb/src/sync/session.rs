@@ -139,8 +139,17 @@ pub(super) async fn session(
     url: &str,
     wake: &mut watch::Receiver<()>,
 ) -> End {
-    let Ok(Some(ws)) = time::timeout(CONNECT, transport::connect(url)).await else {
-        return lost();
+    let ws = match time::timeout(CONNECT, transport::connect(url)).await {
+        Ok(Ok(ws)) => ws,
+        Ok(Err(transport::Unopened::Refused)) => {
+            let _ = with(db, |inner| {
+                if let Some(sync) = inner.sync.as_mut() {
+                    sync.error = Some(crate::texts::part::CONNECT_REFUSED.to_owned());
+                }
+            });
+            return lost();
+        }
+        _ => return lost(),
     };
     let mut session = Session {
         ws,

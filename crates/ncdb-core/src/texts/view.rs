@@ -68,6 +68,11 @@ pub(crate) const UNREADABLE_PARKED_POSITION: &str =
 pub(crate) const UNREADABLE_PENDING_LINK_CHANGE_ID: &str =
     "pending link change id";
 
+/// `unreadablePendingMove`: In core.viewCorrupt, as `what`, when the database
+/// holds a pending move it cannot read.
+pub(crate) const UNREADABLE_PENDING_MOVE: &str =
+    "pending move";
+
 /// `unreadablePluginState`: In core.viewCorrupt, as `what`, when the database
 /// holds a plugin field's state the plugin cannot read.
 pub(crate) const UNREADABLE_PLUGIN_STATE: &str =

@@ -19,6 +19,9 @@ mod find;
 mod find_equal;
 mod members;
 mod refs;
+// Runs a relay on a tokio runtime, which wasm32 has none of.
+#[cfg(not(target_arch = "wasm32"))]
+mod relay;
 mod reports;
 mod spaces;
 mod sync;

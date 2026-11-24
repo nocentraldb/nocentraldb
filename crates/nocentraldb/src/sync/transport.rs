@@ -22,6 +22,20 @@ pub(crate) trait Transport {
 #[derive(Debug)]
 pub(crate) struct Closed;
 
+/// Why a connection could not be opened.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Unopened {
+    /// The relay's endpoint answered the WebSocket handshake with HTTP 401
+    /// or 403, as an authorizer on `$connect` refuses a token (NOC-496).
+    /// The browser never tells.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    Refused,
+    /// Any other failure: the relay is unreachable, or the handshake
+    /// failed otherwise. A browser does not tell the SDK why a WebSocket
+    /// failed, so there every failure is this one.
+    Failed,
+}
+
 #[cfg(target_arch = "wasm32")]
 pub(crate) use browser::connect;
 #[cfg(not(target_arch = "wasm32"))]
@@ -35,21 +49,23 @@ mod native {
     use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
     use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
-    use super::{Closed, Transport};
+    use tokio_tungstenite::tungstenite::Error;
+
+    use super::{Closed, Transport, Unopened};
     use crate::sync::wire;
 
     /// A WebSocket to the relay through tokio-tungstenite.
     pub(crate) struct Native(WebSocketStream<MaybeTlsStream<TcpStream>>);
 
-    /// Opens a WebSocket to the relay at `url`, or `None` when it cannot
-    /// be opened. RFC 0007's largest message is the limit on every
+    /// Opens a WebSocket to the relay at `url`, or says why it cannot be
+    /// opened. RFC 0007's largest message is the limit on every
     /// backend, so a larger one ends the connection instead of being read;
     /// `wss://` verifies the relay against the platform's trust store.
-    pub(crate) async fn connect(url: &str) -> Option<Native> {
+    pub(crate) async fn connect(url: &str) -> Result<Native, Unopened> {
         let config = WebSocketConfig::default()
             .max_message_size(Some(wire::MAX_TEXT))
             .max_frame_size(Some(wire::MAX_TEXT));
-        let tls = crate::sync::tls::config()?;
+        let tls = crate::sync::tls::config().ok_or(Unopened::Failed)?;
         let connector = tokio_tungstenite::Connector::Rustls(tls);
         let (ws, _) = tokio_tungstenite::connect_async_tls_with_config(
             url,
@@ -58,8 +74,13 @@ mod native {
             Some(connector),
         )
         .await
-        .ok()?;
-        Some(Native(ws))
+        .map_err(|error| match error {
+            Error::Http(response) if matches!(response.status().as_u16(), 401 | 403) => {
+                Unopened::Refused
+            }
+            _ => Unopened::Failed,
+        })?;
+        Ok(Native(ws))
     }
 
     impl Transport for Native {
@@ -91,7 +112,7 @@ mod browser {
     use wasm_bindgen::prelude::{Closure, JsValue};
     use web_sys::{BinaryType, MessageEvent, WebSocket};
 
-    use super::{Closed, Transport};
+    use super::{Closed, Transport, Unopened};
     use crate::sync::wire;
 
     /// What the browser's WebSocket told its handlers.
@@ -144,12 +165,13 @@ mod browser {
         }
     }
 
-    /// Opens a WebSocket to the relay at `url`, or `None` when it cannot
+    /// Opens a WebSocket to the relay at `url`, or fails when it cannot
     /// be opened: the browser refuses the URL, as `ws://` from a page
     /// served over `https://`, or the connection fails. The browser
-    /// verifies `wss://` against its own trust store.
-    pub(crate) async fn connect(url: &str) -> Option<Browser> {
-        let ws = WebSocket::new(url).ok()?;
+    /// verifies `wss://` against its own trust store, and does not say why
+    /// a connection failed, so a refused handshake is no different here.
+    pub(crate) async fn connect(url: &str) -> Result<Browser, Unopened> {
+        let ws = WebSocket::new(url).map_err(|_| Unopened::Failed)?;
         ws.set_binary_type(BinaryType::Arraybuffer);
         let (sender, got) = unbounded_channel();
         let handlers = [
@@ -169,8 +191,8 @@ mod browser {
             _handlers: handlers,
         };
         match browser.got.recv().await {
-            Some(Got::Open) => Some(browser),
-            _ => None,
+            Some(Got::Open) => Ok(browser),
+            _ => Err(Unopened::Failed),
         }
     }
 
@@ -250,7 +272,7 @@ mod tests {
         let path = "/prod?token=eyJhbGciOi.J9-_~%2B%2F%3D&client=app";
         let opened = super::connect(&format!("ws://127.0.0.1:{port}{path}")).await;
 
-        assert!(opened.is_some(), "the transport opened the connection");
+        assert!(opened.is_ok(), "the transport opened the connection");
         assert_eq!(relay.await.expect("the relay ran"), path);
     }
 }

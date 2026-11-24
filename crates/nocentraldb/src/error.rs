@@ -78,6 +78,10 @@ pub enum ErrorCode {
     /// `OpenOptions::plugin` implements; the message names the type id and
     /// the rule (RFC 0011, "A type that is not registered").
     UnknownType,
+    /// A write to an object this copy reads as moved to another space; the
+    /// message names that space, where the object lives on (RFC 0016,
+    /// "The SDK call and its notice").
+    Moved,
 }
 
 impl Error {

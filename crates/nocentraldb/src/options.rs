@@ -14,7 +14,7 @@ use crate::keys::Keys;
 #[derive(Clone)]
 pub struct OpenOptions {
     pub(crate) lock: String,
-    pub(crate) relay: Option<String>,
+    pub(crate) relay: Option<crate::relay::Relay>,
     pub(crate) in_memory: bool,
     pub(crate) path: Option<PathBuf>,
     pub(crate) key_file: Option<PathBuf>,
@@ -229,7 +229,27 @@ impl OpenOptions {
     /// A token for the relay belongs in the query string, never in the
     /// path, since the SDK shows a relay URL with its path (NOC-495).
     pub fn relay(mut self, url: &str) -> OpenOptions {
-        self.relay = Some(url.to_owned());
+        self.relay = Some(crate::relay::Relay::Fixed(url.to_owned()));
+        self
+    }
+
+    /// The one relay the database syncs with, by the app's function that
+    /// gives its URL (NOC-496), in place of [`relay`](OpenOptions::relay):
+    /// the SDK calls it before each connect, so a short-lived token in the
+    /// URL, which the relay's authorizer checks on `$connect`, is renewed
+    /// when the SDK reconnects. The URL is `wss://` or `ws://`, as for
+    /// [`relay`](OpenOptions::relay). While the function fails, or gives
+    /// any other URL, the sync status reports `relay_url_failed` and the
+    /// SDK calls it again after a backoff; what it failed with is never
+    /// shown or logged. A connect the relay refuses with HTTP 401 or 403
+    /// shows as `connect_refused`, and the next connect calls the function
+    /// again.
+    pub fn relay_with<F, Fut, E>(mut self, url: F) -> OpenOptions
+    where
+        F: Fn() -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Result<String, E>> + 'static,
+    {
+        self.relay = Some(crate::relay::Relay::Given(crate::relay::boxed(url)));
         self
     }
 

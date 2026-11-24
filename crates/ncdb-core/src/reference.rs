@@ -99,6 +99,10 @@ pub struct Resolution {
     pub entry: basic::Entry,
     /// What the member's copies hold of its target.
     pub status: Status,
+    /// The space whose copy holds the target, when it is ok: the one the
+    /// reference names, or the one the traces of its moves led to (RFC
+    /// 0016, "References to the moved object").
+    pub found: Option<SpaceId>,
 }
 
 /// What the app reads of a reference: the basic value read, resolved.
@@ -110,20 +114,35 @@ pub struct Resolved {
     pub conflicts: Vec<Resolution>,
 }
 
+/// How many traces of moves in a row a reference follows, so that a cycle
+/// of moves ends (RFC 0016, "References to the moved object").
+pub const MAX_TRACES: usize = 8;
+
 /// The status of the target `value` names, in a field that lists
-/// `collections`. Within the target's space it reads as a link does, and
-/// everything but ok is missing.
-fn status(collections: &BTreeSet<String>, value: &Value, copies: &impl Copies) -> Status {
+/// `collections`, and the space whose copy holds it when it is ok. Within
+/// a space it reads as a link does: a trace leads to the space its object
+/// moved to, up to [`MAX_TRACES`] in a row, and everything but ok is
+/// missing.
+fn status(
+    collections: &BTreeSet<String>,
+    value: &Value,
+    copies: &impl Copies,
+) -> (Status, Option<SpaceId>) {
     let Some(target) = target(value) else {
-        return Status::Missing;
+        return (Status::Missing, None);
     };
-    let Some(objects) = copies.copy(&target.space) else {
-        return Status::NotAccessible;
-    };
-    match link::status(collections, &link::value(target.object), objects) {
-        link::Status::Ok => Status::Ok,
-        _ => Status::Missing,
+    let mut space = target.space;
+    for _ in 0..=MAX_TRACES {
+        let Some(objects) = copies.copy(&space) else {
+            return (Status::NotAccessible, None);
+        };
+        match link::status(collections, &link::value(target.object), objects) {
+            link::Status::Ok => return (Status::Ok, Some(space)),
+            link::Status::Moved(to) => space = to,
+            _ => return (Status::Missing, None),
+        }
     }
+    (Status::Missing, None)
 }
 
 impl Reference {
@@ -148,9 +167,13 @@ impl Reference {
     /// The read value, with each target's status in the member's `copies`.
     pub fn resolve(&self, state: &basic::State, copies: &impl Copies) -> Resolved {
         let read = Values::References.read(state);
-        let resolve = |entry: basic::Entry| Resolution {
-            status: status(&self.collections, &entry.value, copies),
-            entry,
+        let resolve = |entry: basic::Entry| {
+            let (status, found) = status(&self.collections, &entry.value, copies);
+            Resolution {
+                status,
+                found,
+                entry,
+            }
         };
         Resolved {
             value: read.value.map(resolve),
