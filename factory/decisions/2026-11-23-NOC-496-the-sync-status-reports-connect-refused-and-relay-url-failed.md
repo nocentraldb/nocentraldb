@@ -1,0 +1,6 @@
+# 2026-11-23 · NOC-496 · The sync status reports a relay's 401 or 403 on connect as `connect_refused`, and a relay function that fails as `relay_url_failed`
+
+- Decided by: coding agent (NOC-496); the two names wait for the owner's review in the PR, since a developer reads them
+- Why: the ticket asks for a refused `$connect` as a distinct, plain reason, not as offline, and for the reason a relay function failed. Both are the SDK's own codes, as `upload_failed` is, beside RFC 0007's codes in `SyncStatus::error`. Only HTTP 401 and 403 count as refused, the answers of an API Gateway authorizer (Unauthorized, Deny); any other failed handshake stays offline without a code. What the app's function threw is never shown or logged, since it may carry anything. Both keep the connection `Offline`, the SDK retries with the usual backoff, calls the function again before each connect, and a connection that goes through clears the code.
+- Instead of: reporting a refused connect as `unauthenticated`, which RFC 0007 gives the relay's own refusal of a member's signature after the connection is open; or a new `Connection` state, which would change the enum both SDKs and the bridge carry.
+- Topics: sdk-rust, sdk-ts, sync, relay

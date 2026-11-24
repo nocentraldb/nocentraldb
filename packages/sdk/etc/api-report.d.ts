@@ -192,7 +192,7 @@ export interface Db {
 interface OpenOptions {
     model: Record<string, any>;
     lock: unknown;
-    relay?: string;
+    relay?: string | (() => Promise<string>);
     name?: string;
     persistentStorage?: "on-open" | "on-request";
     ifStorageLost?: "refuse" | "open-empty";
@@ -424,6 +424,7 @@ export interface SpaceStatus {
     readonly waitingForKey: boolean;
     readonly badPersonKeyRecords: readonly string[];
     readonly provisionalErasures: readonly ProvisionalErasure[];
+    readonly onlyMember: boolean;
 }
 interface ProvisionalErasure {
     readonly change: string;

@@ -33,8 +33,9 @@ pub struct Events {
     pub(super) durability: Arc<Mutex<Watch<Durability>>>,
     /// The view's report (NOC-315).
     pub(super) view: Arc<Mutex<Watch<ViewStatus>>>,
-    /// The sync's asks for an admission, for the SDK to answer (RFC 0015).
-    pub(super) asks: super::admission::Asks,
+    /// The sync's asks for an admission (RFC 0015) and for the relay URL
+    /// (NOC-496), for the SDK to answer.
+    pub(super) asks: super::asks::Asks,
 }
 
 /// The guarded value of `mutex`, poisoned or not.
@@ -260,8 +261,8 @@ pub(super) fn sync_status(status: &SyncStatus) -> Value {
 /// "equivocations": [id], "exposed": bool, "waitingForKey": bool,
 /// "badPersonKeyRecords": [fingerprint], "provisionalErasures":
 /// [{"change": id, "age": milliseconds, "canUndo": bool, "performer":
-/// member, "notice": {"code": text, "text": text}}]}`. A reason is its
-/// Rust name in lower camel case.
+/// member, "notice": {"code": text, "text": text}}], "onlyMember": bool}`.
+/// A reason is its Rust name in lower camel case.
 pub(super) fn space_status(status: &SpaceStatus) -> Value {
     let ids =
         |ids: &[ChangeId]| Value::Array(ids.iter().map(|id| Value::Text(id.to_string())).collect());
@@ -374,5 +375,6 @@ pub(super) fn space_status(status: &SpaceStatus) -> Value {
                     .collect(),
             ),
         ),
+        ("onlyMember", Value::Bool(status.only_member)),
     ])
 }

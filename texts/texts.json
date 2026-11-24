@@ -1204,6 +1204,13 @@
       "when": "The bridge, on a request from the TypeScript SDK: open (nc.open) given neither."
     },
     {
+      "id": "error.bridgeRelayAnswerTakesARequest",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "relay.answer takes a request number and a relay URL text or null",
+      "when": "The bridge, on a request from the TypeScript SDK: relay.answer without its request number, or with a relay that is not text or null."
+    },
+    {
       "id": "error.bridgeRoleIsText",
       "kind": "error",
       "code": "invalidValue",
@@ -1230,6 +1237,20 @@
       "code": "invalidValue",
       "text": "a write takes ops",
       "when": "The bridge, on a request from the TypeScript SDK: write (space.write and its shorthands) without its ops."
+    },
+    {
+      "id": "error.carryOverToSeveralSpaces",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "these later edits belong to objects that moved to different spaces; carry them over one space at a time",
+      "when": "space.moves().carry_over (space.moves.carryOver) when the edits given are of objects that moved to more than one space (RFC 0016, \"Later edits\": one write in the new space)."
+    },
+    {
+      "id": "error.carryOverUnreadable",
+      "kind": "error",
+      "code": "notAllowed",
+      "text": "the later edit {position} of the change {change} writes what this SDK cannot carry over: a personal value, a plugin's operation or a create",
+      "when": "space.moves().carry_over (space.moves.carryOver) when an edit given is one the SDK reads as Edit::Other."
     },
     {
       "id": "error.certificateDoesNotHold",
@@ -1517,6 +1538,13 @@
       "code": "keyStoreUnavailable",
       "text": "this browser context has no IndexedDB, which keeps the member's keys",
       "when": "nc.open in a browser context without IndexedDB, where the member's keys live."
+    },
+    {
+      "id": "error.noLaterEdit",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "the edit {position} of the change {change} is not a later edit of the object {id} in this space",
+      "when": "space.moves().carry_over (space.moves.carryOver) when an edit given is not among the space's later edits now (RFC 0016, \"Later edits\")."
     },
     {
       "id": "error.noLongerMember",
@@ -2079,6 +2107,12 @@
       "when": "space.erasures().take_back(shred) returns it once an admin of the performer's account took a provisional erasure back within its 7 days. pm, NOC-326, on the coding agent's proposal (Q7)."
     },
     {
+      "id": "part.connectRefused",
+      "kind": "part",
+      "text": "connect_refused",
+      "when": "SyncStatus::error (db.sync().current().error) while the relay's endpoint refuses the WebSocket handshake with HTTP 401 or 403, as an authorizer on $connect does for a token that expired or is wrong. The SDK retries with backoff, and asks the relay function, when the app gave one, for the URL again before each connect; a connect that goes through clears it. A browser does not tell the SDK why a WebSocket failed, so there a refused connect shows as offline without it. NOC-496."
+    },
+    {
       "id": "part.databaseDirectoryNotFound",
       "kind": "part",
       "text": "the database directory cannot be found",
@@ -2371,6 +2405,12 @@
       "kind": "part",
       "text": "a point in time",
       "when": "What the read asked for, in fieldDoesNotHold: a point in time (Timestamp)."
+    },
+    {
+      "id": "part.relayUrlFailed",
+      "kind": "part",
+      "text": "relay_url_failed",
+      "when": "SyncStatus::error (db.sync().current().error) while the app's relay function (relay_with in Rust, a function as nc.open's relay in TypeScript) fails, or gives a URL that is neither ws:// nor wss://. The SDK calls it again after a backoff; a connect that goes through clears it. What the function failed with is never shown. NOC-496."
     },
     {
       "id": "part.roleAdmin",

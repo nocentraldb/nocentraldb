@@ -52,6 +52,7 @@ mod id;
 mod keys;
 mod list;
 mod members;
+mod moves;
 mod moving;
 mod next;
 mod object;
@@ -59,6 +60,7 @@ mod options;
 mod pairing;
 mod personal;
 mod query;
+mod relay;
 mod space;
 mod split;
 mod status;
@@ -139,6 +141,7 @@ pub use members::{
     AddMember, Fingerprint, Invitation, MemberId, MemberInfo, MemberKind, Members, Notice,
     NoticeCode, Role,
 };
+pub use moves::{Edit, LaterEdit, LaterEdits, MoveConflict, Moves};
 pub use moving::Moved;
 pub use ncdb_plugin::Data;
 pub use object::Object;

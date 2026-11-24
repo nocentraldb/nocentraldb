@@ -343,8 +343,8 @@ interface OpenOptions {
   model: Record<string, any>;
   /** `model.lock.json`: the rules the core folds by. */
   lock: unknown;
-  /** The relay's URL; without it, the database stays local. A token for the relay belongs in the query string, never in the path, since the sync status shows the path (NOC-495). */
-  relay?: string;
+  /** The relay's URL, or a function that gives it; without it, the database stays local. A token for the relay belongs in the query string, never in the path, since the sync status shows the path (NOC-495). The SDK calls a function before each connect, so a short-lived token is renewed when it reconnects (NOC-496): while the function throws or gives no `ws://` or `wss://` URL, `db.sync.current().error` is `relay_url_failed` and the SDK calls it again after a backoff. */
+  relay?: string | (() => Promise<string>);
   /** Which database: 1 to 64 of a–z, 0–9, `-` and `_`; `"default"` when left out. */
   name?: string;
   /** `"on-open"`, the default: ask the browser for persistent storage on open, without waiting; `"on-request"`: only when the app calls `db.durability.requestPersistent()` (RFC 0006). */
