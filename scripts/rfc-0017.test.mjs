@@ -5,14 +5,19 @@
 // directly, as docs/rfc/README.md asks of a newly published RFC: each
 // section says what the design does and why, then the options not taken.
 // It names nobody who decided; the decision log does. The public names that
-// declared tools add stay open in its own "Open questions", each with its
-// options and their costs. These tests check that each part is there;
+// declared tools add were decided a day later (NOC-504): they stand in the
+// sections they belong to, with the other options under "Options not
+// taken", a short entry each under "Decisions" and a second History line. These tests check that each part is there;
 // whether the design is right was the owner's review.
 import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { historyLines } from "./lib/rfc-record.mjs";
+import {
+  assertRecord,
+  decisionEntries,
+  historyLines,
+} from "./lib/rfc-record.mjs";
 import { headings, read, root, section } from "./lib/rfc-text.mjs";
 
 const file = () => {
@@ -41,7 +46,7 @@ test("RFC 0017 is decided and is about the MCP server", () => {
 
 test("RFC 0017 states its design directly and names nobody who decides", () => {
   const found = headings(text());
-  for (const heading of ["Questions to the owner", "Decisions"]) {
+  for (const heading of ["Questions to the owner", "Open questions"]) {
     assert.ok(!found.includes(heading), `it has a section "${heading}"`);
   }
   const body = prose();
@@ -51,10 +56,46 @@ test("RFC 0017 states its design directly and names nobody who decides", () => {
   assert.ok(!label, `an option label the reader must decode: ${label?.[0]}`);
 });
 
-test("RFC 0017's History is its one publication line", () => {
-  assert.deepEqual(historyLines(text()), [
-    "- 2026-11-23 · First published (NOC-485)",
-  ]);
+test("RFC 0017's History is its publication and the decision on declared tools' names", () => {
+  const lines = historyLines(text());
+  assert.equal(lines[0], "- 2026-11-23 · First published (NOC-485)");
+  assert.equal(lines.length, 2);
+  assert.match(lines[1], /^- 2026-11-24 · .*\(NOC-504, #\d+\)$/);
+  assertRecord(text(), "2026-11-23 · First published (NOC-485)");
+});
+
+test("RFC 0017's Decisions name the four answers on declared tools, each with its decision file", () => {
+  const entries = decisionEntries(text());
+  assert.equal(entries.length, 4, entries.join("\n"));
+  for (const entry of entries) {
+    assert.match(entry, /^- \*\*2026-11-24 · /);
+    assert.match(entry, /factory\/decisions\/2026-11-24-NOC-504-/);
+  }
+});
+
+test("RFC 0017 states the decided names in their sections, with the others not taken", () => {
+  const status = text()
+    .split("\n")
+    .find((l) => l.startsWith("**Status.**"));
+  assert.doesNotMatch(status, /open|proposed/i);
+  const declared = section(text(), "declared-tools");
+  assert.match(declared, /`format` 2/);
+  assert.match(declared, /`toolsRefused`/);
+  assert.doesNotMatch(declared, /proposed/);
+  for (const notTaken of [
+    "model.tools.json",
+    "format 1",
+    "nc.agent",
+    "snake case",
+  ]) {
+    assert.ok(
+      declared.includes(notTaken),
+      `declared tools do not name ${notTaken} as not taken`,
+    );
+  }
+  const tools = section(text(), "the-tools");
+  assert.match(tools, /`--dev`/);
+  assert.match(tools, /`list_spaces`[^.]*behind/);
 });
 
 // Each section that makes a choice states it, then the options not taken.
@@ -102,14 +143,6 @@ test("RFC 0017 keeps the generic tools behind a developer flag", () => {
   assert.match(prose(), /`--generic-tools`/);
 });
 
-test("RFC 0017's open questions each give options and their costs", () => {
-  const part = section(text(), "open-questions");
-  const questions = part.split("\n").filter((l) => /^\d+\. \*\*/.test(l));
-  assert.ok(questions.length >= 3, `${questions.length} questions`);
-  assert.match(part, /[Cc]ost/);
-  assert.doesNotMatch(part, /\bRecommended\b/);
-});
-
 test("RFC 0017 names every generic tool, the clients' limits and the token", () => {
   const body = prose();
   for (const tool of [
@@ -140,12 +173,15 @@ test("RFC 0017 says plainly what it does not do", () => {
 
 test("the decision log holds one file per decision of RFC 0017", () => {
   const files = readdirSync(join(root, "factory/decisions")).filter((f) =>
-    f.startsWith("2026-11-23-NOC-485-"),
+    /^2026-11-2(3-NOC-485|4-NOC-504)-/.test(f),
   );
-  assert.equal(files.length, 7, files.join("\n"));
+  assert.equal(files.length, 11, files.join("\n"));
   for (const f of files) {
     const entry = read(`factory/decisions/${f}`);
-    assert.match(entry, /^- Decided by: Carsten, 2026-11-23\b.*NOC-488/m);
+    assert.match(
+      entry,
+      /^- Decided by: Carsten, 2026-11-2[34]\b.*NOC-(488|504)/m,
+    );
     assert.match(entry, /^- Topics: .*\brfc-0017\b/m);
   }
 });
