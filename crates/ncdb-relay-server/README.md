@@ -21,6 +21,23 @@ ncdb-relay --database relay.sqlite --allow-invitation "$(my-app invite)"
 
 It prints one line, `ncdb-relay listening on ws://<address>`, and serves until it is stopped.
 
+## In your own tests
+
+An app or engine that embeds the Rust SDK starts a relay in its own tests with `ncdb_relay_server::local::TestRelay`: on SQLite in memory, on a free port of the loopback, on a runtime and a thread of its own. It stops when it is dropped, and keeps nothing.
+
+```rust
+use ncdb_relay_server::local::{Options, TestRelay};
+
+let relay = TestRelay::start(Options::new().admit_any())?;
+let options = OpenOptions::new(LOCK)
+    .in_memory()
+    .relay(&relay.url())
+    .admission(relay.admissions());
+let db = Db::open(options).await?;
+```
+
+`Options::admit_any` lets any account create spaces through admissions the test relay signs with a key of its own; `TestRelay::admissions` is the function the SDK fetches them with. It exists only in the test relay. `Options::allow_identity` lists an account by the identity `db.account().identity()` reports instead, as a relay in production lists its accounts. With neither, the relay refuses every new space with `not_allowed`. `Options::admission_key` takes an app's admission key, and `TestRelay::relay_id` is the relay id an admission names. `crates/ncdb-embedder-example/tests/relay.rs` shows a whole test: a write on one member reaches another after sync, and a relay that does not list the space's creator refuses it with `not_allowed`.
+
 ## TLS
 
 RFC 0007 requires TLS on every connection. This server does not terminate TLS: it serves plain `ws://`, and so it refuses to listen on any address but a loopback address (`127.0.0.1`, `::1`, or a name such as `localhost` that resolves only to them). A member on the same machine reaches it directly; a member on the network reaches it through a TLS proxy on the same host, which forwards to the loopback address.

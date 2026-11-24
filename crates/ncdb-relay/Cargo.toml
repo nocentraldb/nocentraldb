@@ -4,8 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false
-description = "The NoCentralDB relay core: the checks of RFC 0007, the backend interface and the SQLite backend."
+homepage.workspace = true
+readme.workspace = true
+description = "The relay core of NoCentralDB, a local-first database: the checks a relay runs on signed, encrypted changes it cannot read (RFC 0007), the backend interface and the SQLite backend."
+keywords = ["local-first", "relay", "sync", "encryption", "sqlite"]
+categories = ["database-implementations", "network-programming"]
 
 # The relay runs natively only: on a server and in AWS Lambda, never in a
 # browser. Every dependency is pinned to one exact version, the one the core
