@@ -31,6 +31,7 @@ mod lost_answer;
 mod lost_device;
 mod members;
 mod merge;
+mod move_objects;
 mod newest_model;
 mod pairing;
 mod pairing_syncing;
