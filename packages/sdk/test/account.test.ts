@@ -101,6 +101,8 @@ test("nc.open passes pairing and recover to the core's open", async () => {
   expect(other.calls[0]?.args).toMatchObject({ recover: "legal winner thank" });
 });
 
+// The code is confirmed with two of its words, at the positions of
+// challenge(), not with one tap (NOC-502).
 test("recoveryCode() gives the twelve words until two of them come back, then null", async () => {
   const { core, calls } = fake();
   const db = await connect(core, { model, lock });
