@@ -36,6 +36,8 @@ export interface SpaceStatus {
   readonly badPersonKeyRecords: readonly string[];
   /** The erasures of this space that are still provisional; an app must show them. */
   readonly provisionalErasures: readonly ProvisionalErasure[];
+  /** Whether this member is the space's only member. Recovery restores the account, not its spaces, so losing this device loses the space; an app that must not lose it adds a second member, another person or an agent (RFC 0010, "What it restores"). */
+  readonly onlyMember: boolean;
 }
 
 /** A provisional erasure in a space with one account (RFC 0008, "A provisional erasure in a space with one account"). */

@@ -13,6 +13,11 @@ export interface RelaySettings {
   /// lowercase hex digits each: each account's recovery key, or the account
   /// key of an account without one (RFC 0015, "The account's identity").
   readonly allowedAccounts: readonly string[];
+  /// The public admission keys whose admissions the relay takes, one per
+  /// app with open signup, 64 lowercase hex digits each (RFC 0015,
+  /// "Admission tokens"). Left out or empty, the relay takes none, and the
+  /// function gets no `NCDB_ADMISSION_KEYS`.
+  readonly admissionKeys?: readonly string[];
 }
 
 /// The settings as the function's environment, after checking them.
@@ -27,8 +32,17 @@ export function relayEnvironment(
       throw new Error("an allowed account is 64 lowercase hex digits");
     }
   }
+  const admissionKeys = settings.admissionKeys ?? [];
+  for (const key of admissionKeys) {
+    if (!/^[0-9a-f]{64}$/.test(key)) {
+      throw new Error("an admission key is 64 lowercase hex digits");
+    }
+  }
   return {
     NCDB_RELAY_ID: settings.relayId,
     NCDB_ALLOWED_ACCOUNTS: settings.allowedAccounts.join(","),
+    ...(admissionKeys.length > 0
+      ? { NCDB_ADMISSION_KEYS: admissionKeys.join(",") }
+      : {}),
   };
 }

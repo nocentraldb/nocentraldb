@@ -19,7 +19,7 @@ Read `factory/FACTORY.md` (above all "Rules for every coding agent"), `factory/C
    - **Green.** Write the least code that makes it pass, and run the tests. Commit: `<ticket id>: <behaviour>`.
    - **Refactor.** Clean up with all tests green, and commit if anything changed.
 
-   Every acceptance criterion gets at least one test that failed before its code existed. A bug fix starts with a test that reproduces the bug. Never change a test to make it pass unless the test itself was wrong, and say so in the commit message.
+   Every acceptance criterion gets at least one test that failed before its code existed. A bug fix starts with a test that reproduces the bug. Never change a test to make it pass unless the test itself was wrong, and say so in a `Test-change: <reason>` trailer of that commit. Every commit that removes a test, skips one, removes an assertion or changes an expected value gets that trailer, with the reason in words; the gate (`repo:test-changes`) holds the PR until one of its commits has it.
 4. Run the gate command from CONFIG.md until it passes. Commit with the ticket id in every message. Add a change fragment when CONFIG.md says the change needs one.
 5. Open a draft PR with the ticket id in its title, following the repository's PR template. Under "How it was tested", list each acceptance criterion with its test and the failure you saw in the red step. When the ticket implements a decided RFC, name in the summary the RFC sections the PR implements. Never decide a departure from the RFC in the PR: when the RFC cannot be followed, or leaves open a choice developers would see, tell pm, who opens a needs-owner ticket, and build the rest as a safe subset (the case is refused or parked safely, and named in the PR). A choice the RFC leaves open inside the core, below the SDK, is yours: record it in the decision log. When the PR only carries out decisions (documentation that records the owner's decisions or follows merged RFC text) or changes only tooling, say so in your message to pm, which may then merge it without the owner. Leave every authorship checkbox unticked.
 6. Subscribe to your PR, so CI results and review comments wake you.
@@ -28,7 +28,7 @@ Read `factory/FACTORY.md` (above all "Rules for every coding agent"), `factory/C
 ## Until the PR is merged
 
 - Fix failing CI and answer review comments from pm or anyone else, then tell pm.
-- When the work needs something GENESIS.md reserves for the owner, or the ticket is unclear, stop and ask pm. Do not guess and do not ask the owner directly.
+- When the work needs something GENESIS.md reserves for the owner, or the ticket is unclear, stop and ask pm. Do not guess and do not ask the owner directly. Never put questions for the owner in a PR's text; pm puts them in a ticket for the owner (Carsten, 2026-11-24, NOC-510).
 - Record decisions a reviewer could question and that bind work after your ticket is done in the decision log, in your PR: one new file each in `factory/decisions/`, in the format FACTORY.md gives, with a title that states the decision. A choice that matters only inside your ticket goes on the ticket as a comment.
 
 ## Never

@@ -8,7 +8,9 @@
 //! open, `NULL` in every row, and keeps its format version. Nor is
 //! `shreds_held`: when this device first held each shred
 //! (`super::shreds_held`), nor `ad_hoc_copies`: which object each copy in
-//! an ad-hoc space came from (`super::ad_hoc`).
+//! an ad-hoc space came from (`super::ad_hoc`), nor `pending_moves`: the
+//! moves whose second change this device has still to write
+//! (`super::pending_moves`).
 
 use crate::plugins::Registry;
 use std::collections::BTreeMap;
@@ -65,6 +67,13 @@ CREATE TABLE IF NOT EXISTS ad_hoc_copies (
     source_id BLOB NOT NULL,
     PRIMARY KEY (space_id, copy_id),
     UNIQUE (space_id, source_space_id, source_id)
+) STRICT;
+CREATE TABLE IF NOT EXISTS pending_moves (
+    old_space_id BLOB NOT NULL,
+    object_id BLOB NOT NULL,
+    new_space_id BLOB NOT NULL,
+    collection TEXT NOT NULL,
+    PRIMARY KEY (old_space_id, object_id)
 ) STRICT;
 CREATE TABLE IF NOT EXISTS shreds_held (
     space_id BLOB NOT NULL,
