@@ -72,10 +72,12 @@ pub fn resolve<'a>(space: SpaceId, changes: impl IntoIterator<Item = &'a Change>
 /// The control state of the space from `folded`, steps 2 to 5 over every
 /// node of `input` once step 1 judged each: with the revocations each
 /// grant saw, the verdicts of the changes that are no nodes, and the gaps.
-pub(super) fn finish(input: Input, mut folded: Resolved) -> Resolved {
-    folded.seen = seen(&input, &folded.members);
-    folded.verdicts.extend(input.verdicts);
-    folded.gaps = input.gaps;
+pub(super) fn finish(input: &Input, mut folded: Resolved) -> Resolved {
+    folded.seen = seen(input, &folded.members);
+    folded
+        .verdicts
+        .extend(input.verdicts.iter().map(|(id, v)| (*id, *v)));
+    folded.gaps = input.gaps.clone();
     folded
 }
 

@@ -57,6 +57,8 @@ pub(crate) struct Input {
     pub(crate) gaps: BTreeSet<ChangeId>,
     /// The change id of each node, by its number.
     ids: BTreeMap<u32, ChangeId>,
+    /// The public keys the geneses and add entries name, by member id.
+    keys: BTreeMap<MemberId, MemberPublicKey>,
 }
 
 /// What [`Input::new`] remembers from one call to the next (NOC-424): what
@@ -80,6 +82,60 @@ pub(crate) struct Memo {
     /// Each node's number, given when the node is first seen, after its
     /// dependencies (NOC-442): a number names one change id in every call.
     numbers: BTreeMap<ChangeId, u32>,
+}
+
+impl Memo {
+    /// Whether `change` verifies under `key`, its author's, and for a
+    /// genesis meets RFC 0008's rules for one, as [`signed`] says, kept
+    /// with the signature it was checked by.
+    fn signed(
+        &mut self,
+        space: SpaceId,
+        change: &Change,
+        body: &ControlBody,
+        key: &MemberPublicKey,
+    ) -> Option<Rejection> {
+        let id = change.id();
+        match self.signed.get(&id) {
+            Some((signature, verdict)) if signature == change.signature() => *verdict,
+            _ => {
+                let verdict = signed(space, change, body, key);
+                let signature = change.signature().to_vec();
+                self.signed.insert(id, (signature, verdict));
+                verdict
+            }
+        }
+    }
+
+    /// The causal past of the node `id`, given the past of each of its
+    /// dependencies: the one built before while each dependency has the
+    /// very same past, else a new one, built and kept.
+    fn past(&mut self, id: ChangeId, deps: &BTreeMap<ChangeId, Arc<Past>>) -> Arc<Past> {
+        let same = self.pasts.get(&id).filter(|before| {
+            before.deps.len() == deps.len()
+                && deps.iter().all(|(dep, past)| {
+                    before
+                        .deps
+                        .get(dep)
+                        .is_some_and(|before| Arc::ptr_eq(before, past))
+                })
+        });
+        if let Some(before) = same {
+            return Arc::clone(&before.past);
+        }
+        let mut past = Past::default();
+        for (dep, of_dep) in deps {
+            past.insert(self.numbers[dep]);
+            past.extend(of_dep);
+        }
+        let past = Arc::new(past);
+        let built = Built {
+            deps: deps.clone(),
+            past: Arc::clone(&past),
+        };
+        self.pasts.insert(id, built);
+        past
+    }
 }
 
 /// A node's causal past, and the past of each of its dependencies it was
@@ -166,15 +222,7 @@ impl Input {
             let header = change.header();
             let verdict = match keys.get(&header.author) {
                 None => Some(Rejection::UnknownAuthor),
-                Some(key) => match memo.signed.get(&id) {
-                    Some((signature, verdict)) if signature == change.signature() => *verdict,
-                    _ => {
-                        let verdict = signed(space, change, &body, key);
-                        let signature = change.signature().to_vec();
-                        memo.signed.insert(id, (signature, verdict));
-                        verdict
-                    }
-                },
+                Some(key) => memo.signed(space, change, &body, key),
             };
             if let Some(rejection) = verdict {
                 verdicts.insert(id, Verdict::Rejected(rejection));
@@ -237,7 +285,73 @@ impl Input {
             verdicts,
             gaps,
             ids,
+            keys,
         }
+    }
+
+    /// How many control changes of the space it holds, nodes or not.
+    pub(crate) fn len(&self) -> usize {
+        self.nodes.len() + self.verdicts.len()
+    }
+
+    /// The node `change` would be if it were added to the changes this
+    /// input was built from (NOC-497), when it is a person-key entry of the
+    /// space that this input does not hold, that no change of it depends
+    /// on, whose author's key it holds, that verifies, and whose
+    /// dependencies are all nodes without a gap. None otherwise. It reads
+    /// nothing of the other changes but those dependencies, and changes
+    /// only `memo`, whose entries are functions of what they are keyed by.
+    pub(crate) fn person_key_node(&self, change: &Change, memo: &mut Memo) -> Option<Node> {
+        let header = change.header();
+        let id = change.id();
+        if header.kind != Kind::CONTROL
+            || header.space != self.space
+            || self.nodes.contains_key(&id)
+            || self.verdicts.contains_key(&id)
+            || self.gaps.contains(&id)
+        {
+            return None;
+        }
+        let Read::Body(body) = memo.read.entry(id).or_insert_with(|| read(change)).clone() else {
+            return None;
+        };
+        if !matches!(body.entry, Entry::PersonKey(_)) {
+            return None;
+        }
+        let deps = &body.dependencies;
+        let held = deps
+            .iter()
+            .all(|dep| self.nodes.get(dep).is_some_and(|node| !node.gap));
+        if !held {
+            return None;
+        }
+        let key = self.keys.get(&header.author)?;
+        if memo.signed(self.space, change, &body, key).is_some() {
+            return None;
+        }
+        let next = u32::try_from(memo.numbers.len()).expect("fewer than 2^32 control changes");
+        let number = *memo.numbers.entry(id).or_insert(next);
+        let pasts: BTreeMap<ChangeId, Arc<Past>> = deps
+            .iter()
+            .map(|dep| (*dep, Arc::clone(&self.nodes[dep].past)))
+            .collect();
+        let past = memo.past(id, &pasts);
+        Some(Node {
+            id,
+            author: header.author,
+            sequence: header.sequence,
+            number,
+            deps: deps.clone(),
+            past,
+            gap: false,
+            body: *body,
+        })
+    }
+
+    /// Adds `node`, which [`Input::person_key_node`] gave.
+    pub(crate) fn insert(&mut self, node: Node) {
+        self.ids.insert(node.number, node.id);
+        self.nodes.insert(node.id, node);
     }
 
     /// Whether the node `b` is in the causal past of the node `a`; false
@@ -310,32 +424,8 @@ fn pasts(nodes: &BTreeMap<ChangeId, Node>, memo: &mut Memo) -> BTreeMap<ChangeId
         if expanded {
             let next = u32::try_from(memo.numbers.len()).expect("fewer than 2^32 control changes");
             memo.numbers.entry(id).or_insert(next);
-            let same = memo.pasts.get(&id).filter(|before| {
-                before.deps.len() == deps.len()
-                    && deps.iter().all(|dep| {
-                        before
-                            .deps
-                            .get(dep)
-                            .is_some_and(|past| Arc::ptr_eq(past, &pasts[dep]))
-                    })
-            });
-            let past = match same {
-                Some(before) => Arc::clone(&before.past),
-                None => {
-                    let mut past = Past::default();
-                    for dep in deps {
-                        past.insert(memo.numbers[dep]);
-                        past.extend(&pasts[dep]);
-                    }
-                    let past = Arc::new(past);
-                    let built = Built {
-                        deps: deps.iter().map(|d| (*d, Arc::clone(&pasts[d]))).collect(),
-                        past: Arc::clone(&past),
-                    };
-                    memo.pasts.insert(id, built);
-                    past
-                }
-            };
+            let of_deps = deps.iter().map(|d| (*d, Arc::clone(&pasts[d]))).collect();
+            let past = memo.past(id, &of_deps);
             pasts.insert(id, past);
         } else {
             stack.push((id, true));
