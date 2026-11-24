@@ -44,7 +44,7 @@
 #
 # scripts/changes-workflow.test.mjs asserts these rules by structure;
 # scripts/changes-workflow-merge-ref.test.mjs and
-# scripts/changes-workflow-merge-group.test.mjs run the steps that pick the
+# scripts/changes-workflow-merge-queue.test.mjs run the steps that pick the
 # baseline and the range against a fixture merge ref and queue commit.
 name: changes
 

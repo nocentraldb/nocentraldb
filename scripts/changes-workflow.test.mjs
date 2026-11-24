@@ -23,7 +23,7 @@
 // merge ref. A step finds the PR from the queue's branch name, fetches its
 // head and reads its skip-changes label (pull-requests: read); the
 // test-change check runs on HEAD^1..HEAD and reads the trailers from the PR's
-// own commits. scripts/changes-workflow-merge-group.test.mjs runs these steps
+// own commits. scripts/changes-workflow-merge-queue.test.mjs runs these steps
 // against a fixture queue commit.
 //
 // The workflow is parsed with the `yaml` package and checked by structure.

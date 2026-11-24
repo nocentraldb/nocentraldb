@@ -1,6 +1,6 @@
 // The fixture the run tests of .github/workflows/changes.yml share
 // (scripts/changes-workflow-merge-ref.test.mjs for a pull request's merge
-// ref, scripts/changes-workflow-merge-group.test.mjs for the merge queue's
+// ref, scripts/changes-workflow-merge-queue.test.mjs for the merge queue's
 // commit). It holds the workflow's steps, a small repository with a
 // TypeScript package whose API report the workflow diffs, and `runStep`,
 // which runs one step's `run` script as GitHub runs it (bash -eo pipefail)
