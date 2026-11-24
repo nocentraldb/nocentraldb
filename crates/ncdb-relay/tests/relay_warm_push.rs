@@ -7,8 +7,10 @@
 //! remembers the space, as a warm Lambda instance does. On that relay it
 //! times, one by one, the push of a person-key entry and the put of its
 //! record, and then the push of another kind of control change: the
-//! creator adding a member. It prints the median of each. It is ignored:
-//! run it with `cargo test --release -p ncdb-relay --test relay_warm_push
+//! creator adding a member. It prints the median of each and asserts
+//! nothing about the times, which depend on the machine; it is ignored
+//! because building a log of 10,000 persons takes about half a minute in
+//! a release build and far longer in a debug one. Run it with `cargo test --release -p ncdb-relay --test relay_warm_push
 //! -- --ignored --nocapture`, and `NCDB_PERSONS=100,1000` for other sizes.
 
 mod support;
