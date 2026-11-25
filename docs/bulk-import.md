@@ -68,23 +68,23 @@ If an import stops halfway, the batches written so far stay: on the device, and 
 
 ## How many operations to a change
 
-Each operation of the measurement creates a record of a task tracker: a title of about 50 characters, a status, a priority, an estimate, a flag and two tags. One create takes about 390 bytes of a change. In this table, the first device writes 81,000 of them online, and then a new device of the same account joins and catches up. Each row is one run on the machine described [below](#what-was-measured); runs of the same row varied by up to 15%. The memory columns were measured again after the SDK learned to hold large changes with less memory (NOC-422); the other columns come from the runs before it, since the SDK took as long before as after when both ran side by side on one machine.
+Each operation of the measurement creates a record of a task tracker: a title of about 50 characters, a status, a priority, an estimate, a flag and two tags. One create takes about 390 bytes of a change. In this table, the first device writes 81,000 of them online, and then a new device of the same account joins and catches up. Each row is one run on the machine described [below](#what-was-measured); runs of the same row varied by up to 15%. The memory columns were measured again after the SDK stopped keeping the changes of an open space in memory (NOC-452); the other columns come from earlier runs, since the SDK took about as long before as after on the same machine.
 
 | Operations per change | Changes | Written on the device | Held by the relay | Relay receives | New device caught up | Peak memory: writer, new device, relay |
 | --------------------: | ------: | --------------------: | ----------------: | -------------: | -------------------: | -------------------------------------: |
-|                     1 |  81,000 |                 144 s |             208 s |        56.8 MB |                 92 s |                  437 MB, 357 MB, 11 MB |
-|                    50 |   1,620 |                  39 s |              62 s |        32.2 MB |                 20 s |                  147 MB, 152 MB, 11 MB |
-|                   500 |     162 |                  32 s |              37 s |        31.6 MB |                 16 s |                  144 MB, 148 MB, 16 MB |
-|                 5,000 |      17 |                  28 s |              29 s |        31.5 MB |                 18 s |                  153 MB, 152 MB, 32 MB |
-|                40,000 |       3 |                  30 s |              30 s |        31.5 MB |                 19 s |                 345 MB, 225 MB, 134 MB |
+|                     1 |  81,000 |                 144 s |             208 s |        56.8 MB |                 92 s |                  232 MB, 138 MB, 11 MB |
+|                    50 |   1,620 |                  39 s |              62 s |        32.2 MB |                 20 s |                    43 MB, 28 MB, 11 MB |
+|                   500 |     162 |                  32 s |              37 s |        31.6 MB |                 16 s |                    62 MB, 44 MB, 16 MB |
+|                 5,000 |      17 |                  28 s |              29 s |        31.5 MB |                 18 s |                    85 MB, 52 MB, 39 MB |
+|                40,000 |       3 |                  30 s |              30 s |        31.5 MB |                 19 s |                 304 MB, 134 MB, 134 MB |
 
 "Held by the relay" counts from the first write, so it includes the writing.
 
 What the numbers say:
 
 - **One operation to a change is the slow way.** Each change carries its own signature, header and encryption, about 310 bytes, so the relay receives almost twice the bytes, and every step takes four to six times as long.
-- **Above a few hundred operations a change, larger changes gain little.** At 500 operations a change the relay held the burst after 37 seconds, at 5,000 after 29. Most of the time is the device folding the records into its SQLite view. 500 operations a change is a good default: about 195 KB a change, with the least memory.
-- **Memory grows with the size of a change.** The writer, the relay and every device that receives a change hold it while they encode, check or fold it. Each MB more in the largest change raised the writer's peak memory by about 13 MB, the new device's by about 5 MB and the relay's by about 8 MB. At 40,000 operations a change, 15.5 MB, the writer peaked at 345 MB; before NOC-422 it peaked at 1.4 GB, the new device at 716 MB and the relay at 165 MB. [A change near the limit](#a-change-near-the-limit) says what one such change costs on its own, in a browser tab too.
+- **Above a few hundred operations a change, larger changes gain little.** At 500 operations a change the relay held the burst after 37 seconds, at 5,000 after 29. Most of the time is the device folding the records into its SQLite view. 500 operations a change is a good default: about 195 KB a change, with little memory.
+- **Memory grows with the size of a change.** The writer, the relay and every device that receives a change hold it while they encode, check or fold it. Each MB more in the largest change raised the writer's peak memory by about 16 MB, the new device's by about 6 MB and the relay's by about 8 MB. At 40,000 operations a change, 15.5 MB, the writer peaked at 304 MB; before NOC-422 it peaked at 1.4 GB, the new device at 716 MB and the relay at 165 MB. [A change near the limit](#a-change-near-the-limit) says what one such change costs on its own, in a browser tab too.
 - **A change above 22 KiB goes through an upload.** The relay's messages are at most 23 KiB, so a larger change goes up through an upload URL, and other devices download it ([RFC 0007, "Large changes"](rfc/0007-relay.md#large-changes)). The SDK does that for you. In the measurement, uploads cost no time: 500 operations a change, each uploaded, was faster than 50, each inline.
 
 ### A write above 16 MiB is split into several changes
@@ -122,7 +122,7 @@ The device opened its database again and wrote one more record; this is what it 
 | Operations, 500 to a change | Rust SDK, on the heap | Before NOC-452 | Chromium tab, the core's WebAssembly memory | Before NOC-452 |
 | --------------------------: | --------------------: | -------------: | ------------------------------------------: | -------------: |
 |                      81,000 |                0.2 MB |        63.3 MB |                                      19 MiB |         79 MiB |
-|                     300,000 |                0.9 MB |      (pending) |                                      20 MiB |        242 MiB |
+|                     300,000 |                0.9 MB |       234.5 MB |                                      20 MiB |        242 MiB |
 
 On the heap counts what the Rust SDK allocates; SQLite's own memory comes on top of it. In the tab, a database with one record took 2 MiB of WebAssembly memory measured the same way. WebAssembly memory does not shrink, so the tab's numbers are the most the core held while it opened the database, read every change of it once, and wrote; SQLite runs inside that memory too.
 
@@ -149,18 +149,18 @@ The SDK reads two reports after every write: the status of each space your app h
 
 ## A device that comes back after working offline
 
-Island mode lets members keep working without a relay. When a device comes back, its burst goes up, and the other devices pull it. In this table, a second device of the same account joined the space and went offline. The first device then wrote the 81,000 operations offline, reconnected and pushed them. Then the second device came back and pulled them. As in the first table, the memory column was measured again after NOC-422.
+Island mode lets members keep working without a relay. When a device comes back, its burst goes up, and the other devices pull it. In this table, a second device of the same account joined the space and went offline. The first device then wrote the 81,000 operations offline, reconnected and pushed them. Then the second device came back and pulled them. As in the first table, the memory column was measured again after NOC-452.
 
 | Operations per change | Written offline | Held by the relay, from reconnecting | Second device caught up, from reopening | Peak memory: writer, second device, relay |
 | --------------------: | --------------: | -----------------------------------: | --------------------------------------: | ----------------------------------------: |
-|                     1 |           134 s |                                 44 s |                                   133 s |                     350 MB, 224 MB, 12 MB |
-|                    50 |            39 s |                                2.3 s |                                    35 s |                      146 MB, 83 MB, 12 MB |
-|                   500 |            32 s |                                1.4 s |                                    25 s |                      144 MB, 89 MB, 18 MB |
-|                 5,000 |            29 s |                                1.2 s |                                    21 s |                     167 MB, 102 MB, 30 MB |
+|                     1 |           134 s |                                 44 s |                                   133 s |                     251 MB, 124 MB, 12 MB |
+|                    50 |            39 s |                                2.3 s |                                    35 s |                       83 MB, 19 MB, 12 MB |
+|                   500 |            32 s |                                1.4 s |                                    25 s |                       82 MB, 46 MB, 18 MB |
+|                 5,000 |            29 s |                                1.2 s |                                    21 s |                      105 MB, 58 MB, 29 MB |
 
 - **Writing offline costs what writing online costs.** The time is the device folding the records, with or without a relay.
 - **Pushing a batched burst takes seconds.** Once the device reconnects, its changes are already signed and encrypted. At 500 operations a change, the relay held all 81,000 operations 1.4 seconds after the reconnect. 81,000 separate changes took 44 seconds; a push carries at most 32 changes, so that took more than 2,500 pushes.
-- **The returning device pulls like a new one.** It received the whole burst and folded it. In this measurement it took longer than a new device joining after the burst, 25 seconds against 16 to 18 at 500 operations a change, and held less memory. This guide did not find out why.
+- **The returning device pulls like a new one.** It received the whole burst and folded it. In this measurement it took longer than a new device joining after the burst, 25 seconds against 16 to 18 at 500 operations a change. This guide did not find out why.
 
 A burst does not change how changes merge: changes written offline merge with what the others wrote meanwhile, as any concurrent changes do, and a change that loses to one its author had not seen stays identifiable as such.
 
