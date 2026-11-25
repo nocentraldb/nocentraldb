@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
 import { build, LOCK, prebuilt } from "./build.mjs";
-import { engine, launch } from "./engine.mjs";
+import { launch } from "./engine.mjs";
 import { startServer } from "./server.mjs";
 
 let server;
@@ -121,8 +121,8 @@ test("space.write splits many objects above 16 MiB, and refuses one value above 
 
 // A value of 256 MiB (NOC-425): it never fails with anything but an
 // nc.Error with a code. Since NOC-421 the SDK refuses it with `tooLarge`
-// before the core would run out of memory; the last test in this file
-// makes a write reach that memory's limit.
+// before the core would run out of memory; trap.e2e.test.mjs holds what
+// follows a real trap of the core (NOC-499).
 test("a write too large for the core fails with an nc.Error that has a code", async () => {
   const opened = await (await browser.newContext()).newPage();
   const errors = [];
@@ -157,24 +157,17 @@ test("a write too large for the core fails with an nc.Error that has a code", as
   assert.deepEqual(errors, []);
 });
 
-/**
- * How many objects of 8 MiB the write in the test below creates. Each is
- * below the relay's change limit, so the write is split and nothing
- * refuses it up front (NOC-421); together, 1.25 GiB, they are more than
- * Chromium's core can hold: it traps from about 1 GiB (768 MiB went
- * through, NOC-499).
- */
-const OBJECTS = 160;
-
 // After a write the core could not hold (NOC-426): the core trapped and is
-// broken for good, so the next call fails at once with `storageFailed` and
-// a text that says to open the database again; `db.close()` succeeds, and
-// the database opened again works and holds what was written before. In
-// Chromium the write must reach a real trap (NOC-499): coreGuard.test.ts
-// holds what follows a trap only with a fake core. Where another engine's
-// core holds the write, or its storage refuses it with `storageFull`
-// (WebKit's, since NOC-422), the core runs on and the next call simply
-// works. In no case does anything reach the page as an uncaught error.
+// broken for good, so every later call fails with `storageFailed` and a
+// text that says to open the database again; `db.close()` succeeds, and the
+// database opened again works and holds what was written before. Where the
+// engine's core holds the value, the SDK refuses it with `tooLarge`, since
+// one value of 256 MiB does not fit into one change under the relay's limit
+// (NOC-421), or the browser's storage refuses it with `storageFull`
+// (WebKit's, since NOC-422 made the core hold it); in each case the core
+// runs on and the later call simply works. trap.e2e.test.mjs holds what
+// follows a real trap of the core (NOC-499). In no case does anything
+// reach the page as an uncaught error.
 test("after a write too large for the core, later calls say to open the database again, and it opens again", async () => {
   const opened = await (await browser.newContext()).newPage();
   const errors = [];
@@ -183,7 +176,7 @@ test("after a write too large for the core, later calls say to open the database
   await opened.waitForFunction(() => window.ready === true);
 
   const result = await opened.evaluate(
-    async ({ lock, MODEL, OBJECTS }) => {
+    async ({ lock, MODEL }) => {
       const { nc } = window;
       const model = new Function("nc", `return ${MODEL}`)(nc);
       const outcome = (promise) =>
@@ -197,11 +190,12 @@ test("after a write too large for the core, later calls say to open the database
       const { ids } = await project.write((tx) => {
         tx.create(model.tasks, { title: "before", priority: 1 });
       });
-      const title = "x".repeat(8 * 1024 * 1024);
       const written = await outcome(
         project.write((tx) => {
-          for (let n = 0; n < OBJECTS; n++)
-            tx.create(model.tasks, { title, priority: 2 });
+          tx.create(model.tasks, {
+            title: "x".repeat(256 * 1024 * 1024),
+            priority: 2,
+          });
         }),
       );
       const later = await outcome(project.get(model.tasks, ids[0]));
@@ -215,21 +209,19 @@ test("after a write too large for the core, later calls say to open the database
       await again.close();
       return { written, later, closed, title: read?.title };
     },
-    { lock, MODEL, OBJECTS },
+    { lock, MODEL },
   );
   assert.deepEqual(errors, []);
   assert.equal(result.closed, "ok");
   assert.equal(result.title, "before");
   if (
-    engine !== "chromium" &&
-    (result.written === "ok" || result.written.startsWith("storageFull: "))
+    result.written === "ok" ||
+    result.written.startsWith("tooLarge: ") ||
+    result.written.startsWith("storageFull: ")
   ) {
     assert.equal(result.later, "ok");
   } else {
-    assert.match(
-      result.written,
-      /^storageFailed: the database's core failed: /,
-    );
+    assert.match(result.written, /^storageFailed: /);
     assert.equal(
       result.later,
       "storageFailed: the database's core stopped after an earlier failure, such as a write too large for its memory: close the database and open it again",
