@@ -119,10 +119,10 @@ test("space.write splits many objects above 16 MiB, and refuses one value above 
   assert.deepEqual(errors, []);
 });
 
-// A value too large for the core's memory: Chromium's core runs out of
-// WebAssembly memory from about 200 MiB and the write fails with
-// `storageFailed`. Where an engine's core holds 256 MiB, the write goes
-// through. Either way it never fails with anything but an nc.Error.
+// A value of 256 MiB (NOC-425): it never fails with anything but an
+// nc.Error with a code. Since NOC-421 the SDK refuses it with `tooLarge`
+// before the core would run out of memory; the last test in this file
+// makes a write reach that memory's limit.
 test("a write too large for the core fails with an nc.Error that has a code", async () => {
   const opened = await (await browser.newContext()).newPage();
   const errors = [];
