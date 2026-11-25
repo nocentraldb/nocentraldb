@@ -63,6 +63,8 @@ impl Core {
 }
 
 async fn answer(bridge: Rc<RefCell<Option<Bridge>>>, request: Vec<u8>) -> Vec<u8> {
+    #[cfg(all(feature = "test-trap", target_arch = "wasm32"))]
+    test_trap::trap_on_marker(&request);
     let taken = bridge.borrow_mut().take();
     let Some(mut held) = taken else {
         return busy(&request);
@@ -70,6 +72,27 @@ async fn answer(bridge: Rc<RefCell<Option<Bridge>>>, request: Vec<u8>) -> Vec<u8
     let answer = held.handle(&request).await;
     *bridge.borrow_mut() = Some(held);
     answer
+}
+
+/// A core that traps on a marker value (NOC-499), only with the feature
+/// `test-trap`, which the package's build never turns on: the browser test
+/// of what follows a trap (scripts/sdk-browser/trap.e2e.test.mjs) writes
+/// the marker, and the core traps while it answers that request, as it
+/// does when a write runs it out of memory.
+#[cfg(all(feature = "test-trap", target_arch = "wasm32"))]
+mod test_trap {
+    /// The marker, as packages/sdk/testTrap.mjs holds it.
+    const TEST_TRAP: &[u8] = b"nocentraldb:test-trap";
+
+    /// Traps when `request` holds the marker.
+    pub(crate) fn trap_on_marker(request: &[u8]) {
+        if request
+            .windows(TEST_TRAP.len())
+            .any(|bytes| bytes == TEST_TRAP)
+        {
+            core::arch::wasm32::unreachable();
+        }
+    }
 }
 
 /// The answer to a request that came while another was answered.
