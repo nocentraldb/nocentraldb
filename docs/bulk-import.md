@@ -113,7 +113,20 @@ In the tab, the core's WebAssembly memory took 191 MiB of it, measured once with
 
 A guard test holds the budget: it writes one change just below the limit and has a second device of the account receive it, natively ([crates/nocentraldb/tests/memory_budget.rs](../crates/nocentraldb/tests/memory_budget.rs)) and in Chromium ([scripts/memory-budget/browser.test.mjs](../scripts/memory-budget/browser.test.mjs)), and fails above 256 MiB. It runs only for releases: in the `verify` job of the release workflow ([.github/workflows/release.yml](../.github/workflows/release.yml)) for beta and stable tags, and in the publish dry run. Pull requests do not run it, so a change that breaks the budget shows when a release is cut, not when it merges.
 
-Each device also keeps every change of the spaces it holds in memory, as long as the database is open: about twice the bytes the relay receives, so 63 MB for the 81,000 operations of this guide. That grows with the log, not with the size of a change.
+### What an open space keeps in memory
+
+While a database is open, the device keeps in memory what each write and each received change of a space needs: for every change its id, its header without the encrypted payload, its state and the relay's answer, and beside them the heads and clocks the next change takes and the space's control changes, which say who is a member. The changes themselves stay in the database. The device reads one back only for work that needs its content, such as checking a change again or un-folding changes after a revocation that arrived late (NOC-452).
+
+The device opened its database again and wrote one more record; this is what it then held:
+
+| Operations, 500 to a change | Rust SDK, on the heap | Before NOC-452 | Chromium tab, the core's WebAssembly memory | Before NOC-452 |
+| --------------------------: | --------------------: | -------------: | ------------------------------------------: | -------------: |
+|                      81,000 |                0.2 MB |        63.3 MB |                                      19 MiB |         79 MiB |
+|                     300,000 |                0.9 MB |      (pending) |                                      20 MiB |        242 MiB |
+
+On the heap counts what the Rust SDK allocates; SQLite's own memory comes on top of it. In the tab, a database with one record took 2 MiB of WebAssembly memory measured the same way. WebAssembly memory does not shrink, so the tab's numbers are the most the core held while it opened the database, read every change of it once, and wrote; SQLite runs inside that memory too.
+
+**What still grows with the log.** Each change still costs about 1.5 KB of memory for its header, its state and the bookkeeping beside them, whatever its size. With 500 operations to a change that is little. With one operation to a change it is most of it: after 81,000 changes of one operation each, the device held 120 MB on the heap, against 218 MB before NOC-452. A space that receives many small changes over a long time grows in memory the same way, so write in batches where you can.
 
 ## In a browser
 
@@ -178,7 +191,7 @@ What it does not show:
 
 - **A network.** The relay ran on the same machine. Over the internet, each push and pull also waits for the round trip, and the bytes of the tables travel over your connection.
 - **The relay on AWS.** API Gateway, DynamoDB and S3 have their own latency and cost. This guide did not measure them.
-- **A phone, or a browser with a relay.** [In a browser](#in-a-browser) measured writing in Chromium alone, without a relay or other engines, and [A change near the limit](#a-change-near-the-limit) the memory of one large write in a Chromium tab. A phone was not measured. The memory columns are the best guide to what a smaller device must hold.
+- **A phone, or a browser with a relay.** [In a browser](#in-a-browser) measured writing in Chromium alone, without a relay or other engines, [A change near the limit](#a-change-near-the-limit) the memory of one large write in a Chromium tab, and [What an open space keeps in memory](#what-an-open-space-keeps-in-memory) a tab that opened its database again, also without a relay. A phone was not measured. The memory columns are the best guide to what a smaller device must hold.
 - **Other records, or edits.** Every operation here creates a record. Larger records make larger changes: with larger records, put fewer to a change, so that each change stays a few hundred KB. Updates and deletes were not measured.
 - **Several writers at once.** One device wrote the burst. Bursts from several members into one space at the same time were not measured.
 
@@ -192,7 +205,7 @@ cargo run --release --locked -p nocentraldb --example bulk_import -- \
   --operations 81000 --batch 500
 ```
 
-`--operations` is the number of operations, `--batch` the operations to a change, and `--island` runs the second table's case instead of the first's. `--relay-bin` names the relay binary if it is not in the same target directory, and `--dir` a new directory that keeps the databases after the run, for a look inside them. Without `--dir`, the run uses a temporary directory and removes it. One run at 81,000 operations takes about a minute; at one operation a change, about five.
+`--operations` is the number of operations, `--batch` the operations to a change, and `--island` runs the second table's case instead of the first's. At the end, the first device opens its database again without the relay and writes one more record, and the example prints what it then holds on the heap. `--relay-bin` names the relay binary if it is not in the same target directory, and `--dir` a new directory that keeps the databases after the run, for a look inside them. Without `--dir`, the run uses a temporary directory and removes it. One run at 81,000 operations takes about a minute; at one operation a change, about five.
 
 The repository's tests run both cases at 2,000 operations, 50 to a change, so that the example keeps working ([crates/nocentraldb/tests/bulk_import.rs](../crates/nocentraldb/tests/bulk_import.rs)). The runs at full size are not part of the gate, because they take minutes. Run them by hand after a change that could affect writing, syncing or folding, and update the tables here when the numbers change.
 
@@ -209,4 +222,10 @@ node scripts/sdk-browser/measure-writes.mjs --objects 100000 --batch 1
 node scripts/sdk-browser/measure-memory.mjs --records 40000
 ```
 
-It prints the peak memory of the tab's renderer process before and after the write. The browser test that keeps a write of one object flat runs with the other browser tests, not in the gate.
+It prints the peak memory of the tab's renderer process before and after the write. To measure what an open space keeps in a tab's core, after the tab opened its database again:
+
+```sh
+node scripts/sdk-browser/measure-open.mjs --records 81000 --batch 500
+```
+
+The browser test that keeps a write of one object flat runs with the other browser tests, not in the gate.
