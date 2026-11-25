@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
 import { build, LOCK, prebuilt } from "./build.mjs";
-import { launch } from "./engine.mjs";
+import { engine, launch } from "./engine.mjs";
 import { startServer } from "./server.mjs";
 
 let server;
@@ -158,16 +158,14 @@ test("a write too large for the core fails with an nc.Error that has a code", as
 });
 
 // After a write the core could not hold (NOC-426): the core trapped and is
-// broken for good, so every later call fails with `storageFailed` and a
-// text that says to open the database again; `db.close()` succeeds, and the
-// database opened again works and holds what was written before. Where the
-// engine's core holds the value, the SDK refuses it with `tooLarge`, since
-// one value of 256 MiB does not fit into one change under the relay's limit
-// (NOC-421), or the browser's storage refuses it with `storageFull`
-// (WebKit's, since NOC-422 made the core hold it); in each case the core
-// runs on and the later call simply works. coreGuard.test.ts holds what
-// follows a trap without a real core. In no case does anything reach the
-// page as an uncaught error.
+// broken for good, so the next call fails at once with `storageFailed` and
+// a text that says to open the database again; `db.close()` succeeds, and
+// the database opened again works and holds what was written before. In
+// Chromium the write must reach a real trap (NOC-499): coreGuard.test.ts
+// holds what follows a trap only with a fake core. Where another engine's
+// core holds the write, or its storage refuses it with `storageFull`
+// (WebKit's, since NOC-422), the core runs on and the next call simply
+// works. In no case does anything reach the page as an uncaught error.
 test("after a write too large for the core, later calls say to open the database again, and it opens again", async () => {
   const opened = await (await browser.newContext()).newPage();
   const errors = [];
@@ -215,13 +213,15 @@ test("after a write too large for the core, later calls say to open the database
   assert.equal(result.closed, "ok");
   assert.equal(result.title, "before");
   if (
-    result.written === "ok" ||
-    result.written.startsWith("tooLarge: ") ||
-    result.written.startsWith("storageFull: ")
+    engine !== "chromium" &&
+    (result.written === "ok" || result.written.startsWith("storageFull: "))
   ) {
     assert.equal(result.later, "ok");
   } else {
-    assert.match(result.written, /^storageFailed: /);
+    assert.match(
+      result.written,
+      /^storageFailed: the database's core failed: /,
+    );
     assert.equal(
       result.later,
       "storageFailed: the database's core stopped after an earlier failure, such as a write too large for its memory: close the database and open it again",
