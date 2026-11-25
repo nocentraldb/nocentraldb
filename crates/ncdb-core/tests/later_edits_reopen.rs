@@ -98,7 +98,7 @@ fn a_reopened_view_gives_the_later_edits_it_gave_before_the_close() {
         for frame in [&created, &moved, &offline] {
             view.receive(frame, &mut control).unwrap();
         }
-        moves::later_edits_in(
+        moves::later_edits(
             view.log(SPACE).unwrap(),
             &control,
             &mut view.stored_frames(),
@@ -107,7 +107,7 @@ fn a_reopened_view_gives_the_later_edits_it_gave_before_the_close() {
     assert_eq!(before[&T].len(), 1, "the offline title is a later edit");
 
     let view = View::open_with(&db.0, &lock(), |_| checks()).unwrap();
-    let after = moves::later_edits_in(
+    let after = moves::later_edits(
         view.log(SPACE).unwrap(),
         &checks(),
         &mut view.stored_frames(),

@@ -439,13 +439,6 @@ impl Log {
         }
     }
 
-    /// [`Log::newest_model_in`] of a log that holds every change in
-    /// memory: one that never released a change. It skips a change the log
-    /// released.
-    pub fn newest_model(&self, checks: &impl Checks, model: [u8; 16]) -> Option<u64> {
-        self.newest_model_in(checks, model, &mut NoFrames)
-    }
-
     /// The newest model version the parked data of the member's own model
     /// needs (RFC 0002, "What the model version is for"): the highest
     /// version in payload key 64 among the changes parked for an unknown
@@ -455,7 +448,7 @@ impl Log {
     /// does one without key 64. It opens each such change with `checks`,
     /// so it costs one decryption per counted change, and reads it from
     /// `frames` when the log released it.
-    pub fn newest_model_in(
+    pub fn newest_model(
         &self,
         checks: &impl Checks,
         model: [u8; 16],
@@ -542,19 +535,12 @@ impl Log {
         self.tips.control_heads()
     }
 
-    /// [`Log::tips_in`] of a log that holds every change in memory: one
-    /// that never released a change. A released change that waits to be
-    /// read is left out.
-    pub fn tips(&mut self, checks: &impl Checks) -> &Tips {
-        self.tips_in(checks, &mut NoFrames)
-    }
-
     /// The tips of the log: what the member's next change takes from it.
     /// A folded sealed change whose state was read back from storage, and
     /// so whose payload the log has not read, is opened with `checks`
     /// once, here, read from `frames` when the log released it; one that
     /// does not open is left out until it does.
-    pub fn tips_in(&mut self, checks: &impl Checks, frames: &mut impl Frames) -> &Tips {
+    pub fn tips(&mut self, checks: &impl Checks, frames: &mut impl Frames) -> &Tips {
         for id in self.tips.unread().clone() {
             let Some(change) = self.change(id, frames) else {
                 continue;
@@ -623,22 +609,10 @@ impl Log {
         self.positions.get(&id).copied()
     }
 
-    /// The entries after a cursor that the log holds in memory, in order,
-    /// with their positions: every entry of a log that never released a
-    /// change. [`Log::after_in`] also reads the released ones.
-    pub fn after(&self, cursor: Position) -> impl Iterator<Item = (Position, &Change)> {
-        let skip = usize::try_from(cursor.0).unwrap_or(usize::MAX);
-        self.entries
-            .iter()
-            .zip(1..)
-            .skip(skip)
-            .filter_map(|(entry, position)| Some((Position(position), entry.held()?)))
-    }
-
     /// The entries after a cursor, in order, with their positions: each
     /// from memory, or read from `frames` when the log released it. An
     /// entry `frames` cannot read is left out.
-    pub fn after_in<'a, F: Frames>(
+    pub fn after<'a, F: Frames>(
         &'a self,
         cursor: Position,
         frames: &'a mut F,

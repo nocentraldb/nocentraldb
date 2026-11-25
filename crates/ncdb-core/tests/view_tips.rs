@@ -24,7 +24,7 @@ use ncdb_core::log::State;
 use ncdb_core::model_lock::ModelLock;
 use ncdb_core::view::View;
 
-use tips::{Counting, of, pool, recount_in};
+use tips::{Counting, of, pool, recount};
 use view_support::{RANK, TASK, TempDb, lock};
 
 /// [`lock`] one version before, without the tasks' rank: a database
@@ -74,11 +74,9 @@ fn folded_sealed(view: &View) -> usize {
 fn assert_rebuilt_once(mut view: View) {
     let space = pool().space;
     let mut checks = Counting::new();
-    for change in view.log(space).unwrap().after(Default::default()) {
-        if matches!(view.state(space, change.1.id()), Some(State::Folded { .. }))
-            && change.1.header().kind == ncdb_core::change::Kind::CONTROL
-        {
-            ncdb_core::receive::Checks::add_control(&mut checks, change.1);
+    for (change, state) in view.log(space).unwrap().controls() {
+        if matches!(state, Some(State::Folded { .. })) {
+            ncdb_core::receive::Checks::add_control(&mut checks, change);
         }
     }
     let folded = folded_sealed(&view);
@@ -89,7 +87,7 @@ fn assert_rebuilt_once(mut view: View) {
     let second = of(view.tips(space, &checks).unwrap());
     assert_eq!(checks.take_opened(), 0);
 
-    let expected = recount_in(view.log(space).unwrap(), &checks, &mut view.stored_frames());
+    let expected = recount(view.log(space).unwrap(), &checks, &mut view.stored_frames());
     assert_eq!(first, expected);
     assert_eq!(second, expected);
 
@@ -100,7 +98,7 @@ fn assert_rebuilt_once(mut view: View) {
     assert_eq!(checks.take_opened(), 0);
     assert_eq!(
         after,
-        recount_in(view.log(space).unwrap(), &checks, &mut view.stored_frames())
+        recount(view.log(space).unwrap(), &checks, &mut view.stored_frames())
     );
 }
 

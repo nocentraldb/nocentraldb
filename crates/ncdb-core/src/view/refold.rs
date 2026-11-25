@@ -40,7 +40,7 @@ pub(super) fn run<C: Checks>(
         let mut log = Log::new(*space);
         let mut checks = checks(*space);
         let mut frames = StoredFrames::new(conn);
-        for (_, change) in old.after_in(Position::START, &mut frames) {
+        for (_, change) in old.after(Position::START, &mut frames) {
             let change = change.into_owned();
             let id = change.id();
             let mut fold = SqlFold::new(conn, model, *space).for_space(checks.space_model_id());

@@ -149,7 +149,7 @@ pub(crate) fn copy(from: &Db, to: &Db, space: &Space) {
     let changes: Vec<Vec<u8>> = {
         let inner = from.lock();
         let log = inner.view.log(space.id().0).expect("the space's log");
-        log.after_in(
+        log.after(
             ncdb_core::log::Position::START,
             &mut inner.view.stored_frames(),
         )

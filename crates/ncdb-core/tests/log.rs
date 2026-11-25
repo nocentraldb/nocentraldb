@@ -86,7 +86,7 @@ fn hands_out_the_entries_after_a_cursor_in_order() {
         log.append(change(SPACE, sequence)).unwrap();
     }
     let after = |cursor| {
-        log.after(Position(cursor))
+        log.after(Position(cursor), &mut ncdb_core::log::NoFrames)
             .map(|(position, change)| (position.0, change.header().sequence))
             .collect::<Vec<_>>()
     };
@@ -108,7 +108,7 @@ fn the_log_appends_and_never_rewrites() {
         for (sequence, other_space) in appends {
             let space = if other_space { SpaceId([9; 16]) } else { SPACE };
             let before: Vec<Vec<u8>> = log
-                .after(Position::START)
+                .after(Position::START, &mut ncdb_core::log::NoFrames)
                 .map(|(_, c)| c.bytes().to_vec())
                 .collect();
             let next = change(space, sequence);
@@ -125,7 +125,7 @@ fn the_log_appends_and_never_rewrites() {
             }
             // Every entry that was there keeps its position and its bytes.
             let after: Vec<Vec<u8>> = log
-                .after(Position::START)
+                .after(Position::START, &mut ncdb_core::log::NoFrames)
                 .map(|(_, c)| c.bytes().to_vec())
                 .collect();
             prop_assert_eq!(&after[..before.len()], &before[..]);
@@ -135,10 +135,10 @@ fn the_log_appends_and_never_rewrites() {
         let mut cursor = Position::START;
         let mut paged = Vec::new();
         for size in pages.into_iter().cycle().take(seen.len() + 1) {
-            for (position, change) in log.after(cursor).take(size) {
+            for (position, change) in log.after(cursor, &mut ncdb_core::log::NoFrames).take(size) {
                 prop_assert_eq!(position.0, cursor.0 + 1);
                 cursor = position;
-                paged.push(change.clone());
+                paged.push(change.into_owned());
             }
         }
         prop_assert_eq!(paged, seen);

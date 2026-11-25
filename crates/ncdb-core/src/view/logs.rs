@@ -27,7 +27,7 @@ impl View {
     /// sealed change once with `checks`; see [`Log::tips`].
     pub fn tips(&mut self, space: SpaceId, checks: &impl Checks) -> Option<&Tips> {
         let mut frames = StoredFrames::new(&self.conn);
-        Some(self.logs.get_mut(&space)?.tips_in(checks, &mut frames))
+        Some(self.logs.get_mut(&space)?.tips(checks, &mut frames))
     }
 
     /// The `log` table as the store of the frames the view's logs released
@@ -44,7 +44,7 @@ impl View {
         let mut frames = StoredFrames::new(&self.conn);
         self.logs
             .get(&space)?
-            .newest_model_in(checks, self.model.id, &mut frames)
+            .newest_model(checks, self.model.id, &mut frames)
     }
 
     /// How many changes of `space` are parked and rejected, and how many

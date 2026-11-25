@@ -19,7 +19,7 @@ use crate::space::Space;
 fn changes(admin: &Db, space: &Space) -> usize {
     let inner = admin.lock();
     let log = inner.view.log(space.id().0).expect("the space's log");
-    log.after_in(
+    log.after(
         ncdb_core::log::Position::START,
         &mut inner.view.stored_frames(),
     )

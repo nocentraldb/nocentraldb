@@ -184,7 +184,7 @@ fn waiting_puts(db: &Db, space: CoreSpaceId) -> String {
         .unwrap_or_default();
     let log = inner.view.log(space).expect("the space's log");
     let entries: Vec<(u64, bool)> = log
-        .after_in(
+        .after(
             ncdb_core::log::Position::START,
             &mut inner.view.stored_frames(),
         )
@@ -387,7 +387,7 @@ pub(super) fn acknowledgements(db: &Db, space: CoreSpaceId) -> Vec<(CoreChangeId
     let me = inner.member.key().id();
     let log = inner.view.log(space).expect("the space's log");
     let mut own: Vec<_> = log
-        .after_in(
+        .after(
             ncdb_core::log::Position::START,
             &mut inner.view.stored_frames(),
         )

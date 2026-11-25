@@ -36,7 +36,7 @@ async fn a_removal_that_reaches_the_relay_first_keeps_the_late_changes_off_every
     let changes: Vec<Change> = {
         let inner = lock(&six.db(REMOVED).inner);
         let log = inner.view.log(space).unwrap();
-        log.after_in(Position::START, &mut inner.view.stored_frames())
+        log.after(Position::START, &mut inner.view.stored_frames())
             .filter(|(_, change)| written.contains(&change.id()))
             .map(|(_, change)| change.into_owned())
             .collect()
