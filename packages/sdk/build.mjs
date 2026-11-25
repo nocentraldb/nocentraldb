@@ -26,11 +26,13 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   renameSync,
   rmSync,
 } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { refuseTestTrap } from "./testTrap.mjs";
 
 const PACKAGE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(PACKAGE, "..", "..");
@@ -93,6 +95,8 @@ if (!tsOnly) {
     "--target",
     "wasm32-unknown-unknown",
   ]);
+  // A core that traps on a marker is for one browser test only (NOC-499).
+  refuseTestTrap(readFileSync(MODULE), MODULE);
   run(BINDGEN, [
     "--target",
     "web",

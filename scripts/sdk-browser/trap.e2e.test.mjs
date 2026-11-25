@@ -10,9 +10,10 @@
 // sdk.e2e.test.mjs is: by the task `repo:sdk-browser`, not by `pnpm gates`.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { TEST_TRAP } from "../../packages/sdk/testTrap.mjs";
-import { build, LOCK, prebuilt } from "./build.mjs";
+import { refuseTestTrap, TEST_TRAP } from "../../packages/sdk/testTrap.mjs";
+import { build, DIST, LOCK, prebuilt } from "./build.mjs";
 import { launch } from "./engine.mjs";
 import { startServer } from "./server.mjs";
 import { buildTrap, prebuiltTrap, TRAP_DIST } from "./trap.mjs";
@@ -42,6 +43,19 @@ const lock = JSON.parse(readFileSync(LOCK, "utf8"));
 const MODEL = `nc.model({
   tasks: nc.collection({ title: nc.string(), priority: nc.int() }),
 })`;
+
+// The package's own module holds no trap; the copy's does. The package's
+// build refuses a module with the marker (packages/sdk/build.mjs), so it
+// never ships one.
+test("the package's core holds no trap, and the copy the test loads does", () => {
+  const module = (dist) =>
+    readFileSync(join(dist, "wasm", "nocentraldb_wasm_bg.wasm"));
+  assert.doesNotThrow(() => refuseTestTrap(module(DIST), "the package"));
+  assert.throws(
+    () => refuseTestTrap(module(TRAP_DIST), "the copy"),
+    /the copy holds the marker/,
+  );
+});
 
 // After the core trapped (NOC-426): it is broken for good, so the call it
 // was answering fails with `storageFailed`, and the next call fails at once
