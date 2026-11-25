@@ -157,6 +157,15 @@ test("a write too large for the core fails with an nc.Error that has a code", as
   assert.deepEqual(errors, []);
 });
 
+/**
+ * How many objects of 8 MiB the write in the test below creates. Each is
+ * below the relay's change limit, so the write is split and nothing
+ * refuses it up front (NOC-421); together, 1.25 GiB, they are more than
+ * Chromium's core can hold: it traps from about 1 GiB (768 MiB went
+ * through, NOC-499).
+ */
+const OBJECTS = 160;
+
 // After a write the core could not hold (NOC-426): the core trapped and is
 // broken for good, so the next call fails at once with `storageFailed` and
 // a text that says to open the database again; `db.close()` succeeds, and
@@ -174,7 +183,7 @@ test("after a write too large for the core, later calls say to open the database
   await opened.waitForFunction(() => window.ready === true);
 
   const result = await opened.evaluate(
-    async ({ lock, MODEL }) => {
+    async ({ lock, MODEL, OBJECTS }) => {
       const { nc } = window;
       const model = new Function("nc", `return ${MODEL}`)(nc);
       const outcome = (promise) =>
@@ -188,12 +197,11 @@ test("after a write too large for the core, later calls say to open the database
       const { ids } = await project.write((tx) => {
         tx.create(model.tasks, { title: "before", priority: 1 });
       });
+      const title = "x".repeat(8 * 1024 * 1024);
       const written = await outcome(
         project.write((tx) => {
-          tx.create(model.tasks, {
-            title: "x".repeat(256 * 1024 * 1024),
-            priority: 2,
-          });
+          for (let n = 0; n < OBJECTS; n++)
+            tx.create(model.tasks, { title, priority: 2 });
         }),
       );
       const later = await outcome(project.get(model.tasks, ids[0]));
@@ -207,7 +215,7 @@ test("after a write too large for the core, later calls say to open the database
       await again.close();
       return { written, later, closed, title: read?.title };
     },
-    { lock, MODEL },
+    { lock, MODEL, OBJECTS },
   );
   assert.deepEqual(errors, []);
   assert.equal(result.closed, "ok");
