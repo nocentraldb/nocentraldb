@@ -66,11 +66,7 @@ fn nothing_parked_needs_no_model() {
     let mut m = with_key();
     receive(&mut m, 2, own(50), vec![set_title(1)], false);
 
-    assert_eq!(
-        m.log
-            .newest_model(&m.control, MODEL, &mut ncdb_core::log::NoFrames),
-        None
-    );
+    assert_eq!(m.log.newest_model(&m.control, MODEL), None);
 }
 
 #[test]
@@ -90,9 +86,5 @@ fn the_highest_version_among_parked_changes_and_operations_of_the_own_model() {
     // No key 64: parked, but it names no version.
     receive(&mut m, 7, None, vec![later()], false);
 
-    assert_eq!(
-        m.log
-            .newest_model(&m.control, MODEL, &mut ncdb_core::log::NoFrames),
-        Some(7)
-    );
+    assert_eq!(m.log.newest_model(&m.control, MODEL), Some(7));
 }

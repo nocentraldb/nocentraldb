@@ -100,7 +100,7 @@ fn copy(frames: &[&[u8]]) -> Copy {
 
 /// The ids of the later edits of `T`.
 fn later(copy: &Copy) -> Vec<OperationId> {
-    let edits = moves::later_edits(&copy.0.log, &copy.0.control, &mut ncdb_core::log::NoFrames);
+    let edits = moves::later_edits(&copy.0.log, &copy.0.control);
     edits
         .get(&T)
         .map(|e| e.iter().map(|edit| edit.id).collect())
@@ -132,11 +132,7 @@ fn an_edit_concurrent_with_the_move_is_a_later_edit() {
     );
     let moved = change(1, 2, 3, &[&created], vec![move_to(NEW)]);
     let offline = change(2, 1, 2, &[&created], vec![title("offline")]);
-    let edit = moves::later_edits(
-        &copy(&[&created, &moved, &offline]).0.log,
-        &Control::all(),
-        &mut ncdb_core::log::NoFrames,
-    );
+    let edit = moves::later_edits(&copy(&[&created, &moved, &offline]).0.log, &Control::all());
     let edits = &edit[&T];
     assert_eq!(edits.len(), 1);
     assert_eq!(edits[0].id, id(&offline, 0));
@@ -188,8 +184,7 @@ fn a_move_taken_back_leaves_no_later_edits() {
     assert!(
         moves::later_edits(
             &copy(&[&created, &moved, &offline, &taken_back]).0.log,
-            &Control::all(),
-            &mut ncdb_core::log::NoFrames
+            &Control::all()
         )
         .is_empty()
     );
@@ -243,7 +238,7 @@ impl Mergeable for Copy {
     }
 
     fn read(&self) -> Self::Read {
-        moves::later_edits(&self.0.log, &self.0.control, &mut ncdb_core::log::NoFrames)
+        moves::later_edits(&self.0.log, &self.0.control)
             .into_iter()
             .map(|(object, edits)| (object, edits.into_iter().map(|e| e.id).collect()))
             .collect()

@@ -28,7 +28,7 @@ fn own_changes(db: &Db, space: &Space) -> Vec<ncdb_core::ids::ChangeId> {
     let inner = db.lock();
     let me = inner.member.key().id();
     let log = inner.view.log(space.id().0).expect("the space's log");
-    log.after(
+    log.after_in(
         ncdb_core::log::Position::START,
         &mut inner.view.stored_frames(),
     )
@@ -147,7 +147,7 @@ fn confirm_account(db: &Db) {
         .view
         .log(account)
         .expect("the account space's log")
-        .after(
+        .after_in(
             ncdb_core::log::Position::START,
             &mut inner.view.stored_frames(),
         )

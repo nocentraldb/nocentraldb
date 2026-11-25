@@ -25,7 +25,7 @@ use ncdb_core::change::{Change, Operation};
 use ncdb_core::checks::SealChecks;
 use ncdb_core::field_op::Origin;
 use ncdb_core::ids::{ChangeId, ObjectId, SpaceId};
-use ncdb_core::log::{Log, NoFrames, OperationParkReason, State};
+use ncdb_core::log::{Log, OperationParkReason, State};
 use ncdb_core::object::ObjectOperation;
 use ncdb_core::receive::Fold;
 use proptest::collection::vec;
@@ -106,10 +106,10 @@ impl Copies {
         assert_eq!(states(&self.released.0), states(&self.kept.0));
         assert_eq!(self.released.2.fold, self.kept.2);
         let (log, checks, store) = &mut self.released;
-        let released = of(log.tips(checks, store));
+        let released = of(log.tips_in(checks, store));
         let (log, checks, _) = &mut self.kept;
-        assert_eq!(released, of(log.tips(checks, &mut NoFrames)));
-        assert_eq!(released, recount(log, checks, &mut NoFrames));
+        assert_eq!(released, of(log.tips(checks)));
+        assert_eq!(released, recount(log, checks));
     }
 }
 

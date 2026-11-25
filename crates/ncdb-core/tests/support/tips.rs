@@ -170,14 +170,19 @@ pub struct Recount {
 /// Reads and opens every change of `log`, as the Rust SDK did on each
 /// write before NOC-138. A change the log holds but did not fold is no
 /// head; a folded sealed change that does not open is skipped.
-pub fn recount(log: &Log, checks: &impl Checks, frames: &mut impl Frames) -> Recount {
+pub fn recount(log: &Log, checks: &impl Checks) -> Recount {
+    recount_in(log, checks, &mut ncdb_core::log::NoFrames)
+}
+
+/// [`recount`] of a log that released changes, which `frames` gives.
+pub fn recount_in(log: &Log, checks: &impl Checks, frames: &mut impl Frames) -> Recount {
     let mut heads = BTreeSet::new();
     let mut control_heads = BTreeSet::new();
     let mut covered = BTreeSet::new();
     let mut controls_covered = BTreeSet::new();
     let mut sequences = BTreeMap::new();
     let mut seen = Hlc::default();
-    for (_, change) in log.after(Position::START, frames) {
+    for (_, change) in log.after_in(Position::START, frames) {
         let header = change.header();
         let next = sequences.entry(header.author).or_insert(1);
         *next = (*next).max(header.sequence + 1);

@@ -172,7 +172,7 @@ pub(super) fn verdicts(six: &Six, who: Who) -> BTreeMap<CoreChangeId, State> {
     let space = six.space(ADMIN).id().0;
     let inner = lock(&six.db(who).inner);
     let log = inner.view.log(space).expect("the space's log");
-    log.after(Position::START, &mut inner.view.stored_frames())
+    log.after_in(Position::START, &mut inner.view.stored_frames())
         .map(|(_, change)| {
             let id = change.id();
             (id, log.state(id).expect("a held change").clone())

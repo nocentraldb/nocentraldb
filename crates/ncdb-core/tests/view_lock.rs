@@ -312,7 +312,7 @@ fn folding_again_keeps_the_log() {
     let before: Vec<Change> = view
         .log(space)
         .unwrap()
-        .after(ncdb_core::log::Position::START, &mut view.stored_frames())
+        .after_in(ncdb_core::log::Position::START, &mut view.stored_frames())
         .map(|(_, change)| change.into_owned())
         .collect();
     drop(view);
@@ -322,7 +322,7 @@ fn folding_again_keeps_the_log() {
     let after: Vec<Change> = view
         .log(space)
         .unwrap()
-        .after(ncdb_core::log::Position::START, &mut view.stored_frames())
+        .after_in(ncdb_core::log::Position::START, &mut view.stored_frames())
         .map(|(_, change)| change.into_owned())
         .collect();
     assert_eq!(after, before);

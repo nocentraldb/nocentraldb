@@ -18,7 +18,7 @@ use crate::change::Operation;
 use crate::clock::Hlc;
 use crate::field_op::{self, MOVE};
 use crate::ids::{ChangeId, MemberId, ObjectId, OperationId};
-use crate::log::{Frames, Log};
+use crate::log::{Frames, Log, NoFrames};
 use crate::object::{MOVED_FROM, Object};
 use crate::receive::Checks;
 
@@ -46,12 +46,18 @@ impl LaterEdit {
     }
 }
 
+/// [`later_edits_in`] of a log that holds every change in memory: one that
+/// never released a change. A released change counts for nothing.
+pub fn later_edits(log: &Log, checks: &impl Checks) -> BTreeMap<ObjectId, Vec<LaterEdit>> {
+    later_edits_in(log, checks, &mut NoFrames)
+}
+
 /// The later edits of each moved object of `log`'s space, in clock order
 /// (stamp, then author, then id). `checks` opens the folded changes,
 /// which `frames` gives when the log released them; a change that no
 /// longer opens counts for nothing. An object that is not moved, or whose
 /// move was taken back, has none.
-pub fn later_edits(
+pub fn later_edits_in(
     log: &Log,
     checks: &impl Checks,
     frames: &mut impl Frames,
@@ -100,12 +106,18 @@ pub fn later_edits(
     later
 }
 
+/// [`moved_objects_in`] of a log that holds every change in memory: one that
+/// never released a change. A released change counts for nothing.
+pub fn moved_objects(log: &Log, checks: &impl Checks) -> BTreeMap<ObjectId, Object> {
+    moved_objects_in(log, checks, &mut NoFrames)
+}
+
 /// Each object of `log`'s space that any folded move names, with what the
 /// copy holds of it: its creates, its deletion and its move, whose
 /// conflicts are the moves that lost (RFC 0016, "Two moves at once"). An
 /// object whose move was taken back is among them, and reads as not moved.
 /// `frames` gives the folded changes the log released.
-pub fn moved_objects(
+pub fn moved_objects_in(
     log: &Log,
     checks: &impl Checks,
     frames: &mut impl Frames,

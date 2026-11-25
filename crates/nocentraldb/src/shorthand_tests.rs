@@ -35,7 +35,7 @@ fn space() -> (Db, Space) {
 fn changes(db: &Db, space: &Space) -> usize {
     let inner = db.lock();
     let log = inner.view.log(space.id().0).expect("the space's log");
-    log.after(
+    log.after_in(
         ncdb_core::log::Position::START,
         &mut inner.view.stored_frames(),
     )

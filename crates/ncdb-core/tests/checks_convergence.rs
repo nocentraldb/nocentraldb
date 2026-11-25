@@ -119,7 +119,7 @@ impl Copy {
     /// the log holds them does not count.
     fn states(&self) -> BTreeMap<ChangeId, Option<State>> {
         let log = &self.log;
-        log.after(Position::START, &mut ncdb_core::log::NoFrames)
+        log.after(Position::START)
             .map(|(_, change)| (change.id(), log.state(change.id()).cloned()))
             .collect()
     }

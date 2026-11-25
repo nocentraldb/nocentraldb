@@ -56,7 +56,7 @@ fn person_key(admin: &Db, space: &Space) {
 fn changes(admin: &Db, space: &Space) -> usize {
     let inner = admin.lock();
     let log = inner.view.log(space.id().0).expect("the space's log");
-    log.after(
+    log.after_in(
         ncdb_core::log::Position::START,
         &mut inner.view.stored_frames(),
     )
@@ -281,7 +281,7 @@ fn copy_some(from: &Db, to: &Db, space: &Space, keep: impl Fn(&Entry) -> bool) {
     let changes: Vec<Vec<u8>> = {
         let inner = from.lock();
         let log = inner.view.log(space.id().0).expect("the space's log");
-        log.after(
+        log.after_in(
             ncdb_core::log::Position::START,
             &mut inner.view.stored_frames(),
         )

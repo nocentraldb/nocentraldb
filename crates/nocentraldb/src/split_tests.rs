@@ -43,7 +43,7 @@ const TASKS: usize = 72;
 fn sealed(db: &Db, space: &Space) -> Vec<Change> {
     let inner = db.lock();
     let log = inner.view.log(space.id().0).unwrap();
-    log.after(
+    log.after_in(
         ncdb_core::log::Position::default(),
         &mut inner.view.stored_frames(),
     )

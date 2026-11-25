@@ -118,7 +118,7 @@ impl Holder {
     /// Per change the holder holds, its state.
     fn states(&self) -> BTreeMap<ChangeId, Option<State>> {
         let log = &self.log;
-        log.after(Position::START, &mut ncdb_core::log::NoFrames)
+        log.after(Position::START)
             .map(|(_, change)| (change.id(), log.state(change.id()).cloned()))
             .collect()
     }
@@ -199,10 +199,7 @@ impl Holders {
                 holder.checks.resolved().encode() == expected,
                 "M-C4: holder {i}'s control state differs from resolve of the control changes"
             );
-            for (_, change) in holder
-                .log
-                .after(Position::START, &mut ncdb_core::log::NoFrames)
-            {
+            for (_, change) in holder.log.after(Position::START) {
                 if change.header().kind != Kind::SEALED {
                     continue;
                 }
@@ -237,7 +234,7 @@ impl Holders {
             .collect();
         let held: BTreeSet<ChangeId> = holder
             .log
-            .after(Position::START, &mut ncdb_core::log::NoFrames)
+            .after(Position::START)
             .map(|(_, c)| c.id())
             .collect();
         let wrong: BTreeSet<ChangeId> = WRONG.with(|wrong| {
