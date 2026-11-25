@@ -133,6 +133,15 @@ jobs:
         if: ${{ !cancelled() }}
         run: node scripts/sdk-browser/build.mjs
 
+      # A copy of that package whose core, built with the feature test-trap
+      # in target/sdk-trap, traps on a marker value, in
+      # target/sdk-browser/trap-dist (scripts/sdk-browser/trap.mjs), for the
+      # test of what follows a real trap (NOC-499). A second release build
+      # of the core: about one to two minutes.
+      - name: The TypeScript SDK with a trapping core, built on the runner
+        if: ${{ !cancelled() }}
+        run: node scripts/sdk-browser/trap.mjs
+
       # The Rust device of the test with a browser (NOC-178), the example
       # crates/nocentraldb/examples/browser_peer.rs, in
       # target/sdk-browser/browser_peer (scripts/sdk-browser/peer.mjs),
