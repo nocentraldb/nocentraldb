@@ -15,5 +15,20 @@ tasks:
     deps: ["repo:wasm-runner"]
     env:
       CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "$workspaceRoot/target/tools/bin/wasm-bindgen-test-runner"
+  # Rich text folds only with the compiler cfg `ncdb_rich_text`, which only
+  # the project's own CI sets (NOC-468; crates/ncdb-core/moon.yml). The SDK
+  # and its bridge to the TypeScript SDK (NOC-461) are linted and tested
+  # with it too, with the feature `bridge` on, natively, in the target
+  # directory the core's rich-text tasks use.
+  lint-rich-text:
+    command: "cargo clippy --locked -p $project --features bridge --all-targets -- -D warnings"
+    env:
+      RUSTFLAGS: "--cfg ncdb_rich_text"
+      CARGO_TARGET_DIR: "$workspaceRoot/target/rich-text"
+  test-rich-text:
+    command: "cargo test --locked -p $project --features bridge --lib"
+    env:
+      RUSTFLAGS: "--cfg ncdb_rich_text"
+      CARGO_TARGET_DIR: "$workspaceRoot/target/rich-text"
   gates:
-    deps: ["~:build-wasm", "~:test-wasm"]
+    deps: ["~:build-wasm", "~:test-wasm", "~:lint-rich-text", "~:test-rich-text"]
