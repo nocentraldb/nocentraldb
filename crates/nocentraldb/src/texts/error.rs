@@ -228,6 +228,12 @@ pub(crate) fn recovery_code_unreadable(why: impl std::fmt::Display) -> String {
 pub(crate) const PERSON_KEY_NOT_HELD: &str =
     "this member does not hold the person's key yet; try again once sync has fetched it";
 
+/// `notRichText` (invalidValue): The rich-text editor binding (space.richText)
+/// opened on a field that is not nc.richText.
+pub(crate) fn not_rich_text(field: impl std::fmt::Display, collection: impl std::fmt::Display) -> String {
+    format!("{field} of {collection} is not a rich-text field")
+}
+
 /// `noAccountKeyToSignOff` (notAllowed): Account::sign_off on a database that
 /// holds no account key, an agent's or one waiting to be paired (NOC-325).
 pub(crate) const NO_ACCOUNT_KEY_TO_SIGN_OFF: &str =

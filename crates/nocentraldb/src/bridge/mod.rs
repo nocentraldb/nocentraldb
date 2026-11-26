@@ -121,6 +121,19 @@
 //! `{"member": id, "recover": words}` answers `{"removed": [{"space": id,
 //! "notice": notice}], "askAdmins": [id], "notice": notice}`.
 //!
+//! With the compiler cfg `ncdb_rich_text` only (NOC-468), the calls of the
+//! rich-text editor binding (RFC 0013, "An editor: the binding"; NOC-461),
+//! in `rich_text.rs`: `richText.open` `{"space": id, "collection": text,
+//! "id": id, "field": text}` leases a client id and answers `{"lease": n,
+//! "client": n, "clock": n, "writable": bool, "state": bytes}`;
+//! `richText.pull` `{"lease": n, "stateVector": bytes}` answers the Yjs
+//! update a binding with that state vector lacks; `richText.write`
+//! `{"lease": n, "update": bytes}` writes the update as one change and
+//! answers `{"change": id}`; `richText.close` `{"lease": n}` gives the
+//! client id back with the clock it reached. `close` gives back every
+//! lease still open. A binding learns that a field may have changed from
+//! the `folded` event of its collection.
+//!
 //! A sync status is `{"connection": "connected" | "connecting" |
 //! "offline" | "paused" | "none", "unconfirmed": u64, "refused": u64,
 //! "epochChanged": bool, "error": text | null}`.
@@ -145,6 +158,10 @@ mod erasures;
 mod events;
 mod members;
 mod reports;
+// The editor binding's calls (NOC-461), built only with the compiler cfg
+// `ncdb_rich_text`.
+#[cfg(ncdb_rich_text)]
+mod rich_text;
 #[cfg(test)]
 mod tests;
 mod values;
@@ -176,6 +193,9 @@ pub struct Bridge {
     /// worker (RFC 0009, "Queries and indexes").
     cursors: BTreeMap<u64, Cursor>,
     next_cursor: u64,
+    /// The rich-text bindings open in the worker (NOC-461).
+    #[cfg(ncdb_rich_text)]
+    rich_text: rich_text::Bindings,
 }
 
 /// Why a call failed: RFC 0009's code, a message and, for
@@ -223,6 +243,8 @@ impl Bridge {
             events: None,
             cursors: BTreeMap::new(),
             next_cursor: 0,
+            #[cfg(ncdb_rich_text)]
+            rich_text: rich_text::Bindings::default(),
         }
     }
 
@@ -367,6 +389,14 @@ impl Bridge {
                 )]))
             }
             "write" => write(&db, owned).await,
+            #[cfg(ncdb_rich_text)]
+            "richText.open" => self.rich_text.open(&db, args),
+            #[cfg(ncdb_rich_text)]
+            "richText.pull" => self.rich_text.pull(&db, args),
+            #[cfg(ncdb_rich_text)]
+            "richText.write" => self.rich_text.write(&db, args).await,
+            #[cfg(ncdb_rich_text)]
+            "richText.close" => self.rich_text.close(&db, args),
             "get" => {
                 let space = db.spaces().get(space_id(args)?).await?;
                 let collection = text(args, "collection")?;
@@ -379,6 +409,10 @@ impl Bridge {
 
     /// Drops the open database, its events and its cursors.
     fn close(&mut self) {
+        #[cfg(ncdb_rich_text)]
+        if let Some(db) = &self.db {
+            self.rich_text.close_all(db);
+        }
         self.db = None;
         if let Some(events) = self.events.take() {
             events.feed.close();

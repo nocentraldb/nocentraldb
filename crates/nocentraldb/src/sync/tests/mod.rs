@@ -38,6 +38,8 @@ mod newest_model;
 mod pairing;
 mod pairing_syncing;
 mod pause;
+// The editor binding (NOC-461), built only with the compiler cfg
+// `ncdb_rich_text`.
 mod person_keys;
 mod personal;
 mod provisional;
@@ -52,6 +54,8 @@ mod remove_member;
 mod removed;
 mod renewed_key;
 mod reopen;
+#[cfg(ncdb_rich_text)]
+mod rich_text_roles;
 mod rotation;
 mod slow_relay;
 mod space_status;

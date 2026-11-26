@@ -1,0 +1,7 @@
+{
+  "id": "error.notRichText",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "{field} of {collection} is not a rich-text field",
+  "when": "The rich-text editor binding (space.richText) opened on a field that is not nc.richText."
+}
