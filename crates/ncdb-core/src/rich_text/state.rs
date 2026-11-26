@@ -2,8 +2,10 @@
 //! document as one Yjs update of its whole state, encoded v1 with garbage
 //! collection, which holds pending items too; for each operation it took,
 //! its author, its stamp, the runs of ids it added and the ids its delete
-//! set named; and the client ids with their nonces. Its canonical CBOR is
-//! what `fs_<collection>` stores.
+//! set named; the same of each rejected operation it holds as
+//! placeholders (RFC 0013, "Un-folding a rejected change"); and the client
+//! ids with their nonces. Its canonical CBOR is what `fs_<collection>`
+//! stores.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -25,6 +27,9 @@ pub struct State {
     pub(super) edits: BTreeMap<OperationId, Record>,
     /// Each client id the operations added items under, with its nonce.
     pub(super) clients: BTreeMap<u64, [u8; 8]>,
+    /// What each rejected operation the state holds as placeholders added
+    /// and deleted.
+    pub(super) placeholders: BTreeMap<OperationId, Record>,
 }
 
 /// What the state keeps of one operation.
@@ -59,6 +64,7 @@ pub struct Corrupt;
 const DOCUMENT: u64 = 1;
 const EDITS: u64 = 2;
 const CLIENTS: u64 = 3;
+const PLACEHOLDERS: u64 = 4;
 
 impl State {
     /// The document's whole state as a Yjs update, encoding v1, empty for a
@@ -69,37 +75,28 @@ impl State {
 
     /// The canonical CBOR: `{1: document, 2: [[[change, position], author,
     /// stamp, [[client, clock, len, digest]…], [[client, clock, len]…]]…],
-    /// 3: {client: nonce}}`, operations in id order. Not a wire format.
+    /// 3: {client: nonce}, 4: [placeholders, as 2]}`, operations in id
+    /// order, and key 4 only when the state holds a placeholder. Not a
+    /// wire format.
     pub fn bytes(&self) -> Vec<u8> {
-        let edits = self
-            .edits
-            .iter()
-            .map(|(id, record)| {
-                Value::Array(vec![
-                    Value::Array(vec![
-                        Value::Bytes(id.change.0.to_vec()),
-                        Value::Unsigned(id.position),
-                    ]),
-                    Value::Bytes(record.author.0.to_vec()),
-                    Value::Unsigned(record.stamp.0),
-                    Value::Array(record.runs.iter().map(run_value).collect()),
-                    Value::Array(record.deletes.iter().map(range_value).collect()),
-                ])
-            })
-            .collect();
         let clients = self
             .clients
             .iter()
             .map(|(client, nonce)| (Key::Unsigned(*client), Value::Bytes(nonce.to_vec())))
             .collect();
-        cbor::encode(&Value::Map(
-            [
-                (Key::Unsigned(DOCUMENT), Value::Bytes(self.document.clone())),
-                (Key::Unsigned(EDITS), Value::Array(edits)),
-                (Key::Unsigned(CLIENTS), Value::Map(clients)),
-            ]
-            .into(),
-        ))
+        let mut map: BTreeMap<Key, Value> = [
+            (Key::Unsigned(DOCUMENT), Value::Bytes(self.document.clone())),
+            (Key::Unsigned(EDITS), records_value(&self.edits)),
+            (Key::Unsigned(CLIENTS), Value::Map(clients)),
+        ]
+        .into();
+        if !self.placeholders.is_empty() {
+            map.insert(
+                Key::Unsigned(PLACEHOLDERS),
+                records_value(&self.placeholders),
+            );
+        }
+        cbor::encode(&Value::Map(map))
     }
 
     /// Reads the bytes [`State::bytes`] wrote.
@@ -113,12 +110,22 @@ impl State {
         else {
             return Err(Corrupt);
         };
+        let placeholders = match map.remove(&Key::Unsigned(PLACEHOLDERS)) {
+            None => Vec::new(),
+            // Written only when the state holds one.
+            Some(Value::Array(placeholders)) if !placeholders.is_empty() => placeholders,
+            Some(_) => return Err(Corrupt),
+        };
         if !map.is_empty() {
             return Err(Corrupt);
         }
         Ok(State {
             document,
             edits: edits.into_iter().map(record).collect::<Result<_, _>>()?,
+            placeholders: placeholders
+                .into_iter()
+                .map(record)
+                .collect::<Result<_, _>>()?,
             clients: clients
                 .into_iter()
                 .map(|entry| match entry {
@@ -139,8 +146,29 @@ impl fmt::Debug for State {
             .field("size", &Size(self.document.len(), "bytes"))
             .field("edits", &self.edits.len())
             .field("clients", &self.clients.len())
+            .field("placeholders", &self.placeholders.len())
             .finish()
     }
+}
+
+fn records_value(records: &BTreeMap<OperationId, Record>) -> Value {
+    Value::Array(
+        records
+            .iter()
+            .map(|(id, record)| {
+                Value::Array(vec![
+                    Value::Array(vec![
+                        Value::Bytes(id.change.0.to_vec()),
+                        Value::Unsigned(id.position),
+                    ]),
+                    Value::Bytes(record.author.0.to_vec()),
+                    Value::Unsigned(record.stamp.0),
+                    Value::Array(record.runs.iter().map(run_value).collect()),
+                    Value::Array(record.deletes.iter().map(range_value).collect()),
+                ])
+            })
+            .collect(),
+    )
 }
 
 fn run_value(run: &Run) -> Value {
