@@ -171,3 +171,25 @@ pub fn string_item(client: u64, clock: u64, text: &str) -> Vec<u8> {
         .0
 }
 pub mod harness;
+
+/// The characters of a document's whole state, without its markup, as
+/// Yrs reads them: what a reader sees, apart from formatting.
+pub fn plain_text(document: &[u8]) -> String {
+    use yrs::GetString;
+    let doc = doc(0);
+    if !document.is_empty() {
+        apply(&doc, document);
+    }
+    let xml = body(&doc).get_string(&doc.transact());
+    let mut out = String::new();
+    let mut in_tag = false;
+    for c in xml.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            c if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    out
+}

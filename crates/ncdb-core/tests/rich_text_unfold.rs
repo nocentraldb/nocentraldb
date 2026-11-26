@@ -19,7 +19,7 @@ use ncdb_core::field_op::{Encoding, Origin};
 use ncdb_core::ids::{ChangeId, MemberId, ObjectId, OperationId};
 use ncdb_core::rich_text::{Edit, Fit, RichText, State, client_id};
 
-use rich_text_support::{add_block, apply, delete_text, doc, type_text};
+use rich_text_support::{add_block, apply, delete_text, doc, plain_text, type_text};
 
 const NONCE: [u8; 8] = [5; 8];
 
@@ -67,18 +67,7 @@ fn edit(n: u8, author: u8, update: &[u8]) -> Edit {
 
 /// What a state reads, without markup.
 fn text(state: &State) -> String {
-    let xml = RichText.read(state).xml;
-    let mut out = String::new();
-    let mut in_tag = false;
-    for c in xml.chars() {
-        match c {
-            '<' => in_tag = true,
-            '>' => in_tag = false,
-            c if !in_tag => out.push(c),
-            _ => {}
-        }
-    }
-    out
+    plain_text(state.document())
 }
 
 /// A state that folded `folded` and placed `placed`, in that order.
