@@ -110,6 +110,9 @@ pub(crate) fn held_person(
         .and_then(|state| match state {
             FieldState::Basic(state) => PersonField.read(&state).value,
             FieldState::Set(_) | FieldState::Plugin(_) => None,
+            // `$person` is a basic field; a rich-text state never holds it.
+            #[cfg(ncdb_rich_text)]
+            FieldState::RichText(_) => None,
         })
         .filter(|entry| entry.known)
         .and_then(|entry| Person::from_value(&entry.value)))
