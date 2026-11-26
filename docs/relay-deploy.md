@@ -358,6 +358,8 @@ The same pattern takes any token your app can check, for example a delegation to
 
 The relay writes one fixed JSON line per invocation (`crates/ncdb-relay-lambda/src/log.rs`): the route, the connection id, the member id, the message's type, the bytes in and out, error and refusal codes, and when and how long. It never logs an event, a frame, a key or a token, and its logs are kept 14 days. Its tables are keyed by space ids, member ids and change ids, not content, and the changes it stores are ciphertext.
 
+[What a relay keeps](relay-data-sheet.md) lists everything the relay stores or sees, why and for how long, as a starting point for your privacy notice.
+
 What you add around it can still expose more. Leave these off, or keep them as described:
 
 | Setting | Default | Risk | Rule |
