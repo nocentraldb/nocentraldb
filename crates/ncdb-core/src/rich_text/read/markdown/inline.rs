@@ -55,10 +55,7 @@ fn form(mark: &Mark) -> Option<Form> {
         "italic" => Form::Italic,
         "strike" => Form::Strike,
         "code" | "underline" | "highlight" => return None,
-        "link" => match mark.attrs.get("href") {
-            Some(Data::Text(href)) => Form::Link(href.clone()),
-            _ => Form::Tag(mark.name.clone(), mark.attrs.clone()),
-        },
+        "link" => link(mark),
         _ => Form::Tag(mark.name.clone(), mark.attrs.clone()),
     })
 }
@@ -71,6 +68,14 @@ fn rank(form: &Form) -> (u8, String) {
         Form::Bold => (2, String::new()),
         Form::Italic => (3, String::new()),
         Form::Strike => (4, String::new()),
+    }
+}
+
+/// A link with a text `href`, or a tag.
+fn link(mark: &Mark) -> Form {
+    match mark.attrs.get("href") {
+        Some(Data::Text(href)) => Form::Link(href.clone()),
+        _ => Form::Tag(mark.name.clone(), mark.attrs.clone()),
     }
 }
 
@@ -116,7 +121,10 @@ fn segments(nodes: &[Node]) -> Vec<Segment<'_>> {
         if let Leaf::Text(text) = &out[k].leaf
             && text.chars().all(char::is_whitespace)
         {
-            let before = k.checked_sub(1).map(|j| out[j].forms.clone()).unwrap_or_default();
+            let before = k
+                .checked_sub(1)
+                .map(|j| out[j].forms.clone())
+                .unwrap_or_default();
             out[k].forms.retain(|f| before.contains(f));
         }
     }
@@ -138,7 +146,11 @@ pub(super) fn render(nodes: &[Node], context: Context) -> String {
             out.push_str(&close(&form, context));
         }
         out.push_str(&std::mem::take(&mut held));
-        let mut opening: Vec<&Form> = segment.forms.iter().filter(|f| !stack.contains(f)).collect();
+        let mut opening: Vec<&Form> = segment
+            .forms
+            .iter()
+            .filter(|f| !stack.contains(f))
+            .collect();
         opening.sort_by_key(|f| std::cmp::Reverse(end(&segments, k, f)));
         let mut text = match &segment.leaf {
             Leaf::Text(text) => text.as_str(),

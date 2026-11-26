@@ -27,7 +27,10 @@ fn updates() -> Vec<Vec<u8>> {
         el("widget", &attrs, vec![]),
         p(vec![
             ma("x", "link", &[("href", s("h"))]),
-            m("y", &["bold", "italic", "strike", "underline", "comment", "note"]),
+            m(
+                "y",
+                &["bold", "italic", "strike", "underline", "comment", "note"],
+            ),
         ]),
     ];
     let mention = el(
@@ -38,7 +41,11 @@ fn updates() -> Vec<Vec<u8>> {
         ],
         vec![],
     );
-    steps(vec![first, vec![p(vec![t("Then "), mention])], vec![p(vec![t("Last.")])]])
+    steps(vec![
+        first,
+        vec![p(vec![t("Then "), mention])],
+        vec![p(vec![t("Last.")])],
+    ])
 }
 
 #[test]
@@ -55,8 +62,20 @@ fn every_read_is_the_same_on_copies_with_equal_state_bytes() {
         assert_eq!(mentions(state), mentions(&forward));
         let (read, expected) = (RichText.read(state), RichText.read(&forward));
         assert_eq!(
-            (read.markdown, read.text, read.tree, read.mentions, read.lost),
-            (expected.markdown, expected.text, expected.tree, expected.mentions, expected.lost)
+            (
+                read.markdown,
+                read.text,
+                read.tree,
+                read.mentions,
+                read.lost
+            ),
+            (
+                expected.markdown,
+                expected.text,
+                expected.tree,
+                expected.mentions,
+                expected.lost
+            )
         );
     }
 }

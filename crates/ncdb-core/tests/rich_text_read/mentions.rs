@@ -28,10 +28,7 @@ fn hex(text: &str) -> [u8; 16] {
 #[test]
 fn a_mention_reads_as_a_link_without_a_name() {
     let state = state(vec![p(vec![t("Ask "), mention(SPACE, ID), t(".")])]);
-    assert_eq!(
-        markdown(&state),
-        format!("Ask [@](ncdb:{SPACE}/{ID}).")
-    );
+    assert_eq!(markdown(&state), format!("Ask [@](ncdb:{SPACE}/{ID})."));
 }
 
 #[test]

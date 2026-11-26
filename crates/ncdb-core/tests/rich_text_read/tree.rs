@@ -61,7 +61,10 @@ fn the_tree_holds_nodes_attributes_marks_and_text() {
                     "heading",
                     vec![
                         ("attrs", map(vec![("level", Data::Integer(2))])),
-                        ("content", Data::Array(vec![node("text", vec![("text", text("Plan"))])])),
+                        (
+                            "content",
+                            Data::Array(vec![node("text", vec![("text", text("Plan"))])]),
+                        ),
                     ],
                 ),
                 node(
@@ -76,7 +79,10 @@ fn the_tree_holds_nodes_attributes_marks_and_text() {
                                     ("text", text("ship")),
                                     (
                                         "marks",
-                                        Data::Array(vec![node("bold", vec![]), node("italic", vec![])]),
+                                        Data::Array(vec![
+                                            node("bold", vec![]),
+                                            node("italic", vec![]),
+                                        ]),
                                     ),
                                 ],
                             ),
@@ -110,7 +116,11 @@ fn a_node_and_a_mark_outside_the_vocabulary_stay_whole() {
     nested.insert("k".to_owned(), Any::from(1.5));
     let state = state(vec![el(
         "callout",
-        &[("tone", s("warn")), ("meta", Any::from(nested)), ("on", Any::Bool(true))],
+        &[
+            ("tone", s("warn")),
+            ("meta", Any::from(nested)),
+            ("on", Any::Bool(true)),
+        ],
         vec![ma("x", "comment", &[("id", s("c1"))])],
     )]);
     let expected = node(

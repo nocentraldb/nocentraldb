@@ -19,8 +19,8 @@ mod client_id;
 mod document;
 mod edit;
 mod outcome;
-mod state;
 pub mod read;
+mod state;
 pub mod update;
 
 use std::collections::BTreeSet;

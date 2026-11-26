@@ -151,7 +151,9 @@ pub fn fold_in(updates: &[Vec<u8>], order: &[usize]) -> State {
             },
         };
         let edit = decode(&op).expect("the update decodes");
-        RichText.try_apply(&mut state, &edit).expect("the update folds");
+        RichText
+            .try_apply(&mut state, &edit)
+            .expect("the update folds");
     }
     state
 }

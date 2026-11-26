@@ -112,7 +112,14 @@ fn a_link_reads_with_its_href() {
     assert_eq!(
         md(vec![p(vec![
             t("See "),
-            ma("the docs", "link", &[("href", s("https://example.com/a(b)")), ("target", s("_blank"))]),
+            ma(
+                "the docs",
+                "link",
+                &[
+                    ("href", s("https://example.com/a(b)")),
+                    ("target", s("_blank"))
+                ]
+            ),
             t("."),
         ])]),
         "See [the docs](https://example.com/a\\(b\\))."
@@ -130,7 +137,11 @@ fn a_link_whose_href_holds_a_space_is_written_in_angle_brackets() {
 #[test]
 fn code_holding_backticks_takes_a_longer_fence() {
     assert_eq!(
-        md(vec![p(vec![m("a `b` c", &["code"]), t(" "), m("`", &["code"])])]),
+        md(vec![p(vec![
+            m("a `b` c", &["code"]),
+            t(" "),
+            m("`", &["code"])
+        ])]),
         "``a `b` c`` `` ` ``"
     );
 }
@@ -162,7 +173,11 @@ fn a_line_that_would_start_a_block_is_escaped() {
 #[test]
 fn a_hard_break_ends_a_line_with_a_backslash() {
     assert_eq!(
-        md(vec![p(vec![t("One"), el("hardBreak", &[], vec![]), t("# two")])]),
+        md(vec![p(vec![
+            t("One"),
+            el("hardBreak", &[], vec![]),
+            t("# two")
+        ])]),
         "One\\\n\\# two"
     );
 }
@@ -207,7 +222,10 @@ fn an_ordered_list_counts_from_its_start() {
         md(vec![el(
             "orderedList",
             &[("start", i(9))],
-            vec![item(vec![p(vec![t("Nine")])]), item(vec![p(vec![t("Ten")])])]
+            vec![
+                item(vec![p(vec![t("Nine")])]),
+                item(vec![p(vec![t("Ten")])])
+            ]
         )]),
         "9. Nine\n10. Ten"
     );
@@ -226,15 +244,21 @@ fn two_lists_in_a_row_stay_two_lists() {
 #[test]
 fn a_task_list_shows_each_items_box() {
     let task = |checked: Option<bool>, text: &str| {
-        let attrs: Vec<(&'static str, Any)> =
-            checked.map(|c| ("checked", Any::Bool(c))).into_iter().collect();
+        let attrs: Vec<(&'static str, Any)> = checked
+            .map(|c| ("checked", Any::Bool(c)))
+            .into_iter()
+            .collect();
         el("taskItem", &attrs, vec![p(vec![t(text)])])
     };
     assert_eq!(
         md(vec![el(
             "taskList",
             &[],
-            vec![task(Some(true), "Done"), task(Some(false), "Open"), task(None, "New")]
+            vec![
+                task(Some(true), "Done"),
+                task(Some(false), "Open"),
+                task(None, "New")
+            ]
         )]),
         "- [x] Done\n- [ ] Open\n- [ ] New"
     );
@@ -244,7 +268,11 @@ fn a_task_list_shows_each_items_box() {
 fn a_code_block_is_fenced_with_its_language() {
     assert_eq!(
         md(vec![
-            el("codeBlock", &[("language", s("rust"))], vec![t("let a = 1;\n```\n*b*")]),
+            el(
+                "codeBlock",
+                &[("language", s("rust"))],
+                vec![t("let a = 1;\n```\n*b*")]
+            ),
             el("codeBlock", &[], vec![t("plain")]),
         ]),
         "````rust\nlet a = 1;\n```\n*b*\n````\n\n```\nplain\n```"
@@ -254,7 +282,11 @@ fn a_code_block_is_fenced_with_its_language() {
 #[test]
 fn a_horizontal_rule_is_three_dashes() {
     assert_eq!(
-        md(vec![p(vec![t("A")]), el("horizontalRule", &[], vec![]), p(vec![t("B")])]),
+        md(vec![
+            p(vec![t("A")]),
+            el("horizontalRule", &[], vec![]),
+            p(vec![t("B")])
+        ]),
         "A\n\n---\n\nB"
     );
 }
@@ -270,14 +302,20 @@ fn a_table_reads_as_a_github_table_with_its_first_row_as_header() {
                 el(
                     "tableRow",
                     &[],
-                    vec![cell("tableHeader", vec![t("Name")]), cell("tableHeader", vec![t("Note")])]
+                    vec![
+                        cell("tableHeader", vec![t("Name")]),
+                        cell("tableHeader", vec![t("Note")])
+                    ]
                 ),
                 el(
                     "tableRow",
                     &[],
                     vec![
                         cell("tableCell", vec![m("Ada", &["bold"])]),
-                        cell("tableCell", vec![t("a|b"), el("hardBreak", &[], vec![]), t("c")]),
+                        cell(
+                            "tableCell",
+                            vec![t("a|b"), el("hardBreak", &[], vec![]), t("c")]
+                        ),
                     ]
                 ),
                 el("tableRow", &[], vec![cell("tableCell", vec![t("short")])]),
@@ -292,12 +330,17 @@ fn a_node_outside_the_vocabulary_reads_as_a_tag_around_its_content() {
     assert_eq!(
         md(vec![
             el("callout", &[("tone", s("warn"))], vec![t("Careful.")]),
-            el("panel", &[("open", Any::Bool(true)), ("a", s("say \"hi\" & go"))], vec![
-                p(vec![t("Inside.")]),
-                p(vec![t("Twice.")]),
-            ]),
+            el(
+                "panel",
+                &[("open", Any::Bool(true)), ("a", s("say \"hi\" & go"))],
+                vec![p(vec![t("Inside.")]), p(vec![t("Twice.")]),]
+            ),
             el("divider", &[], vec![]),
-            p(vec![t("A "), el("chip", &[("n", i(2))], vec![t("x")]), t(" b")]),
+            p(vec![
+                t("A "),
+                el("chip", &[("n", i(2))], vec![t("x")]),
+                t(" b")
+            ]),
         ]),
         "<callout tone=\"warn\">Careful.</callout>\n\n\
          <panel a=\"say &quot;hi&quot; &amp; go\" open=\"true\">\n\nInside.\n\nTwice.\n\n</panel>\n\n\
@@ -324,15 +367,16 @@ fn an_attribute_that_is_no_text_reads_as_json() {
     map.insert("b".to_owned(), Any::from(vec![Any::from(1), Any::Null]));
     map.insert("a".to_owned(), Any::from("x\"y"));
     assert_eq!(
-        md(vec![el("widget", &[("data", Any::from(map)), ("size", Any::from(1.5))], vec![])]),
+        md(vec![el(
+            "widget",
+            &[("data", Any::from(map)), ("size", Any::from(1.5))],
+            vec![]
+        )]),
         "<widget data=\"{&quot;a&quot;:&quot;x\\&quot;y&quot;,&quot;b&quot;:[1,null]}\" size=\"1.5\"></widget>"
     );
 }
 
 #[test]
 fn a_mark_y_prosemirror_names_with_a_hash_reads_under_its_name() {
-    assert_eq!(
-        md(vec![p(vec![m("b", &["bold--AbC1+/=9"])])]),
-        "**b**"
-    );
+    assert_eq!(md(vec![p(vec![m("b", &["bold--AbC1+/=9"])])]), "**b**");
 }

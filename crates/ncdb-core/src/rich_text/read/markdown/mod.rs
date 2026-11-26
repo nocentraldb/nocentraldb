@@ -101,11 +101,16 @@ fn block(node: &Node, other_marker: bool) -> String {
         "bulletList" | "taskList" => Some(list(children, None, other_marker)),
         "orderedList" => start(attrs).map(|start| list(children, Some(start), other_marker)),
         "codeBlock" => Some(code_block(attrs, children)),
-        "horizontalRule" if children.is_empty() => Some("---".to_owned()),
+        "horizontalRule" => rule(children),
         "table" => table(children),
         _ => None,
     };
     rendered.unwrap_or_else(|| tagged(name, attrs, children))
+}
+
+/// A horizontal rule; one that holds content reads as a tag.
+fn rule(children: &[Node]) -> Option<String> {
+    children.is_empty().then(|| "---".to_owned())
 }
 
 /// A node outside the vocabulary: a tag around its inline content, or
@@ -203,9 +208,11 @@ fn list(items: &[Node], start: Option<i128>, other_marker: bool) -> String {
             };
             let continuation = " ".repeat(marker.len() + 1);
             let body = match item {
-                Node::Element { name, attrs, children }
-                    if name == "listItem" || name == "taskItem" =>
-                {
+                Node::Element {
+                    name,
+                    attrs,
+                    children,
+                } if name == "listItem" || name == "taskItem" => {
                     if name == "taskItem" {
                         let checked = attrs.get("checked") == Some(&Data::Bool(true));
                         marker.push_str(if checked { " [x]" } else { " [ ]" });
@@ -314,7 +321,9 @@ fn cell(node: &Node) -> String {
             Node::Element { name, children, .. } if name == "paragraph" => {
                 inline::render(children, CELL)
             }
-            other => block(other, false).replace('|', "\\|").replace('\n', "<br>"),
+            other => block(other, false)
+                .replace('|', "\\|")
+                .replace('\n', "<br>"),
         })
         .collect::<Vec<_>>()
         .join("<br>")

@@ -50,10 +50,7 @@ fn json(value: &Data) -> String {
         Data::Float(_) => "null".to_owned(),
         Data::Text(text) => string(text),
         Data::Bytes(bytes) => string(&bytes.iter().map(|b| format!("{b:02x}")).collect::<String>()),
-        Data::Array(items) => format!(
-            "[{}]",
-            items.iter().map(json).collect::<Vec<_>>().join(",")
-        ),
+        Data::Array(items) => format!("[{}]", items.iter().map(json).collect::<Vec<_>>().join(",")),
         Data::Map(map) => format!(
             "{{{}}}",
             map.iter()
