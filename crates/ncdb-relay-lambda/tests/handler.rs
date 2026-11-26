@@ -7,10 +7,14 @@ use std::sync::Mutex;
 
 use aws_lambda_events::apigw::ApiGatewayWebsocketProxyRequest;
 use ncdb_core::cbor::{self, Key, Value};
+use ncdb_core::ids::{MemberId, SpaceId};
 use ncdb_relay::sqlite::SqliteStore;
+use ncdb_relay::store::Epoch;
 use ncdb_relay::store::{Entry, RelayStore, StoreError, Token, UploadId};
 use ncdb_relay::{Config, ErrorCode, Relay};
-use ncdb_relay_lambda::connections::{Connections, MAX_CONNECTION_AGE, Stage};
+use ncdb_relay_lambda::connections::{
+    Connection, Connections, MAX_CONNECTION_AGE, Stage, Subscription,
+};
 use ncdb_relay_lambda::{
     Body, ConnectionApi, Event, Handler, MemoryConnections, Posted, Route, Urls,
 };
@@ -71,6 +75,11 @@ type Tested = Handler<SqliteStore, MemoryConnections, Recording, NoUrls>;
 
 /// A handler on a fresh SQLite database, and the database's directory.
 fn handler() -> (Tested, std::path::PathBuf) {
+    handler_with(MemoryConnections::default())
+}
+
+/// A handler on a fresh SQLite database whose connections are `connections`.
+fn handler_with(connections: MemoryConnections) -> (Tested, std::path::PathBuf) {
     let mut name = [0u8; 8];
     getrandom::fill(&mut name).unwrap();
     let dir = std::env::temp_dir().join(format!(
@@ -80,13 +89,7 @@ fn handler() -> (Tested, std::path::PathBuf) {
     std::fs::create_dir_all(&dir).unwrap();
     let store = SqliteStore::open(&dir.join("relay.sqlite")).unwrap();
     let relay = Relay::new(store, Config::new(BTreeSet::new()));
-    let handler = Handler::new(
-        relay,
-        [0x5e; 16],
-        MemoryConnections::default(),
-        Recording::default(),
-        NoUrls,
-    );
+    let handler = Handler::new(relay, [0x5e; 16], connections, Recording::default(), NoUrls);
     (handler, dir)
 }
 
@@ -308,4 +311,76 @@ fn handler_api(handler: &Tested) -> &Recording {
 #[tokio::test]
 async fn the_memory_store_keeps_the_connections_contract() {
     ncdb_relay_lambda::contract::run(&MemoryConnections::default(), "memory").await;
+}
+
+#[tokio::test]
+async fn a_store_that_keeps_records_keeps_the_connections_contract() {
+    ncdb_relay_lambda::contract::run(&MemoryConnections::keeping(30), "kept").await;
+}
+
+const DAY: u64 = 24 * 60 * 60 * 1000;
+
+#[tokio::test]
+async fn a_closed_connection_is_kept_for_the_days_set_and_reads_as_gone() {
+    let (handler, _dir) = handler_with(MemoryConnections::keeping(30));
+    handler.handle(live(CONNECT)).await;
+    let open = handler.connections().get(RECORDED).await.unwrap().unwrap();
+    handler.handle(live(DISCONNECT)).await;
+    assert_eq!(handler.connections().get(RECORDED).await.unwrap(), None);
+    let kept = handler.connections().kept(RECORDED).expect("a kept record");
+    assert_eq!(kept.connected_at, open.connected_at);
+    assert!(kept.ended_at >= open.connected_at);
+    assert_eq!(kept.until, kept.ended_at + 30 * DAY);
+}
+
+#[tokio::test]
+async fn a_gone_connection_is_kept_too() {
+    let (handler, _dir) = handler_with(MemoryConnections::keeping(7));
+    handler.handle(live(CONNECT)).await;
+    handler_api(&handler)
+        .gone
+        .lock()
+        .unwrap()
+        .push(RECORDED.to_owned());
+    handler.handle(live(MESSAGE)).await;
+    assert_eq!(handler.connections().get(RECORDED).await.unwrap(), None);
+    let kept = handler.connections().kept(RECORDED).expect("a kept record");
+    assert_eq!(kept.until, kept.ended_at + 7 * DAY);
+}
+
+#[tokio::test]
+async fn by_default_a_closed_connection_keeps_no_record() {
+    let (handler, _dir) = handler();
+    handler.handle(live(CONNECT)).await;
+    handler.handle(live(DISCONNECT)).await;
+    assert_eq!(handler.connections().kept(RECORDED), None);
+}
+
+#[tokio::test]
+async fn a_kept_record_names_the_member_and_every_space_it_subscribed_to() {
+    let store = MemoryConnections::keeping(30);
+    let member = MemberId([0x11; 32]);
+    let (stays, left) = (SpaceId([0x33; 16]), SpaceId([0x44; 16]));
+    let now = ncdb_relay_lambda::contract::now();
+    let connection = Connection {
+        stage: Stage::Member(member),
+        connected_at: now,
+        expires_at: now + MAX_CONNECTION_AGE,
+    };
+    store.put("c", connection).await.unwrap();
+    let sub = Subscription {
+        member,
+        req: 1,
+        epoch: Epoch([0x55; 16]),
+    };
+    store.subscribe("c", stays, sub).await.unwrap();
+    store.subscribe("c", left, sub).await.unwrap();
+    store.unsubscribe("c", left).await.unwrap();
+    assert!(store.subscribers(left).await.unwrap().is_empty());
+    store.remove("c").await.unwrap();
+    assert!(store.subscribers(stays).await.unwrap().is_empty());
+    assert!(store.of_member(member).await.unwrap().is_empty());
+    let kept = store.kept("c").expect("a kept record");
+    assert_eq!(kept.member, Some(member));
+    assert_eq!(kept.spaces, [stays, left]);
 }

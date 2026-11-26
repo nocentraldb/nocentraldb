@@ -191,6 +191,22 @@ mod tests {
     }
 
     #[test]
+    fn connection_records_are_kept_for_the_days_set_and_by_default_not() {
+        let settings = Settings::from_vars(vars(&FULL)).unwrap();
+        assert_eq!(settings.keep_connections_days, None);
+        let mut pairs = FULL.to_vec();
+        pairs.push(("NCDB_KEEP_CONNECTIONS_DAYS", "30"));
+        let settings = Settings::from_vars(vars(&pairs)).unwrap();
+        assert_eq!(settings.keep_connections_days, Some(30));
+        for bad in ["0", "-1", "1.5", "thirty"] {
+            let mut pairs = FULL.to_vec();
+            pairs.push(("NCDB_KEEP_CONNECTIONS_DAYS", bad));
+            let refused = Settings::from_vars(vars(&pairs)).unwrap_err();
+            assert_eq!(refused, Refused("NCDB_KEEP_CONNECTIONS_DAYS"));
+        }
+    }
+
+    #[test]
     fn a_missing_or_malformed_variable_is_refused_by_name_only() {
         for (name, bad) in [
             ("NCDB_RELAY_ID", "5e5e"),
