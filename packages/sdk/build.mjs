@@ -32,6 +32,7 @@ import {
 } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { refuseRichText } from "./richText.mjs";
 import { refuseTestTrap } from "./testTrap.mjs";
 
 const PACKAGE = dirname(fileURLToPath(import.meta.url));
@@ -97,6 +98,9 @@ if (!tsOnly) {
   ]);
   // A core that traps on a marker is for one browser test only (NOC-499).
   refuseTestTrap(readFileSync(MODULE), MODULE);
+  // Rich text stays out of the package until its guard is complete
+  // (NOC-468; NOC-461).
+  refuseRichText(readFileSync(MODULE), MODULE);
   run(BINDGEN, [
     "--target",
     "web",
