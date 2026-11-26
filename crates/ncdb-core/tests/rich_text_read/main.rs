@@ -8,4 +8,5 @@ mod rich_text_support;
 
 mod doc;
 mod markdown;
+mod plain;
 mod tree;
