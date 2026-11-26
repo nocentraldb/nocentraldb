@@ -4,7 +4,9 @@
 //! member renders the same state the same way (C7).
 
 mod markdown;
+mod mention;
 mod node;
+mod plain;
 
 use ncdb_plugin::Data;
 
@@ -24,4 +26,10 @@ pub fn tree(state: &State) -> Data {
 /// returns.
 pub fn markdown(state: &State) -> String {
     markdown::render(&node::nodes(&state.document))
+}
+
+/// The document as plain text, the text of each block on a line of its
+/// own, for previews.
+pub fn text(state: &State) -> String {
+    plain::render(&node::nodes(&state.document))
 }
