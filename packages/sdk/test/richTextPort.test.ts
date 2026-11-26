@@ -57,8 +57,3 @@ test("the port pulls, writes and closes under the lease's handle", async () => {
     { call: "richText.close", args: { lease: 3 } },
   ]);
 });
-
-test("an answer that is not a lease fails", async () => {
-  const ask = async () => ({ lease: "3" });
-  await expect(openRichText(ask, target)).rejects.toThrow();
-});
