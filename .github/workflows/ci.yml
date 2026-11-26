@@ -9,17 +9,22 @@
 # scripts/toolchain-workflow.test.mjs the toolchain cache and its install.
 name: ci
 
+# merge_group: GitHub's merge queue runs the required check `gates` on each
+# queue commit, main with the queued pull requests, before it merges (NOC-511).
 on:
   pull_request:
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [main]
 
 permissions:
   contents: read
 
-# A new push to a pull request cancels its superseded run. Pushes to main are
-# never cancelled: each commit gets a group of its own (by SHA), because a
-# shared group would still cancel a *pending* main run once the next one queues.
+# A new push to a pull request cancels its superseded run. Pushes to main and
+# merge-queue runs are never cancelled: each commit gets a group of its own
+# (by SHA), because a shared group would still cancel a *pending* main run
+# once the next one queues.
 concurrency:
   group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

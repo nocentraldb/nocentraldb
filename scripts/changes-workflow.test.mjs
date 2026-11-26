@@ -17,6 +17,14 @@
 // none: a crate new in the pull request has no baseline (NOC-253).
 // The test-change check (NOC-508) runs last, with the PR's base and head,
 // even when an earlier step failed, and its failure fails the job.
+// In GitHub's merge queue (NOC-511) the same job runs on merge_group: the
+// checkout is the queue's commit, the PR squashed onto main (or the PRs ahead
+// of it), and every comparison starts at its first parent, HEAD^1, as on the
+// merge ref. A step finds the PR from the queue's branch name, fetches its
+// head and reads its skip-changes label (pull-requests: read); the
+// test-change check runs on HEAD^1..HEAD and reads the trailers from the PR's
+// own commits. scripts/changes-workflow-merge-queue.test.mjs runs these steps
+// against a fixture queue commit.
 //
 // The workflow is parsed with the `yaml` package and checked by structure.
 // Every check is also run against mutants of the file and must reject each
@@ -59,6 +67,7 @@ const baselineStep = (ctx) => at(ctx, (step) => step.id === "base-worktree");
 const packagesStep = (ctx) => at(ctx, (step) => step.id === "packages");
 const semverNoticeStep = (ctx) =>
   at(ctx, (step) => step.id === "semver-failed");
+const prStep = (ctx) => at(ctx, (step) => step.id === "pr");
 const testChangesStep = (ctx) =>
   at(ctx, (step) => String(step.run).includes("check-test-changes.mjs"));
 const toolchainStep = (ctx) =>
@@ -68,9 +77,13 @@ const toolchainStep = (ctx) =>
 const gh = (expression) => `\${{ ${expression} }}`;
 
 const TYPES = ["opened", "synchronize", "reopened", "labeled", "unlabeled"];
+const ON = {
+  pull_request: { types: TYPES },
+  merge_group: { types: ["checks_requested"] },
+};
 const FRAGMENTS_ENV = {
   SKIP: gh(
-    "contains(github.event.pull_request.labels.*.name, 'skip-changes') && '--skip' || ''",
+    "(contains(github.event.pull_request.labels.*.name, 'skip-changes') || steps.pr.outputs.skip == 'true') && '--skip' || ''",
   ),
   BREAKING: gh(
     "(steps.semver.outcome == 'failure' || steps.api.outputs.breaking == 'true') && '--require-breaking' || ''",
@@ -82,9 +95,41 @@ const SEMVER_ACTION = "obi1kenobi/cargo-semver-checks-action@";
 // The merge ref's first parent, the main the PR is merged into: neither the
 // event's base tip nor the merge base, which miss what main gained since the
 // PR's push (NOC-505).
-const BASELINE_RUN = `test "$(git rev-parse HEAD^2)" = "$HEAD"
+// In the merge queue the checkout is the queue's commit itself, whose first
+// parent is main with the PRs ahead of it (NOC-511).
+const BASELINE_ENV = {
+  EVENT: gh("github.event_name"),
+  HEAD: gh("github.event.pull_request.head.sha"),
+  GROUP_HEAD: gh("github.event.merge_group.head_sha"),
+};
+const BASELINE_RUN = `if [ "$EVENT" = merge_group ]; then
+  test "$(git rev-parse HEAD)" = "$GROUP_HEAD"
+else
+  test "$(git rev-parse HEAD^2)" = "$HEAD"
+fi
 git worktree add --detach "$RUNNER_TEMP/baseline" HEAD^1
 `;
+const PR_STEP = {
+  if: "github.event_name == 'merge_group'",
+  env: {
+    GH_TOKEN: gh("github.token"),
+    GROUP_REF: gh("github.event.merge_group.head_ref"),
+  },
+  run: `number=$(printf '%s\\n' "$GROUP_REF" | sed -nE 's#^refs/heads/gh-readonly-queue/.+/pr-([0-9]+)-[0-9a-f]+$#\\1#p')
+test -n "$number"
+git fetch --no-tags --quiet origin "refs/pull/$number/head"
+echo "head=$(git rev-parse FETCH_HEAD)" >> "$GITHUB_OUTPUT"
+skip=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$number" --jq 'any(.labels[]; .name == "skip-changes")')
+echo "skip=$skip" >> "$GITHUB_OUTPUT"
+`,
+};
+const TEST_CHANGES_ENV = {
+  BASE: gh("github.event.pull_request.base.sha || 'HEAD^1'"),
+  HEAD: gh("github.event.pull_request.head.sha || 'HEAD'"),
+  PR_HEAD: gh("github.event.pull_request.head.sha || steps.pr.outputs.head"),
+};
+const TEST_CHANGES_RUN =
+  'node scripts/check-test-changes.mjs --base "$BASE" --head "$HEAD" --pr-head "$PR_HEAD"';
 const PACKAGES_RUN =
   'node scripts/release/semver-packages.mjs --baseline "$RUNNER_TEMP/baseline" >> "$GITHUB_OUTPUT"';
 const SEMVER_IF = "steps.packages.outputs.any == 'true'";
@@ -107,10 +152,12 @@ const TIMEOUT_MINUTES = 15;
 
 const checks = [
   {
-    name: "runs on pull_request with the five types incl. labeled and unlabeled",
-    check: (ctx) =>
-      assert.deepEqual(workflow(ctx).on, { pull_request: { types: TYPES } }),
+    name: "runs on pull_request with the five types incl. labeled and unlabeled, and in the merge queue",
+    check: (ctx) => assert.deepEqual(workflow(ctx).on, ON),
     mutants: {
+      "drops merge_group": (ctx) => ctx.doc.deleteIn(["on", "merge_group"]),
+      "drops the merge_group types": (ctx) =>
+        ctx.doc.setIn(["on", "merge_group"], null),
       "drops labeled": (ctx) =>
         ctx.doc.setIn(
           ["on", "pull_request", "types"],
@@ -128,16 +175,21 @@ const checks = [
     },
   },
   {
-    name: "grants contents: read and nothing else, on the workflow, none on the job",
+    name: "grants contents: read and pull-requests: read and nothing else, on the workflow, none on the job",
     check: (ctx) => {
       const wf = workflow(ctx);
-      assert.deepEqual(wf.permissions, { contents: "read" });
+      assert.deepEqual(wf.permissions, {
+        contents: "read",
+        "pull-requests": "read",
+      });
       for (const [id, job] of Object.entries(wf.jobs)) {
         assert.equal(job.permissions, undefined, `job ${id} sets permissions`);
       }
     },
     mutants: {
       "drops the permissions": (ctx) => ctx.doc.deleteIn(["permissions"]),
+      "drops pull-requests: read": (ctx) =>
+        ctx.doc.deleteIn(["permissions", "pull-requests"]),
       "adds pull-requests: write": (ctx) =>
         ctx.doc.setIn(["permissions", "pull-requests"], "write"),
       "sets job permissions": (ctx) =>
@@ -210,6 +262,13 @@ const checks = [
       assert.equal(step.run, FRAGMENTS_RUN);
     },
     mutants: {
+      "reads the label only from the pull request event": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, fragmentsStep(ctx), "env", "SKIP"],
+          gh(
+            "contains(github.event.pull_request.labels.*.name, 'skip-changes') && '--skip' || ''",
+          ),
+        ),
       "hard-codes SKIP to --skip": (ctx) =>
         ctx.doc.setIn([...STEPS, fragmentsStep(ctx), "env", "SKIP"], "--skip"),
       "diffs from the event's base tip": (ctx) =>
@@ -258,9 +317,7 @@ const checks = [
         "api runs before pnpm install",
       );
 
-      assert.deepEqual(all[baseline].env, {
-        HEAD: gh("github.event.pull_request.head.sha"),
-      });
+      assert.deepEqual(all[baseline].env, BASELINE_ENV);
       assert.equal(all[baseline].run, BASELINE_RUN);
 
       const sv = all[semver];
@@ -344,7 +401,23 @@ const checks = [
       "the baseline step does not check the merge ref": (ctx) =>
         ctx.doc.setIn(
           [...STEPS, baselineStep(ctx), "run"],
-          BASELINE_RUN.replace(/^test .*\n/, ""),
+          BASELINE_RUN.replace(
+            '  test "$(git rev-parse HEAD^2)" = "$HEAD"\n',
+            "",
+          ),
+        ),
+      "the baseline step does not check the queue's commit": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, baselineStep(ctx), "run"],
+          BASELINE_RUN.replace(
+            '  test "$(git rev-parse HEAD)" = "$GROUP_HEAD"\n',
+            "  :\n",
+          ),
+        ),
+      "the baseline step checks the merge ref in the queue too": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, baselineStep(ctx), "env", "EVENT"],
+          "pull_request",
         ),
       "the baseline step has no HEAD": (ctx) =>
         ctx.doc.deleteIn([...STEPS, baselineStep(ctx), "env", "HEAD"]),
@@ -408,14 +481,8 @@ const checks = [
       const index = testChangesStep(ctx);
       const step = steps(ctx)[index];
       assert.equal(index, steps(ctx).length - 1, "it is not the last step");
-      assert.deepEqual(step.env, {
-        BASE: gh("github.event.pull_request.base.sha"),
-        HEAD: gh("github.event.pull_request.head.sha"),
-      });
-      assert.equal(
-        step.run,
-        'node scripts/check-test-changes.mjs --base "$BASE" --head "$HEAD"',
-      );
+      assert.deepEqual(step.env, TEST_CHANGES_ENV);
+      assert.equal(step.run, TEST_CHANGES_RUN);
       assert.equal(step.if, gh("!cancelled()"));
       assert.equal(step["continue-on-error"], undefined);
     },
@@ -423,7 +490,24 @@ const checks = [
       "drops --base": (ctx) =>
         ctx.doc.setIn(
           [...STEPS, testChangesStep(ctx), "run"],
-          'node scripts/check-test-changes.mjs --head "$HEAD"',
+          TEST_CHANGES_RUN.replace(' --base "$BASE"', ""),
+        ),
+      "drops --pr-head": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, testChangesStep(ctx), "run"],
+          TEST_CHANGES_RUN.replace(' --pr-head "$PR_HEAD"', ""),
+        ),
+      "uses the merge group's base_sha in the queue": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, testChangesStep(ctx), "env", "BASE"],
+          gh(
+            "github.event.pull_request.base.sha || github.event.merge_group.base_sha",
+          ),
+        ),
+      "reads the trailers from the queue's commit": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, testChangesStep(ctx), "env", "PR_HEAD"],
+          gh("github.event.pull_request.head.sha || 'HEAD'"),
         ),
       "sets BASE to github.sha": (ctx) =>
         ctx.doc.setIn(
@@ -441,6 +525,43 @@ const checks = [
         const list = ctx.doc.getIn(STEPS);
         const step = list.items.splice(testChangesStep(ctx), 1)[0];
         list.items.splice(fragmentsStep(ctx), 0, step);
+      },
+    },
+  },
+  {
+    name: "in the merge queue, finds the PR from the queue's branch, fetches its head and reads its label, before the baseline",
+    check: (ctx) => {
+      const index = prStep(ctx);
+      const step = steps(ctx)[index];
+      assert.ok(checkoutStep(ctx) < index, "the PR is found before checkout");
+      assert.ok(
+        index < baselineStep(ctx),
+        "the PR is found after the baseline",
+      );
+      assert.equal(step.if, PR_STEP.if);
+      assert.deepEqual(step.env, PR_STEP.env);
+      assert.equal(step.run, PR_STEP.run);
+      assert.equal(step["continue-on-error"], undefined);
+    },
+    mutants: {
+      "runs on every event": (ctx) =>
+        ctx.doc.deleteIn([...STEPS, prStep(ctx), "if"]),
+      "may fail without failing the job": (ctx) =>
+        ctx.doc.setIn([...STEPS, prStep(ctx), "continue-on-error"], true),
+      "accepts a branch name without a PR number": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, prStep(ctx), "run"],
+          PR_STEP.run.replace('test -n "$number"\n', ""),
+        ),
+      "never reads the label": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, prStep(ctx), "run"],
+          PR_STEP.run.replace(/skip=.*\n.*\n$/, ""),
+        ),
+      "runs after the baseline": (ctx) => {
+        const list = ctx.doc.getIn(STEPS);
+        const step = list.items.splice(prStep(ctx), 1)[0];
+        list.items.splice(baselineStep(ctx) + 1, 0, step);
       },
     },
   },

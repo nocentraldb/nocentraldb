@@ -143,14 +143,18 @@ const PNPM_KEY = `pnpm-${gh("runner.os")}-${gh("hashFiles('.prototools', 'pnpm-l
  */
 const checks = [
   {
-    name: "runs on pull_request and on push to main, never pull_request_target",
+    // merge_group: GitHub's merge queue runs the required check `gates` on
+    // each queue commit before it merges (NOC-511).
+    name: "runs on pull_request, in the merge queue and on push to main, never pull_request_target",
     check: (ctx) => {
       assert.deepEqual(workflow(ctx).on, {
         pull_request: null,
+        merge_group: { types: ["checks_requested"] },
         push: { branches: ["main"] },
       });
     },
     mutants: {
+      "drops merge_group": (ctx) => ctx.doc.deleteIn(["on", "merge_group"]),
       "adds pull_request_target": (ctx) =>
         ctx.doc.setIn(["on", "pull_request_target"], null),
       "drops the push trigger": (ctx) => ctx.doc.deleteIn(["on", "push"]),
@@ -370,7 +374,8 @@ const checks = [
     // Superseded pull-request runs are cancelled; every push to main runs to
     // the end. A shared group would still cancel a *pending* main run when
     // the next push queues behind it, so push runs get a group of their own
-    // per commit.
+    // per commit, and so does each merge-queue commit, so no queue run is
+    // cancelled either.
     name: "cancels superseded pull-request runs only, never a run on main",
     check: (ctx) => {
       const wf = workflow(ctx);

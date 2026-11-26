@@ -358,6 +358,61 @@ test("a trailer in a commit of the base branch does not count", () => {
   assert.equal(status, 1, out);
 });
 
+/**
+ * The merge queue's commit (NOC-511): the pull request squashed onto main,
+ * checked out detached. Its message carries no trailer of the PR's commits.
+ */
+function squashed(commits) {
+  const dir = repo(REMOVED[0], commits);
+  const git = gitIn(dir);
+  git(["checkout", "--quiet", "--detach", "main"]);
+  git(["merge", "--quiet", "--squash", "pr"]);
+  git(["commit", "--quiet", "-m", "NOC-1: drop the goes test (#1)"]);
+  return dir;
+}
+const QUEUE = ["--base", "HEAD^1", "--head", "HEAD"];
+
+test("in a merge-queue commit, the trailer is read from the pull request's own commits", () => {
+  const dir = squashed([
+    {
+      files: REMOVED[1],
+      message: "NOC-1: drop\n\nTest-change: goes duplicated keeps since NOC-7",
+    },
+    { files: { "README.md": "later\n" }, message: "NOC-1: docs" },
+  ]);
+  const without = check(dir, QUEUE);
+  assert.equal(without.status, 1, without.out);
+  const { status, out } = check(dir, [...QUEUE, "--pr-head", "pr"]);
+  assert.equal(status, 0, out);
+  assert.match(out, /removes the test `goes`/);
+  assert.match(out, /Test-change: goes duplicated keeps since NOC-7/);
+});
+
+test("in a merge-queue commit, a pull request without the trailer still fails", () => {
+  const dir = squashed([{ files: REMOVED[1], message: "NOC-1: drop" }]);
+  const { status, out } = check(dir, [...QUEUE, "--pr-head", "pr"]);
+  assert.equal(status, 1, out);
+  assert.match(out, /removes the test `goes`/);
+});
+
+test("a --pr-head that does not exist is an error, never a pass", () => {
+  const dir = squashed([{ files: REMOVED[1], message: "NOC-1: drop" }]);
+  const { status, out } = check(dir, [...QUEUE, "--pr-head", "nowhere"]);
+  assert.equal(status, 1, out);
+  assert.match(out, /nowhere/);
+});
+
+test("an empty --base, --head or --pr-head is a usage error, never a pass", () => {
+  // In CI an empty value means the step that should set it failed.
+  const dir = squashed([{ files: REMOVED[1], message: "NOC-1: drop" }]);
+  for (const flag of ["--base", "--head", "--pr-head"]) {
+    const args = { "--base": "HEAD^1", "--head": "HEAD", "--pr-head": "pr" };
+    args[flag] = "";
+    const { status, out } = check(dir, Object.entries(args).flat());
+    assert.equal(status, 2, `${flag}\n${out}`);
+  }
+});
+
 test("a pull request that only adds tests passes untouched", () => {
   const { status, out } = pr(
     { [RS]: rust(rustTest("one")), [TS]: ts(tsTest("one")) },
