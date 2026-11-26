@@ -1,0 +1,6 @@
+# 2026-11-26 · NOC-532 · A store that keeps connection records marks an ended connection's items as ended, and every read takes them as gone
+
+- Decided by: coding agent (NOC-532)
+- Why: RFC 0007 lets an operator keep connection records after the connection ends, but says nothing on how. The kept records stay in the `connections` table, so the relay must never deliver to them. On `$disconnect`, on a gone post and on `unsubscribe`, the store sets `ended_at` and `expires_at` to the time the item ended and `ttl` to the days kept after that. Every read already drops an item whose `expires_at` has passed, and also drops one with `ended_at`. Every `ttl` the store writes is the days kept after `expires_at`, so what a missed `$disconnect` leaves is kept as long. Ending an item twice keeps its first `ended_at`. The `Connections` trait keeps its methods: whether records are kept is a property of the store (`keeping(days)`), set from `NCDB_KEEP_CONNECTIONS_DAYS`.
+- Instead of: copying ended records into a table of their own, which would add a table, its grants and a second write on every close; a new trait method for ending, which every caller would have to choose correctly; adding `ended_at` to the `by_member` index's projection, which would make CloudFormation rebuild a deployed index.
+- Topics: relay, aws, privacy
