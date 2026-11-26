@@ -20,6 +20,7 @@ mod document;
 mod edit;
 mod outcome;
 mod state;
+pub mod read;
 pub mod update;
 
 use std::collections::BTreeSet;
