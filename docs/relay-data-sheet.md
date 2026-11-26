@@ -34,9 +34,9 @@ Erasure reaches personal fields, not this metadata. Erasing a person destroys th
 
 These questions have no RFC text yet, or RFC text the relay does not build yet. The page leaves each of them open, and a notice built on it should too:
 
-- **How long a space's log, its memberships and its member keys are kept.** No RFC sets an end, no request deletes a space, and the compaction RFC is not written. An operator cannot yet say when this metadata goes.
-- **Metadata of a person who asks for erasure.** Erasure covers personal fields. No RFC says whether or how an operator removes a former member's member id, certificate, and the sizes and times of its changes from a space's log.
-- **When an admission record goes.** An admission lapses, but no RFC says when its record, the count of spaces, the statement number or a guest's one-space record are deleted, nor how an operator deletes one when RFC 0015 asks it to.
-- **What the relay's logs are for.** RFC 0007 states what they hold and how long, not their purpose.
-- **Settings decided but not built.** RFC 0007 lets an operator keep connection records after the connection ends and keep logs longer than 14 days; the `Relay` construct offers neither setting at 0.1.
-- **Backends other than AWS.** RFC 0007 states retention only for the AWS backend; the SQLite relay server and the Postgres backend have none.
+- **How long a space's log, its memberships and its member keys are kept.** No RFC sets an end, no request deletes a space, and the compaction RFC is not written. An operator cannot yet say when this metadata goes (NOC-533).
+- **Metadata of a person who asks for erasure.** Erasure covers personal fields. No RFC says whether or how an operator removes a former member's member id, certificate, and the sizes and times of its changes from a space's log (NOC-526).
+- **When an admission record goes.** An admission lapses, but no RFC says when its record, the count of spaces, the statement number or a guest's one-space record are deleted, nor how an operator deletes one when RFC 0015 asks it to (NOC-526).
+- **What the relay's logs are for.** RFC 0007 states what they hold and how long, not their purpose (NOC-533).
+- **Settings decided but not built.** RFC 0007 lets an operator keep connection records after the connection ends and keep logs longer than 14 days; the `Relay` construct offers neither setting at 0.1 (NOC-532).
+- **Backends other than AWS.** RFC 0007 states retention only for the AWS backend; the SQLite relay server and the Postgres backend have none (NOC-533).
