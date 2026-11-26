@@ -47,7 +47,7 @@ pub(super) fn run<C: Checks>(
     if waits && checks.is_none() {
         return Ok(());
     }
-    fold_parked(conn, model, &mut logs, checks, newly_known)?;
+    fold_parked(conn, model, &mut logs, checks, newly_known, false)?;
     conn.execute(
         "INSERT INTO meta (key, value) VALUES ('operations', ?1)
          ON CONFLICT DO UPDATE SET value = excluded.value",

@@ -427,10 +427,7 @@ fn rich_text(
         Err(reason) => return (Err(reason), false),
     };
     if placing {
-        let displaces = matches!(
-            field_type.fit_placeholder(&state, &edit),
-            Fit::Displaces(_)
-        );
+        let displaces = matches!(field_type.fit_placeholder(&state, &edit), Fit::Displaces(_));
         field_type.place(&mut state, &edit);
         return (Ok(field_type.state_bytes(&state)), displaces);
     }
@@ -600,8 +597,10 @@ impl Fold for SqlFold<'_> {
     }
 
     fn place(&mut self, origin: Origin, operation: &Operation) {
-        if !self.keeps_placeholders(&operation.collection, operation.field.as_deref().unwrap_or(""))
-        {
+        if !self.keeps_placeholders(
+            &operation.collection,
+            operation.field.as_deref().unwrap_or(""),
+        ) {
             return;
         }
         self.placing = true;

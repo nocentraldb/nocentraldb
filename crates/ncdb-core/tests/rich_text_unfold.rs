@@ -62,7 +62,9 @@ fn edit(n: u8, author: u8, update: &[u8]) -> Edit {
         author: member(author),
         stamp: Hlc(u64::from(n)),
     };
-    RichText.decode(&operation, origin).expect("a well-formed edit")
+    RichText
+        .decode(&operation, origin)
+        .expect("a well-formed edit")
 }
 
 /// What a state reads, without markup.
@@ -228,7 +230,10 @@ fn of_two_placeholders_that_give_one_id_different_content_the_earlier_keeps_it()
     let state = fold(&[], &[&p]);
     assert_eq!(RichText.fit_placeholder(&state, &q), Fit::Later);
     let state = fold(&[], &[&q]);
-    assert_eq!(RichText.fit_placeholder(&state, &p), Fit::Displaces(vec![q.id]));
+    assert_eq!(
+        RichText.fit_placeholder(&state, &p),
+        Fit::Displaces(vec![q.id])
+    );
 }
 
 #[test]
