@@ -171,6 +171,7 @@ pub fn string_item(client: u64, clock: u64, text: &str) -> Vec<u8> {
         .0
 }
 pub mod harness;
+pub mod unfolding;
 
 /// The characters of a document's whole state, without its markup, as
 /// Yrs reads them: what a reader sees, apart from formatting.
