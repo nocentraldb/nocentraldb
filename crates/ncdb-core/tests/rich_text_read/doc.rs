@@ -144,13 +144,21 @@ pub fn fold_in(updates: &[Vec<u8>], order: &[usize]) -> State {
             body: Body {
                 stamp: n as u64,
                 update: update.clone(),
-                clients: vec![(client(0), NONCE)],
+                clients: adds(update)
+                    .then(|| (client(0), NONCE))
+                    .into_iter()
+                    .collect(),
             },
         };
         let edit = decode(&op).expect("the update decodes");
         RichText.try_apply(&mut state, &edit).expect("the update folds");
     }
     state
+}
+
+/// Whether `update` adds items, so that its operation lists its client.
+fn adds(update: &[u8]) -> bool {
+    ncdb_core::rich_text::update::read(update).is_ok_and(|shape| !shape.runs.is_empty())
 }
 
 /// The state of a document holding `nodes`.
