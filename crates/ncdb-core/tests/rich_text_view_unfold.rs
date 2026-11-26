@@ -134,13 +134,17 @@ fn body(view: &View, space: SpaceId) -> (Vec<u8>, String) {
 const FOLDED: State = State::Folded { parked: vec![] };
 const REJECTED: State = State::Rejected(RejectReason::NotMember);
 
+/// One order's end: the body's state bytes and text, and the state of each
+/// change watched.
+type End = ((Vec<u8>, String), Vec<Option<State>>);
+
 /// Each order's view: the body, and the state of each of `watched`.
 fn ends_of(
     space: &Space,
     setup: &[Change],
     orders: &[Vec<&Change>],
     watched: &[&Change],
-) -> Vec<((Vec<u8>, String), Vec<Option<State>>)> {
+) -> Vec<End> {
     orders
         .iter()
         .map(|order| {

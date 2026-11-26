@@ -30,7 +30,7 @@
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::change::{Change, Operation};
+use crate::change::{Change, Kind, Operation, Payload};
 use crate::field_op::Origin;
 use crate::ids::ChangeId;
 use crate::ids::ObjectId;
@@ -94,6 +94,12 @@ pub(crate) fn unfold(log: &mut Log, checks: &impl Checks, fold: &mut impl Fold) 
         log.set_state(id, state);
         touched.extend(targets);
     }
+    // A field that keeps placeholders folds again in stamp order, after
+    // the others, with the rejected changes' operations placed (RFC 0013,
+    // "Un-folding a rejected change").
+    let (placed, touched): (BTreeSet<Target>, BTreeSet<Target>) = touched
+        .into_iter()
+        .partition(|target| keeps_placeholders(target, fold));
     for target in &touched {
         match target {
             Target::Field(object, collection, field) => {
@@ -115,6 +121,110 @@ pub(crate) fn unfold(log: &mut Log, checks: &impl Checks, fold: &mut impl Fold) 
             }
         }
     }
+    for target in &placed {
+        refold(log, checks, fold, target);
+    }
+}
+
+/// Whether `target` is a field whose type keeps placeholders.
+fn keeps_placeholders(target: &Target, fold: &impl Fold) -> bool {
+    match target {
+        Target::Field(_, collection, field) => fold.keeps_placeholders(collection, field),
+        Target::Object(_) => false,
+    }
+}
+
+/// Folds again, in stamp order with their placeholders, the fields that
+/// keep placeholders which the sealed changes `ids` touch: changes that
+/// were rejected as not a member, or no longer are (RFC 0013, "Un-folding
+/// a rejected change"). A change's operations are found with any key held
+/// for its generation, as [`Checks::open_folded`] does, so that a change
+/// that no longer opens still names the fields that held it.
+pub(crate) fn refold_placed(
+    log: &mut Log,
+    checks: &impl Checks,
+    fold: &mut impl Fold,
+    ids: &[ChangeId],
+) {
+    let mut targets = BTreeSet::new();
+    for id in ids {
+        let Some(change) = log.change(*id, fold) else {
+            continue;
+        };
+        if change.header().kind == Kind::CONTROL {
+            continue;
+        }
+        let Ok(payload) = checks.open_folded(&change) else {
+            continue;
+        };
+        targets.extend(
+            payload
+                .operations
+                .iter()
+                .map(Target::of)
+                .filter(|target| keeps_placeholders(target, fold)),
+        );
+    }
+    for target in &targets {
+        refold(log, checks, fold, target);
+    }
+}
+
+/// Whether a change's state leaves placeholders: it was rejected as not a
+/// member (step 4), so every member that holds it opens it alike. A
+/// change rejected at step 3 or 5 cannot be opened the same way
+/// everywhere and leaves none.
+pub(crate) fn leaves_placeholders(state: Option<&State>) -> bool {
+    state == Some(&State::Rejected(RejectReason::NotMember))
+}
+
+/// The operations on `target` of the rejected changes that leave
+/// placeholders, each with its origin: those of a change that opens with
+/// the key the control state gives its generation, whose payload this
+/// member folds, and that the model knows.
+fn placeholders(
+    log: &Log,
+    checks: &impl Checks,
+    fold: &mut impl Fold,
+    target: &Target,
+) -> Vec<(Origin, Operation)> {
+    let mut placed = Vec::new();
+    for id in log.rejected() {
+        if !leaves_placeholders(log.state(id)) {
+            continue;
+        }
+        let Some(change) = log.change(id, fold).map(Cow::into_owned) else {
+            continue;
+        };
+        if change.header().kind == Kind::CONTROL {
+            continue;
+        }
+        let Ok(payload) = checks.open(&change) else {
+            continue;
+        };
+        if !fold.select_model(checks.space_model_id())
+            || payload.format != Payload::FORMAT
+            || payload.extensions().must_understand()
+            || payload
+                .writer_model()
+                .is_some_and(|model| model.map_or(true, |m| m.id != fold.model_id()))
+        {
+            continue;
+        }
+        for (position, operation) in (0..).zip(payload.operations) {
+            if Target::of(&operation) != *target || understand(&operation, fold).is_err() {
+                continue;
+            }
+            let origin = Origin {
+                id: change.operation_id(position),
+                author: change.header().author,
+                stamp: payload.clock,
+            };
+            placed.push((origin, operation));
+        }
+    }
+    placed.sort_by_key(|(origin, _)| (origin.stamp, origin.author, origin.id));
+    placed
 }
 
 /// Folds again each field of the objects whose move was taken back
@@ -213,6 +323,11 @@ fn refold(log: &mut Log, checks: &impl Checks, fold: &mut impl Fold, target: &Ta
         let positions = parked_now.entry(origin.id.change).or_default();
         if let Err(reason) = result {
             positions.insert(origin.id.position, reason);
+        }
+    }
+    if keeps_placeholders(target, fold) {
+        for (origin, operation) in placeholders(log, checks, fold, target) {
+            fold.place(origin, &operation);
         }
     }
     fold.refolding(None);

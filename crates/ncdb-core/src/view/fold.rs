@@ -72,6 +72,9 @@ pub(super) struct SqlFold<'a> {
     /// name, whose state the fold keeps while it runs even on a trace
     /// ([`Fold::refolding`]).
     refolding: Option<(ObjectId, String)>,
+    /// Whether the operation folded now is a rejected change's, placed as
+    /// placeholders ([`Fold::place`]).
+    placing: bool,
 }
 
 impl<'a> SqlFold<'a> {
@@ -89,6 +92,7 @@ impl<'a> SqlFold<'a> {
             displaces: std::cell::Cell::new(false),
             refolds: BTreeSet::new(),
             refolding: None,
+            placing: false,
         }
     }
 
@@ -301,7 +305,7 @@ impl<'a> SqlFold<'a> {
             }
             #[cfg(ncdb_rich_text)]
             (Field::RichText(t), FieldState::RichText(s)) => {
-                let (folded, displaces) = rich_text(t, s, operation, origin);
+                let (folded, displaces) = rich_text(t, s, operation, origin, self.placing);
                 self.displaces.set(displaces);
                 folded.map(|bytes| (bytes, None))
             }
@@ -404,15 +408,17 @@ pub(super) fn load(
     })
 }
 
-/// Folds a rich-text operation into `state`: the new state's bytes, or why
-/// it parks, and whether it displaces operations the state holds, which
-/// park when the field is folded again in stamp order.
+/// Folds a rich-text operation into `state`, or places it there as a
+/// rejected change's (`placing`): the new state's bytes, or why it parks,
+/// and whether it displaces operations or placeholders the state holds,
+/// which park or give way when the field is folded again in stamp order.
 #[cfg(ncdb_rich_text)]
 fn rich_text(
     field_type: &crate::rich_text::RichText,
     mut state: crate::rich_text::State,
     operation: &Operation,
     origin: Origin,
+    placing: bool,
 ) -> (Result<Vec<u8>, OperationParkReason>, bool) {
     use crate::field::FieldType;
     use crate::rich_text::Fit;
@@ -420,6 +426,14 @@ fn rich_text(
         Ok(edit) => edit,
         Err(reason) => return (Err(reason), false),
     };
+    if placing {
+        let displaces = matches!(
+            field_type.fit_placeholder(&state, &edit),
+            Fit::Displaces(_)
+        );
+        field_type.place(&mut state, &edit);
+        return (Ok(field_type.state_bytes(&state)), displaces);
+    }
     let displaces = matches!(field_type.fit(&state, &edit), Fit::Displaces(_));
     let folded = field_type
         .try_apply(&mut state, &edit)
@@ -574,6 +588,26 @@ impl Fold for SqlFold<'_> {
 
     fn take_revived(&mut self) -> BTreeSet<ObjectId> {
         std::mem::take(&mut self.revived)
+    }
+
+    fn keeps_placeholders(&self, collection: &str, field: &str) -> bool {
+        #[cfg(ncdb_rich_text)]
+        if let Some(name) = self.name(collection) {
+            return matches!(self.model.field(&name, field), Some(Field::RichText(_)));
+        }
+        let _ = (collection, field);
+        false
+    }
+
+    fn place(&mut self, origin: Origin, operation: &Operation) {
+        if !self.keeps_placeholders(&operation.collection, operation.field.as_deref().unwrap_or(""))
+        {
+            return;
+        }
+        self.placing = true;
+        // A placeholder that does not decode leaves the field as it was.
+        let _ = self.fold(origin, operation);
+        self.placing = false;
     }
 
     fn take_refolds(&mut self) -> Vec<(ObjectId, String, String)> {

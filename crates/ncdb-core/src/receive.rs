@@ -232,6 +232,19 @@ pub trait Fold {
     /// operations parks as on the live object, and forgets it after
     /// (RFC 0016; RFC 0013, "The same id twice").
     fn refolding(&mut self, _field: Option<(ObjectId, &str, &str)>) {}
+    /// Whether the field's type keeps the operations of a rejected change
+    /// as placeholders (RFC 0013, "Un-folding a rejected change"): the log
+    /// then folds the field in stamp order and places those operations
+    /// after the others ([`Fold::place`]). Only rich text does; a fold
+    /// without it says no.
+    fn keeps_placeholders(&self, _collection: &str, _field: &str) -> bool {
+        false
+    }
+    /// Places an operation of a rejected change in a field that
+    /// [`Fold::keeps_placeholders`]. One that does not decode, or does not
+    /// fit, leaves the field as it was: the change stays rejected either
+    /// way.
+    fn place(&mut self, _origin: Origin, _operation: &Operation) {}
     /// The change `id` of `space` as the store this fold folds into keeps
     /// its frame, for a log that released the change's bytes (NOC-452).
     /// A fold without such a store keeps the default, `None`: its log
@@ -311,7 +324,13 @@ impl Log {
             let (state, opened) = check(change, checks, fold);
             let control_passed = is_folded_control(change, &state);
             let id = change.id();
+            let placed = crate::unfold::leaves_placeholders(Some(&state));
             self.set_state_opened(id, state, opened);
+            // A change rejected as not a member leaves placeholders, as
+            // it would had it been folded and then un-folded.
+            if placed {
+                crate::unfold::refold_placed(self, checks, fold, &[id]);
+            }
             if control_passed {
                 self.check_rejected_again(checks, fold);
                 crate::unfold::unfold(self, checks, fold);
@@ -326,21 +345,33 @@ impl Log {
 
     /// Checks every rejected change again, in log order, and again after any
     /// control change among them passes, since it may let others pass.
+    ///
+    /// A change that now leaves placeholders, or no longer does without
+    /// folding, has the fields that keep placeholders folded again (RFC
+    /// 0013, "Un-folding a rejected change"). One that folds now displaces
+    /// its own placeholders, which folds those fields again too.
     fn check_rejected_again(&mut self, checks: &mut impl Checks, fold: &mut impl Fold) {
+        let mut placed = Vec::new();
         loop {
             let mut control_passed = false;
             for id in self.rejected() {
                 let Some(change) = self.change(id, fold).map(Cow::into_owned) else {
                     continue;
                 };
+                let before = crate::unfold::leaves_placeholders(self.state(id));
                 let (state, opened) = check(&change, checks, fold);
                 control_passed |= is_folded_control(&change, &state);
+                let after = crate::unfold::leaves_placeholders(Some(&state));
+                if before != after && !matches!(state, State::Folded { .. }) {
+                    placed.push(id);
+                }
                 self.set_state_opened(change.id(), state, opened);
             }
             if !control_passed {
-                return;
+                break;
             }
         }
+        crate::unfold::refold_placed(self, checks, fold, &placed);
     }
 }
 
