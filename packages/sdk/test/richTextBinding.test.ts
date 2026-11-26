@@ -151,7 +151,9 @@ describe("what other members write", () => {
     await settle();
     expect(writes).toHaveLength(1);
     const clients = [
-      ...Y.decodeStateVector(Y.encodeStateVectorFromUpdate(writes[0]!)).keys(),
+      ...Y.decodeStateVector(
+        Y.encodeStateVectorFromUpdate(Y.mergeUpdates(writes)),
+      ).keys(),
     ];
     expect(clients).toEqual([CLIENT]);
   });
