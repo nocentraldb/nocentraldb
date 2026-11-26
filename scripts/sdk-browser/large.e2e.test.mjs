@@ -119,10 +119,10 @@ test("space.write splits many objects above 16 MiB, and refuses one value above 
   assert.deepEqual(errors, []);
 });
 
-// A value too large for the core's memory: Chromium's core runs out of
-// WebAssembly memory from about 200 MiB and the write fails with
-// `storageFailed`. Where an engine's core holds 256 MiB, the write goes
-// through. Either way it never fails with anything but an nc.Error.
+// A value of 256 MiB (NOC-425): it never fails with anything but an
+// nc.Error with a code. Since NOC-421 the SDK refuses it with `tooLarge`
+// before the core would run out of memory; trap.e2e.test.mjs holds what
+// follows a real trap of the core (NOC-499).
 test("a write too large for the core fails with an nc.Error that has a code", async () => {
   const opened = await (await browser.newContext()).newPage();
   const errors = [];
@@ -165,9 +165,9 @@ test("a write too large for the core fails with an nc.Error that has a code", as
 // one value of 256 MiB does not fit into one change under the relay's limit
 // (NOC-421), or the browser's storage refuses it with `storageFull`
 // (WebKit's, since NOC-422 made the core hold it); in each case the core
-// runs on and the later call simply works. coreGuard.test.ts holds what
-// follows a trap without a real core. In no case does anything reach the
-// page as an uncaught error.
+// runs on and the later call simply works. trap.e2e.test.mjs holds what
+// follows a real trap of the core (NOC-499). In no case does anything
+// reach the page as an uncaught error.
 test("after a write too large for the core, later calls say to open the database again, and it opens again", async () => {
   const opened = await (await browser.newContext()).newPage();
   const errors = [];

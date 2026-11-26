@@ -14,6 +14,13 @@ description = "The Rust SDK compiled to WebAssembly for @nocentraldb/sdk's worke
 # tests.
 crate-type = ["cdylib", "rlib"]
 
+[features]
+# A core that traps on a marker value, for the browser test of a trap
+# (NOC-499; scripts/sdk-browser/trap.mjs builds it into a copy of the
+# package of its own). Never on by default: packages/sdk/build.mjs refuses
+# a module that holds the marker, so the package never ships it.
+test-trap = []
+
 [dependencies]
 # The bridge, public only with this feature (NOC-176, A).
 nocentraldb = { workspace = true, features = ["bridge"] }

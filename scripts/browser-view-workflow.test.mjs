@@ -42,6 +42,8 @@ const KEYS_BUILD = "node scripts/sdk-keys/build.mjs";
 const KEYS_TESTS = "scripts/sdk-keys/*.test.mjs";
 const SDK_BUILD = "node scripts/sdk-browser/build.mjs";
 const SDK_TESTS = "scripts/sdk-browser/*.test.mjs";
+/** The copy of the SDK whose core traps on a marker (NOC-499). */
+const TRAP_BUILD = "node scripts/sdk-browser/trap.mjs";
 /** The engines the TypeScript SDK's browser tests run in (NOC-344). */
 const SDK_ENGINES = ["chromium", "firefox", "webkit"];
 /** The TypeScript SDK's long browser tests, outside SDK_TESTS (NOC-448). */
@@ -217,6 +219,49 @@ runWorkflowChecks({
               1,
             );
           }
+        },
+      },
+    },
+    {
+      name: "the copy of the TypeScript SDK whose core traps is built on the runner after the SDK, before its tests",
+      check: (ctx) => {
+        const all = steps(ctx);
+        const sdk = all.findIndex((s) => s.run?.includes(SDK_BUILD));
+        const trap = all.findIndex((s) => s.run?.includes(TRAP_BUILD));
+        const test = all.findIndex(
+          (s) => s.run?.includes("docker run") && s.run.includes(SDK_TESTS),
+        );
+        assert.ok(trap >= 0, "the trapping copy is not built on the runner");
+        assert.ok(trap > sdk, "the trapping copy is built before the SDK");
+        assert.ok(test > trap, "the SDK's tests run before the trapping copy");
+        assert.match(
+          all[trap].if ?? "",
+          /^\$\{\{ !cancelled\(\) \}\}$/,
+          "a failed build above skips the trapping copy",
+        );
+      },
+      mutants: {
+        "no trapping copy": (ctx) => {
+          const all = jobSteps(ctx);
+          all.splice(
+            all.findIndex((s) => s.run?.includes(TRAP_BUILD)),
+            1,
+          );
+        },
+        "the trapping copy before the SDK": (ctx) => {
+          const all = jobSteps(ctx);
+          const [step] = all.splice(
+            all.findIndex((s) => s.run?.includes(TRAP_BUILD)),
+            1,
+          );
+          all.splice(
+            all.findIndex((s) => s.run?.includes(SDK_BUILD)),
+            0,
+            step,
+          );
+        },
+        "the trapping copy skipped after a failure above": (ctx) => {
+          delete jobSteps(ctx).find((s) => s.run?.includes(TRAP_BUILD)).if;
         },
       },
     },
