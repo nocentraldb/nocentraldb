@@ -62,7 +62,11 @@ test("the committed module is the one the texts generate, file by file", () => {
   const generated = generate(texts);
   assert.deepEqual(Object.keys(generated).sort(), [
     "bridge.rs",
-    "error.rs",
+    "error/mod.rs",
+    "error/shard_0.rs",
+    "error/shard_1.rs",
+    "error/shard_2.rs",
+    "error/shard_3.rs",
     "mod.rs",
     "notice.rs",
     "part.rs",
