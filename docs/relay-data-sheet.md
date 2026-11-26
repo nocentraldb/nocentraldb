@@ -32,7 +32,7 @@ Erasure reaches personal fields, not this metadata. Erasing a person destroys th
 
 ## Where the RFCs say nothing yet
 
-These questions have no RFC text. The page leaves them open, and pm turns each into a ticket:
+These questions have no RFC text yet, or RFC text the relay does not build yet. The page leaves each of them open, and a notice built on it should too:
 
 - **How long a space's log, its memberships and its member keys are kept.** No RFC sets an end, no request deletes a space, and the compaction RFC is not written. An operator cannot yet say when this metadata goes.
 - **Metadata of a person who asks for erasure.** Erasure covers personal fields. No RFC says whether or how an operator removes a former member's member id, certificate, and the sizes and times of its changes from a space's log.
