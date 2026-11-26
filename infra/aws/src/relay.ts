@@ -10,7 +10,7 @@
 // - The function: Rust on arm64 with 256 MB, the binary of
 //   crates/ncdb-relay-lambda, built by cargo-lambda into `bootstrap`. Its
 //   settings are `NCDB_*` variables (./relay-settings.ts), and its logs are
-//   kept 14 days.
+//   kept 14 days, or the longer period of `logRetentionDays` (NOC-532).
 // - The tables, on demand, with point-in-time recovery for 35 days:
 //   - RFC 0007's `log`, `changes`, `spaces`, `members` and `person-keys`;
 //   - NOC-270's `uploads` (no `tokens`: behind API Gateway the URLs of
@@ -58,7 +58,6 @@ import {
   FilterPattern,
   LogGroup,
   MetricFilter,
-  RetentionDays,
 } from "aws-cdk-lib/aws-logs";
 import {
   BlockPublicAccess,
@@ -68,7 +67,11 @@ import {
 } from "aws-cdk-lib/aws-s3";
 import { Topic } from "aws-cdk-lib/aws-sns";
 import { Construct } from "constructs";
-import { type RelaySettings, relayEnvironment } from "./relay-settings.ts";
+import {
+  logRetention,
+  type RelaySettings,
+  relayEnvironment,
+} from "./relay-settings.ts";
 
 /// What a relay is built from.
 export interface RelayProps {
@@ -185,7 +188,7 @@ export class Relay extends Construct {
     });
 
     this.logGroup = new LogGroup(this, "Logs", {
-      retention: RetentionDays.TWO_WEEKS,
+      retention: logRetention(props.settings),
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
