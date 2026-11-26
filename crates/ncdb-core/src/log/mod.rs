@@ -28,7 +28,7 @@
 //! log so grows with its number of changes, not with their bytes: each
 //! change costs one entry of about 150 bytes, which names its author by a
 //! number, its position, its author sequence, and its node among the
-//! tips' heads with its dependencies as a slice, about 450 bytes in all
+//! tips' heads with its dependencies as a slice, about 400 bytes in all
 //! (NOC-518).
 
 use std::borrow::Cow;
