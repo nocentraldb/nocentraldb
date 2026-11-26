@@ -329,7 +329,7 @@ impl Log {
             // A change rejected as not a member leaves placeholders, as
             // it would had it been folded and then un-folded.
             if placed {
-                crate::unfold::refold_placed(self, checks, fold, &[id]);
+                crate::unfold::place_rejected(self, checks, fold, id);
             }
             if control_passed {
                 self.check_rejected_again(checks, fold);

@@ -196,35 +196,67 @@ fn placeholders(
         let Some(change) = log.change(id, fold).map(Cow::into_owned) else {
             continue;
         };
-        if change.header().kind == Kind::CONTROL {
-            continue;
-        }
-        let Ok(payload) = checks.open(&change) else {
-            continue;
-        };
-        if !fold.select_model(checks.space_model_id())
-            || payload.format != Payload::FORMAT
-            || payload.extensions().must_understand()
-            || payload
-                .writer_model()
-                .is_some_and(|model| model.map_or(true, |m| m.id != fold.model_id()))
-        {
-            continue;
-        }
-        for (position, operation) in (0..).zip(payload.operations) {
-            if Target::of(&operation) != *target || understand(&operation, fold).is_err() {
-                continue;
-            }
+        placed.extend(
+            placeable(&change, checks, fold)
+                .into_iter()
+                .filter(|(_, operation)| Target::of(operation) == *target),
+        );
+    }
+    placed.sort_by_key(|(origin, _)| (origin.stamp, origin.author, origin.id));
+    placed
+}
+
+/// The operations of a sealed change rejected as not a member that fields
+/// keeping placeholders take, each with its origin: none unless it opens
+/// with the key the control state gives its generation, its payload is one
+/// this member folds, and the model knows the operation's field.
+fn placeable(
+    change: &Change,
+    checks: &impl Checks,
+    fold: &mut impl Fold,
+) -> Vec<(Origin, Operation)> {
+    if change.header().kind == Kind::CONTROL {
+        return Vec::new();
+    }
+    let Ok(payload) = checks.open(change) else {
+        return Vec::new();
+    };
+    if !fold.select_model(checks.space_model_id())
+        || payload.format != Payload::FORMAT
+        || payload.extensions().must_understand()
+        || payload
+            .writer_model()
+            .is_some_and(|model| model.map_or(true, |m| m.id != fold.model_id()))
+    {
+        return Vec::new();
+    }
+    (0..)
+        .zip(payload.operations)
+        .filter(|(_, operation)| {
+            keeps_placeholders(&Target::of(operation), fold) && understand(operation, fold).is_ok()
+        })
+        .map(|(position, operation)| {
             let origin = Origin {
                 id: change.operation_id(position),
                 author: change.header().author,
                 stamp: payload.clock,
             };
-            placed.push((origin, operation));
-        }
+            (origin, operation)
+        })
+        .collect()
+}
+
+/// Places the operations of `id`, a sealed change just rejected as not a
+/// member, in the fields that keep placeholders, as un-folding would have
+/// left them. One that displaces others has its field folded again in
+/// stamp order by [`refold_displaced`].
+pub(crate) fn place_rejected(log: &Log, checks: &impl Checks, fold: &mut impl Fold, id: ChangeId) {
+    let Some(change) = log.change(id, fold).map(Cow::into_owned) else {
+        return;
+    };
+    for (origin, operation) in placeable(&change, checks, fold) {
+        fold.place(origin, &operation);
     }
-    placed.sort_by_key(|(origin, _)| (origin.stamp, origin.author, origin.id));
-    placed
 }
 
 /// Folds again each field of the objects whose move was taken back
