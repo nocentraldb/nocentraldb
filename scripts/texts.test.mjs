@@ -289,7 +289,11 @@ test("a text with placeholders becomes a function that fills them", () => {
     { ...ERROR, text: "the lock is refused: {why:?} at {space}" },
     PART,
   ]);
-  const module = files["error.rs"];
+  // The error texts stand in error/ and its shards (NOC-541).
+  const module = Object.keys(files)
+    .filter((name) => name.startsWith("error/"))
+    .map((name) => files[name])
+    .join("\n");
   assert.ok(
     module.includes(
       "pub(crate) fn no_such_space(why: impl std::fmt::Debug, space: impl std::fmt::Display) -> String {",

@@ -48,6 +48,7 @@
 // new text. With no release tag yet, every text counts as new. `--since
 // <tag>` compares against another tag.
 
+import { createHash } from "node:crypto";
 import {
   mkdirSync,
   readdirSync,
@@ -62,6 +63,7 @@ import { parseArgs } from "node:util";
 import { coreGate } from "./texts-core.mjs";
 import { mergeOrder, readTexts } from "./texts-files.mjs";
 import { review } from "./texts-review.mjs";
+import { fileLimit, generatedModules, tooLong } from "./texts-size.mjs";
 import { rfcErrorCodes, TS_PATHS, tsGate } from "./texts-ts.mjs";
 
 export {
@@ -70,6 +72,7 @@ export {
   lastReleaseTag,
   review,
 } from "./texts-review.mjs";
+export { generatedModules, tooLong } from "./texts-size.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -180,13 +183,31 @@ const GENERATED = [
 ];
 
 /**
- * The Rust module the texts generate, as { file name: content }: mod.rs,
- * and one file per kind that has texts.
+ * The generated files that are split, and into how many: a file of these
+ * kinds is a folder, `<file>/mod.rs`, which re-exports `shard_0.rs` and the
+ * rest, so code still names a text `texts::<file>::NAME` (NOC-541). Each
+ * text's shard is a hash of its id, so a new text moves no other. Raise a
+ * number when `tooLong` says a shard would pass the limit for a file.
+ */
+export const SHARDS = { error: 4 };
+
+/** The shard of `entry` in its split file: a hash of its id. */
+export const shardOf = (entry) =>
+  Number.parseInt(
+    createHash("sha256").update(entry.id).digest("hex").slice(0, 8),
+    16,
+  ) % SHARDS[fileOf(entry)];
+
+/**
+ * The Rust module the texts generate, as { file path: content }: mod.rs,
+ * and one file per kind that has texts, or a folder of shards for a kind in
+ * `SHARDS`.
  */
 export const generate = (texts) => {
   const files = {};
+  const sdk = texts.filter((t) => SDK_KINDS.includes(t.kind));
   const kinds = [...SDK_KINDS, "bridge"].filter((kind) =>
-    texts.some((t) => SDK_KINDS.includes(t.kind) && fileOf(t) === kind),
+    sdk.some((t) => fileOf(t) === kind),
   );
   files["mod.rs"] = [
     ...GENERATED,
@@ -203,43 +224,40 @@ export const generate = (texts) => {
     .join("\n")
     .concat("\n");
   for (const kind of kinds) {
-    const out = [...GENERATED, `//! ${MODULES[kind]}`];
-    mergeOrder(texts)
-      .filter((t) => SDK_KINDS.includes(t.kind) && fileOf(t) === kind)
-      .forEach((entry) => {
-        out.push("");
-        // A notice's name is its code.
-        const code = entry.kind === "error" ? ` (${entry.code})` : "";
-        out.push(doc(`\`${nameOf(entry)}\`${code}: ${entry.when}`, ""));
-        const params = placeholders(entry.text);
-        if (params.length === 0) {
-          out.push(`pub(crate) const ${constName(itemName(entry))}: &str =`);
-          out.push(`    ${rustString(unescaped(entry.text))};`);
-        } else {
-          const args = params
-            .map(
-              ([p, debug]) =>
-                `${p}: impl std::fmt::${debug ? "Debug" : "Display"}`,
-            )
-            .join(", ");
-          out.push(
-            `pub(crate) fn ${fnName(itemName(entry))}(${args}) -> String {`,
-          );
-          out.push(`    format!(${rustString(entry.text)})`);
-          out.push("}");
-        }
-      });
-    files[`${kind}.rs`] = `${out.join("\n")}\n`;
+    const entries = sdk.filter((t) => fileOf(t) === kind);
+    if (!(kind in SHARDS)) {
+      files[`${kind}.rs`] = moduleOf(entries, [MODULES[kind]]);
+      continue;
+    }
+    const shards = [...Array(SHARDS[kind]).keys()];
+    files[`${kind}/mod.rs`] = [
+      ...GENERATED,
+      `//! ${MODULES[kind]}`,
+      `//! In ${shards.length} files by a hash of each id, so that none grows`,
+      "//! past the limit for a file (NOC-541); this module re-exports them.",
+      ...shards.flatMap((i) => [
+        "",
+        `mod shard_${i};`,
+        `pub(crate) use shard_${i}::*;`,
+      ]),
+    ]
+      .join("\n")
+      .concat("\n");
+    for (const i of shards)
+      files[`${kind}/shard_${i}.rs`] = moduleOf(
+        entries.filter((t) => shardOf(t) === i),
+        [`${MODULES[kind]} Shard ${i} of ${shards.length}.`],
+      );
   }
   return files;
 };
 
 /** A text's constant, or its function that fills its placeholders. */
-const item = (entry) => {
+const item = (entry, name = nameOf(entry)) => {
   const params = placeholders(entry.text);
   if (params.length === 0) {
     return [
-      `pub(crate) const ${constName(nameOf(entry))}: &str =`,
+      `pub(crate) const ${constName(name)}: &str =`,
       `    ${rustString(unescaped(entry.text))};`,
     ];
   }
@@ -247,27 +265,35 @@ const item = (entry) => {
     .map(([p, debug]) => `${p}: impl std::fmt::${debug ? "Debug" : "Display"}`)
     .join(", ");
   return [
-    `pub(crate) fn ${fnName(nameOf(entry))}(${args}) -> String {`,
+    `pub(crate) fn ${fnName(name)}(${args}) -> String {`,
     `    format!(${rustString(entry.text)})`,
     "}",
   ];
 };
 
 /**
- * A Rust module of the texts of one `kind`, a constant or a function per
- * text, below the `header` lines of its module comment.
+ * A Rust module of `entries`, a constant or a function per text, below the
+ * `header` lines of its module comment. An error's comment names its code.
  */
-export const rustModule = (texts, kind, header) => {
+const moduleOf = (entries, header) => {
   const out = [...GENERATED, ...header.map((line) => `//! ${line}`)];
-  for (const entry of mergeOrder(texts).filter((t) => t.kind === kind)) {
+  for (const entry of mergeOrder(entries)) {
+    const code = entry.kind === "error" ? ` (${entry.code})` : "";
     out.push(
       "",
-      doc(`\`${nameOf(entry)}\`: ${entry.when}`, ""),
-      ...item(entry),
+      doc(`\`${nameOf(entry)}\`${code}: ${entry.when}`, ""),
+      ...item(entry, itemName(entry)),
     );
   }
   return `${out.join("\n")}\n`;
 };
+
+/** A Rust module of the texts of one `kind`, below the `header` lines of its module comment. */
+export const rustModule = (texts, kind, header) =>
+  moduleOf(
+    texts.filter((t) => t.kind === kind),
+    header,
+  );
 
 /** The command line's module, crates/ncdb/src/texts.rs, of the `cli` texts. */
 export const generateCli = (texts) =>
@@ -504,6 +530,20 @@ export const checkCode = (
   return problems;
 };
 
+/** The files under the module folder `dir`, as paths relative to it; none when it is missing. */
+const moduleFiles = (dir, sub = "") => {
+  let names = [];
+  try {
+    names = readdirSync(join(dir, sub));
+  } catch {}
+  return names.flatMap((name) => {
+    const path = sub ? `${sub}/${name}` : name;
+    return statSync(join(dir, path)).isDirectory()
+      ? moduleFiles(dir, path)
+      : [path];
+  });
+};
+
 const main = () => {
   const { values } = parseArgs({
     options: {
@@ -534,22 +574,17 @@ const main = () => {
     ...read.problems,
   ];
   if (problems.length === 0) {
+    problems.push(...tooLong(generatedModules(file.texts), fileLimit(ROOT)));
     const generated = generate(file.texts);
     const dir = at(PATHS.module);
     if (values.write) {
-      mkdirSync(dir, { recursive: true });
-      for (const name of readdirSync(dir)) {
-        if (!(name in generated)) rmSync(join(dir, name));
-      }
+      rmSync(dir, { recursive: true, force: true });
       for (const [name, content] of Object.entries(generated)) {
+        mkdirSync(dirname(join(dir, name)), { recursive: true });
         writeFileSync(join(dir, name), content);
       }
     }
-    let present = [];
-    try {
-      present = readdirSync(dir);
-    } catch {}
-    const names = new Set([...present, ...Object.keys(generated)]);
+    const names = new Set([...moduleFiles(dir), ...Object.keys(generated)]);
     for (const name of [...names].sort()) {
       let committed = null;
       try {
