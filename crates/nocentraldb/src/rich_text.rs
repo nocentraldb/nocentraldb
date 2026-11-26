@@ -104,7 +104,7 @@ pub(crate) fn document(
         Some(_) => {
             return Err(Error::new(
                 ErrorCode::InvalidValue,
-                crate::texts::error::not_rich_text(field, collection),
+                crate::texts::error::field_does_not_hold("rich text"),
             ));
         }
         None if inner.model.collections.contains_key(collection) => {

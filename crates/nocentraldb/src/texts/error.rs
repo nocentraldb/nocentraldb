@@ -162,7 +162,8 @@ pub(crate) const NOT_ARECOVERY_CODE: &str =
     "the words are not a recovery code";
 
 /// `fieldDoesNotHold` (invalidValue): Object::get::<T> when the field holds
-/// another kind of value than T.
+/// another kind of value than T; the bridge's rich-text editor binding
+/// (richText.open) on a field that is not rich text.
 pub(crate) fn field_does_not_hold(asked: impl std::fmt::Display) -> String {
     format!("the field does not hold {asked}")
 }
@@ -227,12 +228,6 @@ pub(crate) fn recovery_code_unreadable(why: impl std::fmt::Display) -> String {
 /// key's record.
 pub(crate) const PERSON_KEY_NOT_HELD: &str =
     "this member does not hold the person's key yet; try again once sync has fetched it";
-
-/// `notRichText` (invalidValue): The rich-text editor binding (space.richText)
-/// opened on a field that is not nc.richText.
-pub(crate) fn not_rich_text(field: impl std::fmt::Display, collection: impl std::fmt::Display) -> String {
-    format!("{field} of {collection} is not a rich-text field")
-}
 
 /// `noAccountKeyToSignOff` (notAllowed): Account::sign_off on a database that
 /// holds no account key, an agent's or one waiting to be paired (NOC-325).
