@@ -42,3 +42,23 @@ pub fn mentions(state: &State) -> Vec<Mention> {
     mention::all(&node::nodes(&state.document), &mut out);
     out
 }
+
+/// The four reads of one state, from one reading of its document.
+pub(crate) struct Reads {
+    pub(crate) markdown: String,
+    pub(crate) text: String,
+    pub(crate) tree: Data,
+    pub(crate) mentions: Vec<Mention>,
+}
+
+pub(crate) fn all(state: &State) -> Reads {
+    let nodes = node::nodes(&state.document);
+    let mut mentions = Vec::new();
+    mention::all(&nodes, &mut mentions);
+    Reads {
+        markdown: markdown::render(&nodes),
+        text: plain::render(&nodes),
+        tree: node::tree(&nodes),
+        mentions,
+    }
+}
