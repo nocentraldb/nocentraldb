@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 
 use ncdb_plugin::Data;
 
+use super::super::mention;
 use super::super::node::{Mark, Node};
 use super::tag;
 
@@ -261,6 +262,10 @@ fn node_inline(out: &mut String, node: &Node, context: Context) {
     else {
         return;
     };
+    if let Some(mention) = mention::of(node) {
+        out.push_str(&mention.markdown());
+        return;
+    }
     match name.as_str() {
         "hardBreak" => hard_break(out, context),
         _ => {

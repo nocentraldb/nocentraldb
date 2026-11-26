@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 
 use ncdb_plugin::Data;
 
+use super::mention;
 use super::node::Node;
 use inline::Context;
 
@@ -93,6 +94,7 @@ fn block(node: &Node, other_marker: bool) -> String {
         return String::new();
     };
     let rendered = match name.as_str() {
+        "mention" => mention::of(node).map(|mention| mention.markdown()),
         "paragraph" => Some(inline::render(children, BLOCK)),
         "heading" => heading(attrs, children),
         "blockquote" => Some(quote(children)),

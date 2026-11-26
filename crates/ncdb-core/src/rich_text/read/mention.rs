@@ -21,6 +21,30 @@ pub struct Mention {
     pub id: ObjectId,
 }
 
+impl Mention {
+    /// The Markdown form, `[@](ncdb:<space id>/<object id>)`: a link whose
+    /// text is `@` and whose destination needs no escaping, so that it
+    /// reads back as this reference.
+    pub(crate) fn markdown(&self) -> String {
+        format!("[@](ncdb:{}/{})", hex(&self.space.0), hex(&self.id.0))
+    }
+}
+
+fn hex(bytes: &[u8; 16]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// The references the mentions among `nodes` hold, in document order.
+pub(crate) fn all(nodes: &[Node], out: &mut Vec<Mention>) {
+    for node in nodes {
+        if let Some(mention) = of(node) {
+            out.push(mention);
+        } else if let Node::Element { children, .. } = node {
+            all(children, out);
+        }
+    }
+}
+
 /// The reference `node` holds, when it is a mention with two ids.
 pub(crate) fn of(node: &Node) -> Option<Mention> {
     let Node::Element { name, attrs, .. } = node else {

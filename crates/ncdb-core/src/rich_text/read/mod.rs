@@ -11,6 +11,7 @@ mod plain;
 use ncdb_plugin::Data;
 
 use super::State;
+pub use mention::Mention;
 
 /// The document as ProseMirror JSON, `{ type, attrs, content, marks, text
 /// }`, under a root of type `doc`, for apps that render the document
@@ -32,4 +33,12 @@ pub fn markdown(state: &State) -> String {
 /// own, for previews.
 pub fn text(state: &State) -> String {
     plain::render(&node::nodes(&state.document))
+}
+
+/// The references the document's mentions hold, in document order, for an
+/// app that resolves names.
+pub fn mentions(state: &State) -> Vec<Mention> {
+    let mut out = Vec::new();
+    mention::all(&node::nodes(&state.document), &mut out);
+    out
 }
