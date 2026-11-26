@@ -66,7 +66,7 @@ pub(crate) fn unfold(log: &mut Log, checks: &impl Checks, fold: &mut impl Fold) 
     let mut failing = Vec::new();
     for (id, parked) in log.folded_sealed() {
         let header = log.header(id).expect("the log holds the change");
-        if !checks.may_unfold(header) {
+        if !checks.may_unfold(&header) {
             continue;
         }
         let Some(change) = log.change(id, fold) else {

@@ -297,22 +297,6 @@ impl Header {
         }
     }
 
-    /// This header without its payload: what a log keeps in memory of a
-    /// sealed change whose frame its store keeps (NOC-452).
-    pub(crate) fn without_payload(&self) -> Header {
-        Header {
-            space: self.space,
-            author: self.author,
-            sequence: self.sequence,
-            key_generation: self.key_generation,
-            kind: self.kind,
-            payload: Vec::new(),
-            format: self.format,
-            suite: self.suite,
-            extensions: self.extensions.clone(),
-        }
-    }
-
     /// The keys this core does not know.
     pub fn extensions(&self) -> &Extensions {
         &self.extensions
