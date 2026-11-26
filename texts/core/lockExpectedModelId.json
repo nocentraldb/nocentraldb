@@ -1,0 +1,6 @@
+{
+  "id": "core.lockExpectedModelId",
+  "kind": "core",
+  "text": "expected 32 lowercase hex digits",
+  "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: `model.id` is not 32 lower-case hex digits."
+}

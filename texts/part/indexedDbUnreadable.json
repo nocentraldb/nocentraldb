@@ -1,0 +1,6 @@
+{
+  "id": "part.indexedDbUnreadable",
+  "kind": "part",
+  "text": "IndexedDB cannot be read",
+  "when": "What failed, in indexedDbRefused: IndexedDB could not be read."
+}

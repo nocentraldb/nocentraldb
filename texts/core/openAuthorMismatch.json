@@ -1,0 +1,6 @@
+{
+  "id": "core.openAuthorMismatch",
+  "kind": "core",
+  "text": "the header's author is not the member of these public keys",
+  "when": "The core's reason when a change does not verify or open (seal::open). Not shown to a developer today: the core turns it into a park or reject reason, and the relay into BadSignature. The header's author is not the member of the given public keys."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "core.pairingReadPrefix",
+  "kind": "core",
+  "text": "it does not start with ncdb-pair-1:",
+  "when": "After error.notAPairingAnswer's colon, from parsing a pairing answer (PairingAnswer::from_str; the bridge's account.completePairing): the text does not start with ncdb-pair-1:. In TypeScript, nc.pairingAnswer refuses such a text first with ts.notAPairingAnswer."
+}

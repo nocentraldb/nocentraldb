@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadableRelayEpoch",
+  "kind": "core",
+  "text": "relay epoch",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a relay epoch it cannot read."
+}

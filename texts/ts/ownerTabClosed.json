@@ -1,0 +1,7 @@
+{
+  "id": "ts.ownerTabClosed",
+  "kind": "ts",
+  "code": "storageFailed",
+  "text": "the tab that held the database closed before it answered; the call may or may not have run",
+  "when": "A call that changes the database, sent to the tab that owned it, when that tab ended before it answered (NOC-177)."
+}

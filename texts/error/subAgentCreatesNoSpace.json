@@ -1,0 +1,7 @@
+{
+  "id": "error.subAgentCreatesNoSpace",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "a sub-agent creates no space: its parent adds it to the spaces it works in",
+  "when": "Spaces::create (db.spaces.create) on a sub-agent's database (OpenOptions::sub_agent): it works in the spaces its parent adds it to."
+}

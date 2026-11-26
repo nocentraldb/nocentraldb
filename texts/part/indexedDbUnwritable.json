@@ -1,0 +1,6 @@
+{
+  "id": "part.indexedDbUnwritable",
+  "kind": "part",
+  "text": "IndexedDB cannot be written",
+  "when": "What failed, in indexedDbRefused: IndexedDB could not be written."
+}

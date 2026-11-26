@@ -1,0 +1,6 @@
+{
+  "id": "part.erasureTextTooShort",
+  "kind": "part",
+  "text": "it is too short",
+  "when": "Why a text is not an erasure request or a set of sign-offs: it ends before its layout does."
+}

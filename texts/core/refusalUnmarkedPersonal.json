@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalUnmarkedPersonal",
+  "kind": "core",
+  "text": "{collection}.{field}: no longer personal.\nOld values stay sealed under person keys and new ones would not be: the field would be half erasable.\nKeep .personal({{ person: \"{person}\" }}).",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a personal field is no longer personal."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "cli.refusedNotAdditive",
+  "kind": "cli",
+  "text": "{lock}: refused, the change is not additive (model version stays {version})",
+  "when": "`ncdb model build` and `ncdb model check` when the core refuses the change against the previous lock; each refusal follows on a line of its own."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalIndexNotIndexable",
+  "kind": "core",
+  "text": "index {collection}.{index}: {collection}.{field} is {type_id}, which cannot be indexed.\nAn index can use basic values and single links (nc.link).",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: an index names a field of a type that cannot be indexed. Opening with such a lock shows it after error.lockInvalid's colon."
+}

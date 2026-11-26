@@ -1,0 +1,7 @@
+{
+  "id": "error.databaseHeld",
+  "kind": "error",
+  "code": "storageFailed",
+  "text": "the database cannot be opened: another tab holds it, or {error}",
+  "when": "nc.open in a browser, when OPFS refuses the database: most often another tab holds it; the reason follows."
+}

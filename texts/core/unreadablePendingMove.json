@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadablePendingMove",
+  "kind": "core",
+  "text": "pending move",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a pending move it cannot read."
+}

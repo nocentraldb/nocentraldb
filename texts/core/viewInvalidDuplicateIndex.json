@@ -1,0 +1,6 @@
+{
+  "id": "core.viewInvalidDuplicateIndex",
+  "kind": "core",
+  "text": "index {collection}.{index} is declared twice.",
+  "when": "Two indexes of one collection share a name: from opening (Db::open; nc.open), after error.lockInvalid's colon; a lock that `ncdb model build` wrote does not reach it."
+}

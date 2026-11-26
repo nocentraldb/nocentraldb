@@ -1,0 +1,6 @@
+{
+  "id": "cli.unknownOption",
+  "kind": "cli",
+  "text": "unknown option: {option}",
+  "when": "`ncdb model build` and `ncdb model check` given an option other than `--model` or `--lock`; the usage follows."
+}

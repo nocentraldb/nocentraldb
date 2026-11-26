@@ -1,0 +1,7 @@
+{
+  "id": "error.pairingCreatesNoSpace",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "a database waiting to be paired creates no space until its pairing completes",
+  "when": "Spaces::create (db.spaces.create) on a database waiting to be paired."
+}

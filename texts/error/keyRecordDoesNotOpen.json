@@ -1,0 +1,7 @@
+{
+  "id": "error.keyRecordDoesNotOpen",
+  "kind": "error",
+  "code": "storageFailed",
+  "text": "the key record of the database does not open under its wrapping key",
+  "when": "nc.open in a browser when the database's key record does not open under its wrapping key."
+}

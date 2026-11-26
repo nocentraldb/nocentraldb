@@ -1,0 +1,7 @@
+{
+  "id": "ts.lockHasNoIndex",
+  "kind": "ts",
+  "code": "lockOutOfDate",
+  "text": "model.lock.json is out of date: it has no index {collection}.{index}. Run ncdb model build.",
+  "when": "nc.open, on a model that names an index the lock does not have, as when the lock was not built again after the index was added."
+}

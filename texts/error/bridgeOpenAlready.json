@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeOpenAlready",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the database is open already",
+  "when": "The bridge, on a request from the TypeScript SDK: open, on a worker whose database is open."
+}

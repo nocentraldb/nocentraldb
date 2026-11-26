@@ -1,0 +1,6 @@
+{
+  "id": "part.erasureTextEntries",
+  "kind": "part",
+  "text": "its length does not match its number of entries",
+  "when": "Why a text is not an erasure request or a set of sign-offs: the entries do not fill it."
+}

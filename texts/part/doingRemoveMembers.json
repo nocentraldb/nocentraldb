@@ -1,0 +1,6 @@
+{
+  "id": "part.doingRemoveMembers",
+  "kind": "part",
+  "text": "removes members",
+  "when": "What the member does, in roleRequired: Members::remove."
+}

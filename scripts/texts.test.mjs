@@ -1,5 +1,6 @@
 // Tests of scripts/texts.mjs (NOC-329): the repository's texts pass, and
-// each check fails on its mutant.
+// each check fails on its mutant. The texts' files, one per text, and how
+// two new texts merge are tested in texts-files.test.mjs (NOC-512).
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -17,7 +18,6 @@ import {
   CLI_STRAYS,
   checkCode,
   checkEntries,
-  checkLayout,
   cliUse,
   constName,
   diffTexts,
@@ -31,6 +31,7 @@ import {
   placeholders,
   review,
 } from "./texts.mjs";
+import { entryJson, entryPath, readTexts } from "./texts-files.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFileSync(join(ROOT, path), "utf8");
@@ -57,7 +58,7 @@ test("the repository's texts pass the gate", () => {
 });
 
 test("the committed module is the one the texts generate, file by file", () => {
-  const texts = JSON.parse(read(PATHS.texts)).texts;
+  const texts = readTexts(ROOT).texts;
   const generated = generate(texts);
   assert.deepEqual(Object.keys(generated).sort(), [
     "bridge.rs",
@@ -77,9 +78,7 @@ test("every NoticeCode of the SDK has its notice, and each notice its code", () 
     variants.includes("MemberAdded") && variants.length >= 11,
     variants.join(),
   );
-  const notices = JSON.parse(read(PATHS.texts)).texts.filter(
-    (t) => t.kind === "notice",
-  );
+  const notices = readTexts(ROOT).texts.filter((t) => t.kind === "notice");
   assert.deepEqual(
     notices.map((t) => t.code[0].toUpperCase() + t.code.slice(1)).sort(),
     [...variants].sort(),
@@ -189,11 +188,9 @@ test("the module holds each text as a Rust literal, with when it shows", () => {
   assert.equal(constName("accountKeyRenewed"), "ACCOUNT_KEY_RENEWED");
 });
 
-test("every notice text RFC 0009 quotes is a copy of texts.json's", () => {
+test("every notice text RFC 0009 quotes is a copy of its file's", () => {
   const rfc = read("docs/rfc/0009-sdk-api.md");
-  const texts = new Map(
-    JSON.parse(read(PATHS.texts)).texts.map((t) => [t.code, t.text]),
-  );
+  const texts = new Map(readTexts(ROOT).texts.map((t) => [t.code, t.text]));
   const quotes = [
     // `{ code: "memberAdded", text: "…" }` in the examples.
     ...[...rfc.matchAll(/\{ code: "(\w+)", text: "([^"]+)" \}/g)].map((m) => [
@@ -215,27 +212,6 @@ test("every notice text RFC 0009 quotes is a copy of texts.json's", () => {
   }
 });
 
-test("the file is sorted by id and written one field per line", () => {
-  const second = { ...ENTRY, id: "notice.roleSet", code: "roleSet" };
-  const sorted = file(ENTRY, second);
-  assert.deepEqual(
-    checkLayout(`${JSON.stringify(sorted, null, 2)}\n`, sorted),
-    [],
-  );
-  const unsorted = file(second, ENTRY);
-  assert.equal(
-    checkLayout(`${JSON.stringify(unsorted, null, 2)}\n`, unsorted).length,
-    1,
-  );
-  for (const raw of [
-    JSON.stringify(sorted),
-    `${JSON.stringify(sorted, null, 4)}\n`,
-    JSON.stringify(sorted, null, 2),
-  ]) {
-    assert.equal(checkLayout(raw, sorted).length, 1, raw.slice(0, 40));
-  }
-});
-
 const ERROR = {
   id: "error.noSuchSpace",
   kind: "error",
@@ -254,9 +230,7 @@ const ERRORS = ["NotFound", "StorageFull", "StorageFailed"];
 test("every ErrorCode an error names exists in error.rs", () => {
   const variants = enumVariants(read(PATHS.errorCodes), "ErrorCode");
   assert.ok(variants.includes("InvalidValue") && variants.includes("NotFound"));
-  const errors = JSON.parse(read(PATHS.texts)).texts.filter(
-    (t) => t.kind === "error",
-  );
+  const errors = readTexts(ROOT).texts.filter((t) => t.kind === "error");
   assert.ok(errors.length >= 80, `${errors.length} errors`);
 });
 
@@ -435,11 +409,11 @@ test("pnpm texts compares the file at the last release tag, found in git", () =>
       assert.equal(run.status, 0, run.stderr);
     };
     const put = (texts) => {
-      mkdirSync(join(dir, "texts"), { recursive: true });
-      writeFileSync(
-        join(dir, "texts", "texts.json"),
-        `${JSON.stringify({ texts }, null, 2)}\n`,
-      );
+      rmSync(join(dir, "texts"), { recursive: true, force: true });
+      for (const entry of texts) {
+        mkdirSync(dirname(join(dir, entryPath(entry))), { recursive: true });
+        writeFileSync(join(dir, entryPath(entry)), entryJson(entry));
+      }
       git("add", "-A");
       git(
         "-c",
@@ -475,7 +449,7 @@ test("pnpm texts compares the file at the last release tag, found in git", () =>
     assert.match(text, /^# Texts new or changed since v0\.2\.0-beta\.1$/m);
     assert.ok(text.includes("1 new, 1 changed, 0 removed, of 2 texts"), text);
     assert.ok(text.includes('- text now: "Changed after the beta."'));
-    // A tag from before texts.json: every text is new since it.
+    // A tag from before the texts: every text is new since it.
     assert.ok(review(dir, "v0.1.0").includes("2 new, 0 changed, 0 removed"));
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -586,6 +560,6 @@ test("a cli text no code uses fails, and the generated module does not count", (
 });
 
 test("the command line's committed module is the one the texts generate", () => {
-  const texts = JSON.parse(read(PATHS.texts)).texts;
+  const texts = readTexts(ROOT).texts;
   assert.equal(read(PATHS.cliModule), generateCli(texts));
 });

@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeWriteTakesOps",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "a write takes ops",
+  "when": "The bridge, on a request from the TypeScript SDK: write (space.write and its shorthands) without its ops."
+}

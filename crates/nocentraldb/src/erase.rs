@@ -53,7 +53,7 @@ const SIGN_OFFS: &str = "ncdb-sign-off-1:";
 const VERSION: u8 = 1;
 
 /// The notice of an erasure (Carsten, 2026-11-15, on NOC-326, Q6); its
-/// text is in texts/texts.json (NOC-329).
+/// text is in texts/notice/ (NOC-329).
 pub(crate) const ERASED: Notice = Notice {
     code: NoticeCode::Erased,
     text: crate::texts::notice::ERASED,

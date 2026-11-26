@@ -1,0 +1,6 @@
+{
+  "id": "core.viewSqlite",
+  "kind": "core",
+  "text": "SQLite failed: {error}",
+  "when": "After error.viewFailed's colon (storageFailed), from any call that reads the view: SQLite fails (storageFull when the disk or the quota is full); `error` is SQLite's reason."
+}

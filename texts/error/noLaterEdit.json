@@ -1,0 +1,7 @@
+{
+  "id": "error.noLaterEdit",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the edit {position} of the change {change} is not a later edit of the object {id} in this space",
+  "when": "space.moves().carry_over (space.moves.carryOver) when an edit given is not among the space's later edits now (RFC 0016, \"Later edits\")."
+}

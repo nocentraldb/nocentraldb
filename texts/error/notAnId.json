@@ -1,0 +1,7 @@
+{
+  "id": "error.notAnId",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "not {name} in {len} lowercase hex digits",
+  "when": "Parsing an id from text (SpaceId, ObjectId, ChangeId, MemberId) when the text is not that many lowercase hex digits."
+}

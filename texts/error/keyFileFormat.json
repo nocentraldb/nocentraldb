@@ -1,0 +1,7 @@
+{
+  "id": "error.keyFileFormat",
+  "kind": "error",
+  "code": "storageFailed",
+  "text": "the key file holds no keys of this SDK's format",
+  "when": "Opening with a key file (OpenOptions::key_file) whose content is not keys of this SDK's format."
+}

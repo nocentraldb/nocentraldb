@@ -1,0 +1,7 @@
+{
+  "id": "error.recoveryCodeUnreadable",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the words are not a recovery code: {why}",
+  "when": "Opening with a recovery code (OpenOptions::recover; nc.open with recover) when the words are not a recovery code; the reason names a word's position, never the word."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeNoSuchOp",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "no op {op}",
+  "when": "The bridge, on a request from the TypeScript SDK: a write op the bridge does not have."
+}

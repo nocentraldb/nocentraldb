@@ -1,0 +1,6 @@
+{
+  "id": "part.indexedDbUnopenable",
+  "kind": "part",
+  "text": "IndexedDB cannot be opened",
+  "when": "What failed, in indexedDbRefused: IndexedDB could not be opened."
+}

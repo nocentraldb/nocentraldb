@@ -1,0 +1,6 @@
+{
+  "id": "core.lockExpectedString",
+  "kind": "core",
+  "text": "expected a string",
+  "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: a value that must be a string is something else."
+}

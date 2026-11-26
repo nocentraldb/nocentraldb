@@ -1,0 +1,6 @@
+{
+  "id": "cli.rewriteCanonical",
+  "kind": "cli",
+  "text": "rewrite it in its canonical form (model version stays {version})",
+  "when": "After `cli.outOfDate`, from `ncdb model check`, when the lock describes the model but is not written in its canonical form, so `build` would only rewrite it."
+}

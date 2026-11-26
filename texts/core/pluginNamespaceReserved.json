@@ -1,0 +1,6 @@
+{
+  "id": "core.pluginNamespaceReserved",
+  "kind": "core",
+  "text": "a plugin names the namespace {namespace}, which is reserved for the built-in types",
+  "when": "The whole error of opening with plugins (OpenOptions::plugin; invalidValue), when a plugin names the built-in types' namespace. Rust only: TypeScript's nc.open takes no plugins."
+}

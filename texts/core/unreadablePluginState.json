@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadablePluginState",
+  "kind": "core",
+  "text": "plugin state",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a plugin field's state the plugin cannot read."
+}

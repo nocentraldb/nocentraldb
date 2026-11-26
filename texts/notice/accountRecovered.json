@@ -1,0 +1,7 @@
+{
+  "id": "notice.accountRecovered",
+  "kind": "notice",
+  "code": "accountRecovered",
+  "text": "Your account is back with a new account key. Your spaces come back when one of their members adds this device.",
+  "when": "db.account().recovered() gives it on the open that recovered the account from its code (OpenOptions::recover; nc.open with recover), with a new account key on this device. The owner's text, NOC-273; NOC-289."
+}

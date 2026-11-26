@@ -1,0 +1,6 @@
+{
+  "id": "part.kindList",
+  "kind": "part",
+  "text": "a list of elements",
+  "when": "What the read asked for, in fieldDoesNotHold: the elements of a set or of many links."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "cli.additive",
+  "kind": "cli",
+  "text": "additive: clients on model version {from} keep every change written under version {to}.",
+  "when": "`ncdb model build`, the last line of a new model version's report: the change is additive."
+}

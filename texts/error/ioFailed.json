@@ -1,0 +1,7 @@
+{
+  "id": "error.ioFailed",
+  "kind": "error",
+  "code": "storageFull | storageFailed",
+  "text": "{what}: {error}",
+  "when": "Opening, when the file system fails on the database's directory, file or key file: what failed, then the system's error, never the path."
+}

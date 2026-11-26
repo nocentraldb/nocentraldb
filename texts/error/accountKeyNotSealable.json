@@ -1,0 +1,7 @@
+{
+  "id": "error.accountKeyNotSealable",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the account key cannot be sealed to the invitation's member",
+  "when": "Account::pair (db.account.pair) when the account key cannot be sealed to the invitation's member key."
+}

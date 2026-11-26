@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalCollectionUndeprecated",
+  "kind": "core",
+  "text": "collection {collection}: no longer deprecated.\nClients that stopped writing it would not write it again.\nKeep it deprecated, and add a new collection instead.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a deprecated collection is no longer deprecated."
+}

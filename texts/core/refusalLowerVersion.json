@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalLowerVersion",
+  "kind": "core",
+  "text": "model.version: {next} is lower than {previous}.\nThe lock is older than the previous one; it is not its successor.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: the next lock's model version is lower than the previous one's."
+}

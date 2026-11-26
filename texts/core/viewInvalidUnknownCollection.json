@@ -1,0 +1,6 @@
+{
+  "id": "core.viewInvalidUnknownCollection",
+  "kind": "core",
+  "text": "index {index} names a collection the model does not have.",
+  "when": "An index names a collection the model does not have: from opening (Db::open; nc.open), after error.lockInvalid's colon; a lock that `ncdb model build` wrote does not reach it."
+}

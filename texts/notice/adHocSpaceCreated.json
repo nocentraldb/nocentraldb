@@ -1,0 +1,7 @@
+{
+  "id": "notice.adHocSpaceCreated",
+  "kind": "notice",
+  "code": "adHocSpaceCreated",
+  "text": "This space limits what the sub-agent can decrypt, not what a process running as the same user can read. Its copies keep no link to an object that was not copied, and no personal or plugin field.",
+  "when": "Spaces::create_ad_hoc (db.spaces.createAdHoc) returns it once the ad-hoc space and its copies are written. The first sentence is the owner's, NOC-320 Q10; how many links and plugin fields were left out, the call returns beside it."
+}

@@ -192,8 +192,8 @@ pub enum Refusal {
 
 impl Refusal {
     /// The message, one line each: what changed, why it is refused, and
-    /// (for most) what to do instead. Its text is the refusal's entry of
-    /// texts/texts.json (NOC-329).
+    /// (for most) what to do instead. Its text is the refusal's entry in
+    /// texts/core/ (NOC-329).
     pub fn lines(&self) -> Vec<String> {
         use Refusal::*;
         let text = match self {

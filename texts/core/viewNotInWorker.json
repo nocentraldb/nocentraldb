@@ -1,0 +1,6 @@
+{
+  "id": "core.viewNotInWorker",
+  "kind": "core",
+  "text": "the view runs only in a dedicated Web Worker",
+  "when": "The core's reason when the browser view is opened outside a dedicated Web Worker. Not shown to a developer today: the SDK replaces it with error.openOutsideWorker."
+}

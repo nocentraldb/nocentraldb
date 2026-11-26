@@ -1,0 +1,7 @@
+{
+  "id": "error.noSuchIndexQueried",
+  "kind": "error",
+  "code": "notFound",
+  "text": "the model declares no such index",
+  "when": "A query of an index the model does not declare."
+}

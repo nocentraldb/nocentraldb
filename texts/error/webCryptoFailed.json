@@ -1,0 +1,7 @@
+{
+  "id": "error.webCryptoFailed",
+  "kind": "error",
+  "code": "storageFailed",
+  "text": "{what}: {name}",
+  "when": "nc.open in a browser when WebCrypto fails to make the wrapping key or to seal the key record: what failed, and the name of the error it threw, never a byte."
+}

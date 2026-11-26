@@ -1,0 +1,6 @@
+{
+  "id": "core.changeNotMap",
+  "kind": "core",
+  "text": "expected a map",
+  "when": "Inside core.receiveDecode or core.openPayload, which no developer sees today (the SDK and the relay replace a change's decode error with their own): a value of a change that must be a map is something else."
+}

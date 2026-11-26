@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeNotASpaceId",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "not a space id",
+  "when": "The bridge, on a request from the TypeScript SDK: a call given a space that is not a space id."
+}

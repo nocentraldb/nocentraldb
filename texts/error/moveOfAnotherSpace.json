@@ -1,0 +1,7 @@
+{
+  "id": "error.moveOfAnotherSpace",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the object {id} is in the space {space}; a move takes only objects of the space it is called on",
+  "when": "Space::move_objects (space.move) when an object to move was read from another space (RFC 0016, \"The SDK call and its notice\")."
+}

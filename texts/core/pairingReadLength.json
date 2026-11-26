@@ -1,0 +1,6 @@
+{
+  "id": "core.pairingReadLength",
+  "kind": "core",
+  "text": "its length is not the one its bytes give",
+  "when": "After error.notAPairingAnswer's colon, from parsing a pairing answer (PairingAnswer::from_str; the bridge's account.completePairing): the answer is longer or shorter than its parts."
+}

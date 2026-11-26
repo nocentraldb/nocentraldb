@@ -1,0 +1,6 @@
+{
+  "id": "core.pairingCheckAccountKey",
+  "kind": "core",
+  "text": "the account key does not open, or is not the account's",
+  "when": "After error.pairingAnswerDoesNotHold's colon, from Account::complete_pairing (db.account.completePairing): the sealed account key does not open for this device, or is not the account's."
+}

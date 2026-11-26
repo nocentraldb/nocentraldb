@@ -1,0 +1,7 @@
+{
+  "id": "ts.erasureRequestNotRead",
+  "kind": "ts",
+  "code": "invalidValue",
+  "text": "erasureRequest takes an object this database read, as space.get, find or subscribe gives it, not a copy of one",
+  "when": "db.erasureRequest, given an object the SDK of this database did not read, such as a spread of one or an object of another database."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadableSpaceId",
+  "kind": "core",
+  "text": "space id",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a space id it cannot read."
+}

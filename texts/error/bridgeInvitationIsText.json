@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeInvitationIsText",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "an invitation is text",
+  "when": "The bridge, on a request from the TypeScript SDK: members.add given an invitation that is not text."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "core.lockExpectedNames",
+  "kind": "core",
+  "text": "expected an array of names",
+  "when": "After the JSON path of the value at fault, when the schema's description cannot be read (cli.descriptionUnreadable): a collection's list of names, such as its deprecated fields, is not a list."
+}

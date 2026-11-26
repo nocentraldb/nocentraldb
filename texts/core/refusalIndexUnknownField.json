@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalIndexUnknownField",
+  "kind": "core",
+  "text": "index {collection}.{index}: {collection} has no field {field}.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: an index names a field its collection does not have. Opening with such a lock shows it after error.lockInvalid's colon."
+}

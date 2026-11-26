@@ -1,0 +1,6 @@
+{
+  "id": "ts.notAView",
+  "kind": "ts",
+  "text": "{collection}.{key}: not a view; declare it with nc.view(...).",
+  "when": "ncdb model build, on a model whose view is not declared with nc.view."
+}

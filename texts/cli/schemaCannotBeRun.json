@@ -1,0 +1,6 @@
+{
+  "id": "cli.schemaCannotBeRun",
+  "kind": "cli",
+  "text": "cannot be run: {error}",
+  "when": "After the schema module's name, when Node.js cannot import it; `error` is the exception's message."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "cli.descriptionsChanged",
+  "kind": "cli",
+  "text": "descriptions changed (model version stays {version})",
+  "when": "`ncdb model build`, after the lock's name, when only descriptions changed, so the model version stays; a line per change follows."
+}

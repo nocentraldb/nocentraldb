@@ -1,0 +1,6 @@
+{
+  "id": "core.lockNoFieldType",
+  "kind": "core",
+  "text": "{type_id} is not a field type: expected ncdb/<type> or <plugin>/<type>",
+  "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: a field's type names no built-in type and no plugin's."
+}

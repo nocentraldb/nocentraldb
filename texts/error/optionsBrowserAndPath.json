@@ -1,0 +1,7 @@
+{
+  "id": "error.optionsBrowserAndPath",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the options name a browser database together with a path, a key file or in_memory(); name one place",
+  "when": "Opening with options that name a browser database together with a path, a key file or in_memory()."
+}

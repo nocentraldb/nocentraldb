@@ -1,0 +1,7 @@
+{
+  "id": "error.lockRefused",
+  "kind": "error",
+  "code": "modelRefused",
+  "text": "the lock is refused: {error}",
+  "when": "Opening, when the lock cannot be read; the reason follows."
+}

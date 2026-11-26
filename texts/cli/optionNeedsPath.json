@@ -1,0 +1,6 @@
+{
+  "id": "cli.optionNeedsPath",
+  "kind": "cli",
+  "text": "{option} needs a path",
+  "when": "`--model` or `--lock` given last, or followed by another option; the usage follows."
+}

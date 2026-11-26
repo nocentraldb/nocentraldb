@@ -7,7 +7,8 @@
 // them.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { read, section } from "./lib/rfc-text.mjs";
+import { read, root, section } from "./lib/rfc-text.mjs";
+import { readTexts } from "./texts-files.mjs";
 
 const RFC = "docs/rfc/0009-sdk-api.md";
 
@@ -54,8 +55,8 @@ test("The Rust SDK has the erase calls, their texts and their results", () => {
 });
 
 test("The Rust SDK gives the texts of Erased and TakenBack", () => {
-  // The texts are texts.json's (NOC-329); the bullet quotes them as they are.
-  const texts = JSON.parse(read("texts/texts.json")).texts;
+  // The texts are texts/'s (NOC-329); the bullet quotes them as they are.
+  const texts = readTexts(root).texts;
   const textOf = (id) => texts.find((t) => t.id === id).text;
   const bullet = rustBullet("- **Erasing a person.**");
   for (const id of ["notice.erased", "notice.takenBack"]) {

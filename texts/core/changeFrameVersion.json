@@ -1,0 +1,6 @@
+{
+  "id": "core.changeFrameVersion",
+  "kind": "core",
+  "text": "unknown frame version {version}",
+  "when": "Inside core.receiveDecode or core.openPayload, which no developer sees today (the SDK and the relay replace a change's decode error with their own): a change's frame version is not 1."
+}

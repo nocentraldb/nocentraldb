@@ -1,0 +1,6 @@
+{
+  "id": "part.invitationStatementByte",
+  "kind": "part",
+  "text": "its statement byte is neither 0 nor 1",
+  "when": "Why, in notAnInvitation: its statement byte is neither 0 nor 1."
+}

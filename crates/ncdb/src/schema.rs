@@ -16,7 +16,7 @@ use crate::texts;
 
 /// Imports the schema module and prints the description of its `model`.
 /// Its arguments: the module's path, then its two messages, from
-/// texts/texts.json, the first with `{error}` where the exception goes.
+/// texts/cli/, the first with `{error}` where the exception goes.
 const SCRIPT: &str = r#"
 const { pathToFileURL } = await import("node:url");
 const [, path, cannotBeRun, exportsNoModel] = process.argv;

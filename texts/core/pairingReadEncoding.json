@@ -1,0 +1,6 @@
+{
+  "id": "core.pairingReadEncoding",
+  "kind": "core",
+  "text": "it is not unpadded base64url",
+  "when": "After error.notAPairingAnswer's colon, from parsing a pairing answer (PairingAnswer::from_str; the bridge's account.completePairing): the text after the prefix is not unpadded base64url. In TypeScript, nc.pairingAnswer refuses such a text first with ts.notAPairingAnswer."
+}

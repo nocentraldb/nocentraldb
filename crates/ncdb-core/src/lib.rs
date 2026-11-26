@@ -69,7 +69,7 @@ pub mod reference;
 pub mod rich_text;
 pub mod seal;
 pub mod set;
-/// Every text the core words itself, generated from texts/texts.json (NOC-329).
+/// Every text the core words itself, generated from texts/ (NOC-329).
 // The gate repo:texts compares it byte for byte, so rustfmt leaves it as written.
 // The browser build and the native one each use only their own texts.
 #[rustfmt::skip]

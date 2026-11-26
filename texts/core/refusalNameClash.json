@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalNameClash",
+  "kind": "core",
+  "text": "{kind} {name}: the name collides with the {other_kind} {other}.\nNames in one scope must differ in more than case: the local view is SQLite, whose column names ignore case.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: two names in one scope are equal, or differ only in case. `kind` and `other_kind` are core.nameKind texts. Opening with such a lock shows it after error.lockInvalid's colon."
+}

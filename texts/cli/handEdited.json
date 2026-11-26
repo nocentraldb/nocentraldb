@@ -1,0 +1,6 @@
+{
+  "id": "cli.handEdited",
+  "kind": "cli",
+  "text": "its model.hash does not match its content, so it was edited by hand. Restore it from version control, and change the schema instead.",
+  "when": "After the lock's name, when the lock's `model.hash` does not match its content."
+}

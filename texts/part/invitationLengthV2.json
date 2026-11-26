@@ -1,0 +1,6 @@
+{
+  "id": "part.invitationLengthV2",
+  "kind": "part",
+  "text": "its length is not that of version 2",
+  "when": "Why, in notAnInvitation: a version 2 invitation is not 66 bytes long."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "part.erasureRequestPrefix",
+  "kind": "part",
+  "text": "it does not start with ncdb-erase-1:",
+  "when": "Why a text is not an erasure request: its prefix."
+}

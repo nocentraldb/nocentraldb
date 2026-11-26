@@ -1,0 +1,7 @@
+{
+  "id": "ts.notATimestamp",
+  "kind": "ts",
+  "code": "invalidValue",
+  "text": "{collection}.{field} takes a valid Date from the year 1 to 9999",
+  "when": "A write of an nc.timestamp() field given anything but such a Date, a string or a number included."
+}

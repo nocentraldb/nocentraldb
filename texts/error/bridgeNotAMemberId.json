@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeNotAMemberId",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "a member id is 64 lowercase hex digits",
+  "when": "The bridge, on a request from the TypeScript SDK: a membership or account call given a member id that is not 64 lowercase hex digits."
+}

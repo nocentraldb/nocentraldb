@@ -1,0 +1,6 @@
+{
+  "id": "part.signOffsPrefix",
+  "kind": "part",
+  "text": "it does not start with ncdb-sign-off-1:",
+  "when": "Why a text is not a set of sign-offs: its prefix."
+}

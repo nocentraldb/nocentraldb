@@ -1,0 +1,7 @@
+{
+  "id": "notice.takenBack",
+  "kind": "notice",
+  "code": "takenBack",
+  "text": "The erasure is taken back in this space, and the person's fields read again; an erasure that another device of the account made final before it saw this take-back still wins, and the person stays erased.",
+  "when": "space.erasures().take_back(shred) returns it once an admin of the performer's account took a provisional erasure back within its 7 days. pm, NOC-326, on the coding agent's proposal (Q7)."
+}

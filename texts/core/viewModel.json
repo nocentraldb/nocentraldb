@@ -1,0 +1,6 @@
+{
+  "id": "core.viewModel",
+  "kind": "core",
+  "text": "the view was folded by another model",
+  "when": "The core's reason when the database's view was folded by another model. Not shown to a developer today: the SDK replaces it with error.foldedByAnotherModel."
+}

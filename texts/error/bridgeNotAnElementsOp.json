@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeNotAnElementsOp",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "a map value is $add or $remove with a list",
+  "when": "The bridge, on a request from the TypeScript SDK: a write of a map value that is not nc.add(...) or nc.remove(...)."
+}

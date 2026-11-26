@@ -1,0 +1,6 @@
+{
+  "id": "part.doingAddMembers",
+  "kind": "part",
+  "text": "adds members",
+  "when": "What the member does, in roleRequired: Members::add."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "cli.usage",
+  "kind": "cli",
+  "text": "usage: ncdb model build [--model <path>] [--lock <path>]\n       ncdb model check [--model <path>] [--lock <path>]\n\nbuild reads the schema module (--model, default ./model.ts, which exports\n`model`) and the previous lock (--lock, default ./model.lock.json), refuses a\nchange that clients on the previous model could not keep, and writes the lock.\ncheck does the same and writes nothing: it fails when the lock is missing or\nout of date, or the change is refused. Both run the schema with Node.js 24 or\nlater, found on PATH.\n",
+  "when": "`ncdb --help`, `ncdb -h` or `ncdb help` prints it; after a usage error, `ncdb` prints it below the error."
+}

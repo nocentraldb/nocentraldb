@@ -1,0 +1,7 @@
+{
+  "id": "error.noIndexedDb",
+  "kind": "error",
+  "code": "keyStoreUnavailable",
+  "text": "this browser context has no IndexedDB, which keeps the member's keys",
+  "when": "nc.open in a browser context without IndexedDB, where the member's keys live."
+}

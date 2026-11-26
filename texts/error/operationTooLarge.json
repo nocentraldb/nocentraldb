@@ -1,0 +1,7 @@
+{
+  "id": "error.operationTooLarge",
+  "kind": "error",
+  "code": "tooLarge",
+  "text": "the field {name} of the object {id} of {collection} takes {size} bytes in its change, more than one change can carry under the relay's limit of {limit} bytes",
+  "when": "Space::write (space.write) when one operation alone does not fit into one change under the relay's change limit."
+}

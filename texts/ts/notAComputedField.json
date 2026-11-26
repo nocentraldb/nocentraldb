@@ -1,0 +1,6 @@
+{
+  "id": "ts.notAComputedField",
+  "kind": "ts",
+  "text": "{collection}.{key}: not a computed field; declare it with nc.reach(...).",
+  "when": "ncdb model build, on a model whose computed field is not declared with nc.reach."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeAfterIsACursor",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "after is a cursor",
+  "when": "The bridge, on a request from the TypeScript SDK: find given an after that is not a cursor."
+}

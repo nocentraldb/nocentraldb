@@ -1,0 +1,6 @@
+{
+  "id": "part.indexedDbUnusable",
+  "kind": "part",
+  "text": "IndexedDB cannot be used",
+  "when": "What failed, in indexedDbRefused: IndexedDB could not be used."
+}

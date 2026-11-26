@@ -1,0 +1,7 @@
+{
+  "id": "notice.accountLinked",
+  "kind": "notice",
+  "code": "accountLinked",
+  "text": "Spaces this database joined before keep its old account. Other members see it as linked to yours.",
+  "when": "Account::complete_pairing (db.account.completePairing) returns it besides devicePaired or agentPaired when the database had joined spaces under an account of its own, now linked into the one it paired with. The owner's text, NOC-273."
+}

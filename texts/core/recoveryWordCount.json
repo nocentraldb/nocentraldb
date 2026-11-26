@@ -1,0 +1,6 @@
+{
+  "id": "core.recoveryWordCount",
+  "kind": "core",
+  "text": "a recovery code has 12 words, not {count}",
+  "when": "After error.recoveryCodeUnreadable's colon, opening with a recovery code (OpenOptions::recover; nc.open with recover), when it has more or fewer than 12 words."
+}

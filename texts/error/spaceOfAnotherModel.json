@@ -1,0 +1,7 @@
+{
+  "id": "error.spaceOfAnotherModel",
+  "kind": "error",
+  "code": "spaceOfAnotherModel",
+  "text": "the space {id} is of the model {space_model}, the lock is of the model {lock_model}",
+  "when": "A write to, or a read of, a space whose model is not the lock's."
+}

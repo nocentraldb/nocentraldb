@@ -1,0 +1,6 @@
+{
+  "id": "core.viewFormat",
+  "kind": "core",
+  "text": "the view has format version {found}, this core writes {writes}",
+  "when": "After error.viewFailed's colon, from opening (Db::open; nc.open), when the database holds a view of another format version."
+}

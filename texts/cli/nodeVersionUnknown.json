@@ -1,0 +1,6 @@
+{
+  "id": "cli.nodeVersionUnknown",
+  "kind": "cli",
+  "text": "of an unknown version",
+  "when": "The `version` of `cli.nodeTooOld` when `node --version` printed nothing."
+}

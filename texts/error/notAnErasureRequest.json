@@ -1,0 +1,7 @@
+{
+  "id": "error.notAnErasureRequest",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the text is not an erasure request: {why}",
+  "when": "Parsing an erasure request from text (ErasureRequest::from_str) when the text is not one; the reason follows (NOC-325)."
+}

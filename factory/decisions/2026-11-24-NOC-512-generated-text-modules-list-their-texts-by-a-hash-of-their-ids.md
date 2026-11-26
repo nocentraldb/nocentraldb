@@ -1,0 +1,6 @@
+# 2026-11-24 · NOC-512 · Generated text modules list their texts by a hash of their ids, not by id
+
+- Decided by: coding agent, NOC-512
+- Why: the generated modules (`crates/nocentraldb/src/texts/`, `crates/ncdb/src/texts.rs`, `packages/sdk/src/texts.ts`, `crates/ncdb-core/src/texts/`) are committed, and in id order two pull requests' new texts of one feature land side by side and conflict there, as `texts/error.rs` did. In the order of a SHA-256 of each id two new texts meet only when they fall into the same gap, about once in as many texts as the module holds; in a measurement over 25 pairs of neighbouring ids per module, 1 or 2 pairs met. Then either side of the generated file is taken and `node scripts/texts.mjs --write` rewrites it. Code names a text by its name, and each text's comment says when it shows, so the order serves nobody who reads the module.
+- Instead of: id order, which conflicts for every pair of neighbouring new texts; generating the modules at build time with a `build.rs`, which needs a JSON build dependency and the texts inside each published crate; or a file per text in the generated modules, whose list of modules would again be one sorted list.
+- Topics: texts, gates

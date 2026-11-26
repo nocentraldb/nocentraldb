@@ -1,0 +1,6 @@
+{
+  "id": "part.kindTimestamp",
+  "kind": "part",
+  "text": "a point in time",
+  "when": "What the read asked for, in fieldDoesNotHold: a point in time (Timestamp)."
+}

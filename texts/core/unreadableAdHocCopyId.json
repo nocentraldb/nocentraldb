@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadableAdHocCopyId",
+  "kind": "core",
+  "text": "ad-hoc copy id",
+  "when": "In core.viewCorrupt, as `what`, when the database holds an ad-hoc copy's id it cannot read."
+}

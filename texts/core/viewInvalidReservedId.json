@@ -1,0 +1,6 @@
+{
+  "id": "core.viewInvalidReservedId",
+  "kind": "core",
+  "text": "model.id is the id of the model the SDK ships; the app's model needs an id of its own.",
+  "when": "The lock has the model.id of the model the SDK ships (its accounts), so a space could not say which of the two it folds by: from opening (Db::open; nc.open), after error.lockInvalid's colon."
+}

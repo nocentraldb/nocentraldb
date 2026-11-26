@@ -1,0 +1,7 @@
+{
+  "id": "error.statementNumberTooHigh",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the statement's number is too high",
+  "when": "Renewing the account key, on removing a lost member, when the account key statement's number cannot grow further."
+}

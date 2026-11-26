@@ -222,7 +222,7 @@ pub enum Invalid {
 
 /// What a developer reads: a lock's refusals print their lines, as
 /// `ncdb model build` does; each finding of [`Model::validate`] its own
-/// text (texts/texts.json, NOC-343).
+/// text (texts/core/, NOC-343).
 impl std::fmt::Display for Invalid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let text = match self {

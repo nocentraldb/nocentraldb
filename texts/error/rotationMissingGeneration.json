@@ -1,0 +1,7 @@
+{
+  "id": "error.rotationMissingGeneration",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the member holds no space key of a generation the rotation must chain; it can rotate once the key envelope for that generation arrives",
+  "when": "A removal, or an add after a rotation, when this member lacks a key generation the rotation must chain; it works once an envelope for it arrives."
+}

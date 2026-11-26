@@ -1,0 +1,6 @@
+{
+  "id": "part.kindReference",
+  "kind": "part",
+  "text": "a reference",
+  "when": "What the read asked for, in fieldDoesNotHold: a reference into a space."
+}

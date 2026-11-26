@@ -1,0 +1,6 @@
+{
+  "id": "part.erasureRequestCertificate",
+  "kind": "part",
+  "text": "its certificate is not one",
+  "when": "Why a text is not an erasure request: the performer's certificate does not decode."
+}

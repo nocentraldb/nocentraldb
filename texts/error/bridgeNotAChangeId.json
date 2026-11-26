@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeNotAChangeId",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "change is not a change id",
+  "when": "The bridge, on a request from the TypeScript SDK: sync.isConfirmed (db.sync.isConfirmed) given a change that is not a change id."
+}

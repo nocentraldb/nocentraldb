@@ -1,0 +1,6 @@
+{
+  "id": "core.openDecryption",
+  "kind": "core",
+  "text": "the payload does not decrypt under the key the header names",
+  "when": "The core's reason when a change does not verify or open (seal::open). Not shown to a developer today: the core turns it into a park or reject reason, and the relay into BadSignature. The payload does not decrypt under the content key the header names."
+}

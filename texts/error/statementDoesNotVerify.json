@@ -1,0 +1,7 @@
+{
+  "id": "error.statementDoesNotVerify",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the account key statement does not verify",
+  "when": "Members::add (members.add) when the account key statement the invitation carries does not verify."
+}

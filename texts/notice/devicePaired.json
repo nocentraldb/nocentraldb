@@ -1,0 +1,7 @@
+{
+  "id": "notice.devicePaired",
+  "kind": "notice",
+  "code": "devicePaired",
+  "text": "This device now holds your account key. Keep your recovery code: it is the way back if you lose every device.",
+  "when": "Account::complete_pairing (db.account.completePairing) returns it on a device once it holds the account key. The owner's text, NOC-273."
+}

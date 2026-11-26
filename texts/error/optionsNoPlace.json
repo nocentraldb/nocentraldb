@@ -1,0 +1,7 @@
+{
+  "id": "error.optionsNoPlace",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the options name no place for the database: call path(dir) or in_memory()",
+  "when": "Opening with options that name no place: neither a path, nor in_memory(), nor a browser name."
+}

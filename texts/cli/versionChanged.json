@@ -1,0 +1,6 @@
+{
+  "id": "cli.versionChanged",
+  "kind": "cli",
+  "text": "model version {from} -> {to}",
+  "when": "`ncdb model build`, after the lock's name, when it wrote a new model version; a line per change follows, then `cli.additive`."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "ts.notADatabaseName",
+  "kind": "ts",
+  "code": "invalidValue",
+  "text": "a database name is 1 to 64 characters of a-z, 0-9, - and _",
+  "when": "nc.open, given a name that breaks RFC 0006's rule for a browser database's name."
+}

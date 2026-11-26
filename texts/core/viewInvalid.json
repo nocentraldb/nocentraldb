@@ -1,0 +1,6 @@
+{
+  "id": "core.viewInvalid",
+  "kind": "core",
+  "text": "the model cannot be folded: {invalid}",
+  "when": "The core's reason when the model cannot be folded into a view; `invalid` is the lock's refusals, one core.refusal* text after another, or a core.viewInvalid* text. Not shown to a developer today: opening replaces it with error.lockInvalid."
+}

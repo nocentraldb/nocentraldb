@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadableLogState",
+  "kind": "core",
+  "text": "log state",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a log entry's state it does not know."
+}

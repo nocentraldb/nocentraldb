@@ -1,0 +1,6 @@
+{
+  "id": "cli.cannotBeRead",
+  "kind": "cli",
+  "text": "cannot be read: {error}",
+  "when": "After the lock's name, when the lock cannot be read from disk, or is no lock JSON; `error` is the system's or the core's reason."
+}

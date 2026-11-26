@@ -1,0 +1,7 @@
+{
+  "id": "notice.erased",
+  "kind": "notice",
+  "code": "erased",
+  "text": "The person's personal fields are erased in these spaces. Devices that never come back online, copies made outside the database and unmarked free text keep them; other devices and agents of this account erase only when they run the erasure too.",
+  "when": "Db::erase returns it with the shreds it wrote, once per call, in every space of the database where a sign-off came for the person's keys. Carsten, 2026-11-15, NOC-326 (Q6)."
+}

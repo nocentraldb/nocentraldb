@@ -1,0 +1,6 @@
+{
+  "id": "part.databaseDirectoryUncreatable",
+  "kind": "part",
+  "text": "the database directory cannot be created",
+  "when": "What failed, in ioFailed: the database's directory could not be created."
+}

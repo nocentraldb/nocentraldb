@@ -1,0 +1,6 @@
+{
+  "id": "core.lockUnknownFormat",
+  "kind": "core",
+  "text": "format {format} is not one this core reads; it reads format {known}. Build the lock with the matching version of ncdb, or upgrade the SDK.",
+  "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: the lock's format is one this version does not read. `known` is the one it reads."
+}

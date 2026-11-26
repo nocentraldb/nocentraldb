@@ -1,0 +1,7 @@
+{
+  "id": "ts.lockHasNoField",
+  "kind": "ts",
+  "code": "lockOutOfDate",
+  "text": "model.lock.json is out of date: it has no field {collection}.{field}. Run ncdb model build.",
+  "when": "nc.open, on a model that names a field the lock does not have, as when the lock was not built again after the field was added."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "part.databaseDirectoryNotFound",
+  "kind": "part",
+  "text": "the database directory cannot be found",
+  "when": "What failed, in ioFailed: the database's directory could not be found."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "ts.notASafeInteger",
+  "kind": "ts",
+  "code": "invalidValue",
+  "text": "{collection}.{field} takes a safe integer, between -(2^53 - 1) and 2^53 - 1",
+  "when": "A write of an nc.int() field given a number that is not a safe integer."
+}

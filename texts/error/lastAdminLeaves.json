@@ -1,0 +1,7 @@
+{
+  "id": "error.lastAdminLeaves",
+  "kind": "error",
+  "code": "lastAdmin",
+  "text": "the space's last admin may not leave it",
+  "when": "Space::leave (space.leave) when this member is the space's last admin."
+}

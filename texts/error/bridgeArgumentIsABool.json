@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeArgumentIsABool",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "{key} is true or false",
+  "when": "The bridge, on a request from the TypeScript SDK: a request whose option, such as personal or local of spaces.createAdHoc, is not a boolean."
+}

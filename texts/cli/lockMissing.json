@@ -1,0 +1,6 @@
+{
+  "id": "cli.lockMissing",
+  "kind": "cli",
+  "text": "{lock}: missing; run ncdb model build.",
+  "when": "`ncdb model check` when there is no lock at `--lock`."
+}

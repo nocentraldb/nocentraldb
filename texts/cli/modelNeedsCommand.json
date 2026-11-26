@@ -1,0 +1,6 @@
+{
+  "id": "cli.modelNeedsCommand",
+  "kind": "cli",
+  "text": "model needs a command: build or check",
+  "when": "`ncdb model` with nothing after it; the usage follows."
+}

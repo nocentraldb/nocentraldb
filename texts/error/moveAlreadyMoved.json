@@ -1,0 +1,7 @@
+{
+  "id": "error.moveAlreadyMoved",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the object {id} has moved to another space already; move it from the space it is in now",
+  "when": "Space::move_objects (space.move) when an object to move reads as moved in this space (RFC 0016, \"The SDK call and its notice\")."
+}

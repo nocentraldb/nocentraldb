@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadableRelayPosition",
+  "kind": "core",
+  "text": "relay position",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a relay position out of range."
+}

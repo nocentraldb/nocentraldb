@@ -1,0 +1,6 @@
+{
+  "id": "part.invitationVersion",
+  "kind": "part",
+  "text": "its version is not one this database knows",
+  "when": "Why, in notAnInvitation: its version byte is one this SDK does not know."
+}

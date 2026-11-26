@@ -1,0 +1,7 @@
+{
+  "id": "ts.lockFieldDiffers",
+  "kind": "ts",
+  "code": "lockOutOfDate",
+  "text": "model.lock.json is out of date: {collection}.{field} differs from the lock in its type or options. Run ncdb model build.",
+  "when": "nc.open, on a model whose field has another type or other options in the lock, as when the lock was not built again after the field changed."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "part.doingLowerOwnRole",
+  "kind": "part",
+  "text": "lowers its role",
+  "when": "What the member does, in roleRequired: Members::set_role on itself."
+}

@@ -85,7 +85,7 @@ pub(crate) fn shred(
 }
 
 /// The notice of a take-back (Carsten, 2026-11-15, on NOC-326, Q7 a; the
-/// text: pm, NOC-326, on the coding agent's proposal, in texts/texts.json).
+/// text: pm, NOC-326, on the coding agent's proposal, in texts/notice/).
 pub(crate) const TAKEN_BACK: crate::members::Notice = crate::members::Notice {
     code: crate::members::NoticeCode::TakenBack,
     text: crate::texts::notice::TAKEN_BACK,

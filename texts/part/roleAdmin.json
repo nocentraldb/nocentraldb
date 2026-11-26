@@ -1,0 +1,6 @@
+{
+  "id": "part.roleAdmin",
+  "kind": "part",
+  "text": "an admin",
+  "when": "The role needed, in roleRequired: an admin."
+}

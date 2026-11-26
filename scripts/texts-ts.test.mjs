@@ -1,4 +1,4 @@
-// The TypeScript SDK's texts in texts/texts.json (NOC-329, T3): entries of
+// The TypeScript SDK's texts in texts/ts/ (NOC-329, T3): entries of
 // kind `ts`, the module scripts/texts.mjs generates from them,
 // packages/sdk/src/texts.ts, and the gate's reading of packages/sdk/src.
 // The bridge's own messages are the Rust SDK's entries since T3, so the
@@ -15,6 +15,7 @@ import {
   PATHS,
   rustFiles,
 } from "./texts.mjs";
+import { readTexts } from "./texts-files.mjs";
 import {
   checkTsCode,
   generateTs,
@@ -144,7 +145,7 @@ test("a ts text no code uses fails, and the generated module does not count", ()
 });
 
 test("the TypeScript SDK's committed module is the one the texts generate", () => {
-  const texts = JSON.parse(read(PATHS.texts)).texts;
+  const texts = readTexts(ROOT).texts;
   assert.equal(read(TS_PATHS.module), generateTs(texts));
 });
 

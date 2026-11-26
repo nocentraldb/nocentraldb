@@ -1,0 +1,7 @@
+{
+  "id": "error.agentHasAccount",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "the invitation's agent already has an account: linking an agent is not built yet",
+  "when": "Account::pair (db.account.pair) with the invitation of an agent that already has an account."
+}

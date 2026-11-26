@@ -1,0 +1,7 @@
+{
+  "id": "ts.lockHasNoCollection",
+  "kind": "ts",
+  "code": "lockOutOfDate",
+  "text": "model.lock.json is out of date: it has no collection {collection}. Run ncdb model build.",
+  "when": "nc.open, on a model that names a collection the lock does not have, as when the lock was not built again after the collection was added."
+}

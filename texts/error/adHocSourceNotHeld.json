@@ -1,0 +1,7 @@
+{
+  "id": "error.adHocSourceNotHeld",
+  "kind": "error",
+  "code": "notFound",
+  "text": "the space {space} holds no object {id} to copy",
+  "when": "Spaces::create_ad_hoc (db.spaces.createAdHoc) when this database holds no such object in that space."
+}

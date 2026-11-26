@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeNotARequest",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "a request is a map of id, call and args",
+  "when": "The bridge, on a request from the TypeScript SDK: a request that is not a map with a positive id, a call and its args."
+}

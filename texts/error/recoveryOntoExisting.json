@@ -1,0 +1,7 @@
+{
+  "id": "error.recoveryOntoExisting",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the database exists: a recovery code recovers the account onto a new one",
+  "when": "Opening with a recovery code when the database exists: a recovery code recovers the account onto a new database only."
+}

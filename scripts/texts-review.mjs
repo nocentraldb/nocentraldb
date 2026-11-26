@@ -3,9 +3,7 @@
 // which re-exports it, to keep that file under 700 lines (T3).
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { PATHS } from "./texts.mjs";
+import { readTexts, readTextsAt } from "./texts-files.mjs";
 
 /** A release tag, `vX.Y.Z` or `vX.Y.Z-beta.N`: never an alpha. */
 const RELEASE_TAG = /^v(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$/;
@@ -60,7 +58,7 @@ export const formatReview = (diff, tag, total) => {
       ? `# Texts new or changed since ${tag}`
       : "# Texts: no beta or stable release yet, so every text is new",
     "",
-    `${added.length} new, ${changed.length} changed, ${removed.length} removed, of ${total} texts in texts/texts.json.`,
+    `${added.length} new, ${changed.length} changed, ${removed.length} removed, of ${total} texts in texts/.`,
   ];
   if (added.length > 0) {
     out.push("", "## New");
@@ -111,19 +109,8 @@ export const review = (cwd, since) => {
   const tag =
     since ??
     lastReleaseTag(git("tag", "--list", "v*").split("\n").filter(Boolean));
-  const now = JSON.parse(readFileSync(join(cwd, PATHS.texts), "utf8")).texts;
-  let before = [];
-  if (tag) {
-    try {
-      before = JSON.parse(
-        execFileSync("git", ["-C", cwd, "show", `${tag}:${PATHS.texts}`], {
-          encoding: "utf8",
-          stdio: ["ignore", "pipe", "ignore"],
-        }),
-      ).texts;
-    } catch {
-      // The tag predates texts.json: every text is new since it.
-    }
-  }
+  const now = readTexts(cwd).texts;
+  // A tag from before the texts has none: every text is new since it.
+  const before = tag ? readTextsAt(cwd, tag) : [];
   return formatReview(diffTexts(before, now), tag, now.length);
 };

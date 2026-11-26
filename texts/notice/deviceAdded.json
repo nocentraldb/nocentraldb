@@ -1,0 +1,7 @@
+{
+  "id": "notice.deviceAdded",
+  "kind": "notice",
+  "code": "deviceAdded",
+  "text": "Your new device was added to this space and reads its whole history.",
+  "when": "Account::pair (db.account.pair) returns it once per space it added the new device to. The owner's text, NOC-273."
+}

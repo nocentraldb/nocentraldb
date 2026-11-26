@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeNoSuchCall",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "no call {call}",
+  "when": "The bridge, on a request from the TypeScript SDK: a request whose call the bridge does not have."
+}

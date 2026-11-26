@@ -1,0 +1,7 @@
+{
+  "id": "error.noAccountSpace",
+  "kind": "error",
+  "code": "notFound",
+  "text": "this database holds no account space",
+  "when": "Renewing the account key, on removing a lost member, on a device that holds no account space."
+}

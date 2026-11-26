@@ -1,0 +1,6 @@
+{
+  "id": "cli.unknownModelCommand",
+  "kind": "cli",
+  "text": "unknown command: model {command}",
+  "when": "`ncdb model` followed by a word other than `build` or `check`; the usage follows."
+}

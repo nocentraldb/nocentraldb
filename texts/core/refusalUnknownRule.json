@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalUnknownRule",
+  "kind": "core",
+  "text": "{collection}.{field}: {type_id} has no rule version {rule}.\nThis version knows rule version {known} of every built-in type.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a built-in field type names a rule version this core does not know. `known` is the one it knows. Opening with such a lock shows it after error.lockInvalid's colon."
+}

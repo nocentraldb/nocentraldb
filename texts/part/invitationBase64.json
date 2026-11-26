@@ -1,0 +1,6 @@
+{
+  "id": "part.invitationBase64",
+  "kind": "part",
+  "text": "it is not unpadded base64url",
+  "when": "Why, in notAnInvitation: what follows the prefix is not unpadded base64url."
+}

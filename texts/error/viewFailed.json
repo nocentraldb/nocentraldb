@@ -1,0 +1,7 @@
+{
+  "id": "error.viewFailed",
+  "kind": "error",
+  "code": "storageFull | storageFailed",
+  "text": "the local view failed: {error}",
+  "when": "Any call, when the local view's SQLite fails: storageFull when the disk or the quota is full, storageFailed otherwise; the core's error follows."
+}

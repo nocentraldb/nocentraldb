@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeRelayAnswerTakesARequest",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "relay.answer takes a request number and a relay URL text or null",
+  "when": "The bridge, on a request from the TypeScript SDK: relay.answer without its request number, or with a relay that is not text or null."
+}

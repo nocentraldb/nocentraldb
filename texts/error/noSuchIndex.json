@@ -1,0 +1,7 @@
+{
+  "id": "error.noSuchIndex",
+  "kind": "error",
+  "code": "notFound",
+  "text": "the model declares no index {name} of {collection}",
+  "when": "Db::index (db.index) when the model declares no index of that name on the collection."
+}

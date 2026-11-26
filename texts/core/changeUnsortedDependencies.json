@@ -1,0 +1,6 @@
+{
+  "id": "core.changeUnsortedDependencies",
+  "kind": "core",
+  "text": "the dependencies are not sorted, or repeat an id",
+  "when": "Inside core.receiveDecode or core.openPayload, which no developer sees today (the SDK and the relay replace a change's decode error with their own): a change's dependencies are not sorted by bytes, or repeat an id."
+}

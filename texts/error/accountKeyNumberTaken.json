@@ -1,0 +1,7 @@
+{
+  "id": "error.accountKeyNumberTaken",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the account space already records an account key with this number",
+  "when": "Renewing the account key, on removing a lost member, when the account space already records an account key with the next number."
+}

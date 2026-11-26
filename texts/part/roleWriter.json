@@ -1,0 +1,6 @@
+{
+  "id": "part.roleWriter",
+  "kind": "part",
+  "text": "a writer or an admin",
+  "when": "The role needed, in roleRequired: a writer or an admin."
+}

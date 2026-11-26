@@ -1,0 +1,6 @@
+{
+  "id": "ts.notACollection",
+  "kind": "ts",
+  "text": "{collection}: not a collection; declare it with nc.collection(...).",
+  "when": "ncdb model build, on a model whose collection is not declared with nc.collection."
+}

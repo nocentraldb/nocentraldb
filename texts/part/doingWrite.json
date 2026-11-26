@@ -1,0 +1,6 @@
+{
+  "id": "part.doingWrite",
+  "kind": "part",
+  "text": "writes content",
+  "when": "What the member does, in roleRequired: a write."
+}

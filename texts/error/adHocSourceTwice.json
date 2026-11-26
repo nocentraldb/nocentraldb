@@ -1,0 +1,7 @@
+{
+  "id": "error.adHocSourceTwice",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the object {id} is named twice, and an ad-hoc space holds one copy of it",
+  "when": "Spaces::create_ad_hoc (db.spaces.createAdHoc) when the objects to copy name the same object twice."
+}

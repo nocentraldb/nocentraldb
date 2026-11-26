@@ -1,0 +1,6 @@
+{
+  "id": "part.erasureTextVersion",
+  "kind": "part",
+  "text": "its version is not one this database knows",
+  "when": "Why a text is not an erasure request or a set of sign-offs: its version byte."
+}

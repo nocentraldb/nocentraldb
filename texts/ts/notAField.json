@@ -1,0 +1,6 @@
+{
+  "id": "ts.notAField",
+  "kind": "ts",
+  "text": "{path}: not a field; declare it with a field function such as nc.string().",
+  "when": "ncdb model build, on a model whose field is not declared with a field function."
+}

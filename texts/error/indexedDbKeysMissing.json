@@ -1,0 +1,7 @@
+{
+  "id": "error.indexedDbKeysMissing",
+  "kind": "error",
+  "code": "storageFailed",
+  "text": "the database exists, but IndexedDB holds no keys for it; new keys would open none of its spaces",
+  "when": "nc.open in a browser when the database exists on OPFS but IndexedDB holds no keys for it."
+}

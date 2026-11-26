@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadableMergeState",
+  "kind": "core",
+  "text": "merge state",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a field's merge state it cannot read."
+}

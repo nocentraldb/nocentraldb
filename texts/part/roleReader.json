@@ -1,0 +1,6 @@
+{
+  "id": "part.roleReader",
+  "kind": "part",
+  "text": "a member",
+  "when": "The role needed, in roleRequired: any member."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadableObjectId",
+  "kind": "core",
+  "text": "object id",
+  "when": "In core.viewCorrupt, as `what`, when the database holds an object id it cannot read."
+}

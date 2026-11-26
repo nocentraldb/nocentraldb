@@ -1,0 +1,7 @@
+{
+  "id": "error.pairNeedsAccountKey",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "this database holds no account key, so it pairs nobody",
+  "when": "Account::pair (db.account.pair) on a database that holds no account key."
+}

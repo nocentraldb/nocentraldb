@@ -1,0 +1,7 @@
+{
+  "id": "error.recoveryCodeOfAnotherAccount",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "the recovery code is not this account's",
+  "when": "Account::remove_member (db.account.removeMember) when the recovery code given is of another account."
+}

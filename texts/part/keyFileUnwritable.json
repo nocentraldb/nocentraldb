@@ -1,0 +1,6 @@
+{
+  "id": "part.keyFileUnwritable",
+  "kind": "part",
+  "text": "the key file cannot be written",
+  "when": "What failed, in ioFailed: the key file could not be written."
+}

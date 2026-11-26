@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeRoleIsText",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "a role is text",
+  "when": "The bridge, on a request from the TypeScript SDK: members.add or members.setRole given a role that is not text."
+}

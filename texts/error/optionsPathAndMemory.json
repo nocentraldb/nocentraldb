@@ -1,0 +1,7 @@
+{
+  "id": "error.optionsPathAndMemory",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the options name both a path and in_memory(); name one",
+  "when": "Opening with options that name both a path and in_memory()."
+}

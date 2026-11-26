@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeKindIsDeviceOrAgent",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "a kind is \"device\" or \"agent\"",
+  "when": "The bridge, on a request from the TypeScript SDK: account.pair (db.account.pair) given a kind that is neither."
+}

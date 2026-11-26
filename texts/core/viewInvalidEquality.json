@@ -1,0 +1,6 @@
+{
+  "id": "core.viewInvalidEquality",
+  "kind": "core",
+  "text": "index {index} fixes more fields with equality than it orders by.",
+  "when": "An index's equal is larger than its number of fields: from opening (Db::open; nc.open), after error.lockInvalid's colon; a lock that `ncdb model build` wrote does not reach it."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "notice.agentPaired",
+  "kind": "notice",
+  "code": "agentPaired",
+  "text": "This agent acts for your account in the spaces an admin adds it to. It holds no account key.",
+  "when": "Account::complete_pairing (db.account.completePairing) returns it on an agent once its account certified it. The owner's text, NOC-273."
+}

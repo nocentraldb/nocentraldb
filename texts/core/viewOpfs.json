@@ -1,0 +1,6 @@
+{
+  "id": "core.viewOpfs",
+  "kind": "core",
+  "text": "OPFS could not be opened: {error}",
+  "when": "After error.databaseHeld's \"or\", nc.open in a browser worker, when OPFS refuses the database; `error` is the browser's reason."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "cli.descriptionUnreadable",
+  "kind": "cli",
+  "text": "the SDK described the model in a form this ncdb cannot read: {error}",
+  "when": "After the schema module's name, when the SDK's description of the model is no JSON this `ncdb` reads, as when the SDK and `ncdb` are of different releases; `error` is the core's reason."
+}

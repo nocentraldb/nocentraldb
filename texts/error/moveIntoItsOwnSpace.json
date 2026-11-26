@@ -1,0 +1,7 @@
+{
+  "id": "error.moveIntoItsOwnSpace",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "a move needs another space than the one its objects are in",
+  "when": "Space::move_objects (space.move) when the destination is the space the call is made on."
+}

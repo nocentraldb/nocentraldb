@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeEqualIsAnArray",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "equal is an array",
+  "when": "The bridge, on a request from the TypeScript SDK: find given equal values that are not an array."
+}

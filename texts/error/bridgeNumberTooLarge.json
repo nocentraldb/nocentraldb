@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeNumberTooLarge",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "too large",
+  "when": "The bridge, on a request from the TypeScript SDK: a write of an integer above the largest a field holds."
+}

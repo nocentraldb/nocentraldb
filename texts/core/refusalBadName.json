@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalBadName",
+  "kind": "core",
+  "text": "{kind} {name}: the name breaks the naming rules.\nA name starts with a lowercase letter and has at most 63 ASCII letters and digits.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a name breaks the naming rules. `kind` is a core.nameKind text; `name` is the name, after its collection's for a name in a collection. Opening with such a lock shows it after error.lockInvalid's colon."
+}

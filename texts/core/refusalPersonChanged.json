@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalPersonChanged",
+  "kind": "core",
+  "text": "{collection}.{field}: its person changes from {from} to {to}.\nOld values stay sealed under the keys of the old person: the field would be half erasable.\nKeep .personal({{ person: \"{from}\" }}), or add a new personal field.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a personal field's person changes."
+}

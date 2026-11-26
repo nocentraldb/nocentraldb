@@ -1,0 +1,7 @@
+{
+  "id": "ts.cursorOfAnotherDatabase",
+  "kind": "ts",
+  "code": "cursorOfAnotherModel",
+  "text": "the cursor is not of this database; start from the first page",
+  "when": "db.find or space.find, given a page's cursor from another database."
+}

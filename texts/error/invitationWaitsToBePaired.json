@@ -1,0 +1,7 @@
+{
+  "id": "error.invitationWaitsToBePaired",
+  "kind": "error",
+  "code": "invalidCertificate",
+  "text": "the invitation's member waits to be paired and has no certificate yet",
+  "when": "Members::add (members.add) with the invitation of a database waiting to be paired, which has no certificate yet."
+}

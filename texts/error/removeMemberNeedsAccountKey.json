@@ -1,0 +1,7 @@
+{
+  "id": "error.removeMemberNeedsAccountKey",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "only a device that holds the account key removes a member of the account",
+  "when": "Account::remove_member (db.account.removeMember) on a database that holds no account key: only a device of the account removes a member of it."
+}

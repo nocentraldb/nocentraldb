@@ -1,0 +1,7 @@
+{
+  "id": "error.optionsSubAgent",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the options name sub_agent() together with agent(), pairing() or recover(); a sub-agent is none of them",
+  "when": "Opening with OpenOptions::sub_agent together with agent(), pairing() or recover()."
+}

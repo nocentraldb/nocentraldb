@@ -1,0 +1,6 @@
+{
+  "id": "cli.noSchemaFile",
+  "kind": "cli",
+  "text": "no such file; the schema module is ./model.ts unless --model names another.",
+  "when": "After the schema module's name, from `ncdb model build` and `ncdb model check`, when there is no file at `--model`."
+}

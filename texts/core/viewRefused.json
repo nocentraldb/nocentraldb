@@ -1,0 +1,6 @@
+{
+  "id": "core.viewRefused",
+  "kind": "core",
+  "text": "the lock is refused against the lock the database was last opened with:",
+  "when": "The whole error of opening (modelRefused) with a lock that is not a successor of the one the database was last opened with; each refusal's lines follow, indented."
+}

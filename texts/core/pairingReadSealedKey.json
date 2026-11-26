@@ -1,0 +1,6 @@
+{
+  "id": "core.pairingReadSealedKey",
+  "kind": "core",
+  "text": "its sealed key does not match its kind",
+  "when": "After error.notAPairingAnswer's colon, from parsing a pairing answer (PairingAnswer::from_str; the bridge's account.completePairing): the sealed key byte does not match the kind: 1 for a device, 0 for an agent."
+}

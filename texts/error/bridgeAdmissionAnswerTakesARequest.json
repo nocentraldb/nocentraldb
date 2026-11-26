@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeAdmissionAnswerTakesARequest",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "admission.answer takes a request number and an admission text or null",
+  "when": "The bridge, on a request from the TypeScript SDK: admission.answer without its request number, or with an admission that is not text or null."
+}

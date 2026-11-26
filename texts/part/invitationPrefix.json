@@ -1,0 +1,6 @@
+{
+  "id": "part.invitationPrefix",
+  "kind": "part",
+  "text": "it does not start with ncdb-invite-1:",
+  "when": "Why, in notAnInvitation: the text does not start with ncdb-invite-1:."
+}

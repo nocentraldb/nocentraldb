@@ -1,0 +1,6 @@
+{
+  "id": "part.erasureTextEntryTwice",
+  "kind": "part",
+  "text": "it names an entry twice",
+  "when": "Why a text is not an erasure request or a set of sign-offs: one space and person key twice."
+}

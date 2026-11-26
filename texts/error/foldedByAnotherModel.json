@@ -1,0 +1,7 @@
+{
+  "id": "error.foldedByAnotherModel",
+  "kind": "error",
+  "code": "modelRefused",
+  "text": "the database was folded by another model than the lock's, and holds no lock to check this one against",
+  "when": "Opening, when the database holds a view of another model and no lock to check the new one against."
+}

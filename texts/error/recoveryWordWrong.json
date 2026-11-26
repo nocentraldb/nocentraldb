@@ -1,0 +1,7 @@
+{
+  "id": "error.recoveryWordWrong",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "word {position} does not match the recovery code, which stays until two of its words match",
+  "when": "RecoveryCode::confirm (code.confirm) when a word typed back is not the code's word at its position; it names the position, never a word."
+}

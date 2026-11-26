@@ -1,0 +1,7 @@
+{
+  "id": "error.notAnInvitation",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "the text is not an invitation: {why}",
+  "when": "Parsing an invitation from text (Invitation::from_str; nc.invitation) when the text is not one; the reason follows."
+}

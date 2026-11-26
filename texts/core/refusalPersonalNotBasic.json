@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalPersonalNotBasic",
+  "kind": "core",
+  "text": "{collection}.{field}: {type_id} cannot be personal.\nOnly basic values can be personal: nc.string, nc.int, nc.float, nc.boolean and nc.oneOf.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a field of a type that cannot be personal is marked personal. Opening with such a lock shows it after error.lockInvalid's colon."
+}

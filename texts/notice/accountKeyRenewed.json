@@ -1,0 +1,7 @@
+{
+  "id": "notice.accountKeyRenewed",
+  "kind": "notice",
+  "code": "accountKeyRenewed",
+  "text": "Your account has a new account key. Members that have not learnt it yet still accept the old one.",
+  "when": "Account::remove_member (db.account.removeMember) returns it once a lost member is removed and the account key renewed. The owner's text, NOC-273."
+}

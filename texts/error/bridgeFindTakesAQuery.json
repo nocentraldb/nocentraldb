@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeFindTakesAQuery",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "find takes a query",
+  "when": "The bridge, on a request from the TypeScript SDK: find (db.find, space.find) without its query."
+}

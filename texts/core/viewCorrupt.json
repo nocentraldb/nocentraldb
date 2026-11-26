@@ -1,0 +1,6 @@
+{
+  "id": "core.viewCorrupt",
+  "kind": "core",
+  "text": "the database holds an unreadable {what}",
+  "when": "After error.viewFailed's colon (storageFailed), from any call that reads the view: the database holds something this core did not write; `what` is a core.unreadable* text."
+}

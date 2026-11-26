@@ -1,0 +1,6 @@
+{
+  "id": "core.viewPlan",
+  "kind": "core",
+  "text": "a query of index {index} does not run through it",
+  "when": "The whole error of opening (modelRefused; Db::open, nc.open) when a declared index's lookup would not run through it, or would sort in a temporary B-tree; `index` is <collection>.<index>."
+}

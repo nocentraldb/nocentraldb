@@ -1,0 +1,7 @@
+{
+  "id": "error.databaseName",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "a database name is 1 to 64 characters of a-z, 0-9, - and _",
+  "when": "nc.open in a browser, when the database name is empty, longer than 64 characters or has another character than a-z, 0-9, - and _."
+}

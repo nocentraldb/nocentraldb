@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeNotAFieldValue",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "not a value a field takes",
+  "when": "The bridge, on a request from the TypeScript SDK: a write of a value no field type takes."
+}

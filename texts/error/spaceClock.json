@@ -1,0 +1,7 @@
+{
+  "id": "error.spaceClock",
+  "kind": "error",
+  "code": "storageFailed",
+  "text": "the space's clock: {error}",
+  "when": "A write (Space::write and its shorthands), when the space's clock has reached its largest value, after it saw a received clock at the maximum; core.clockExhausted follows."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadablePosition",
+  "kind": "core",
+  "text": "position",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a log position out of range."
+}

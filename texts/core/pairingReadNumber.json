@@ -1,0 +1,6 @@
+{
+  "id": "core.pairingReadNumber",
+  "kind": "core",
+  "text": "its account key number is 0",
+  "when": "After error.notAPairingAnswer's colon, from parsing a pairing answer (PairingAnswer::from_str; the bridge's account.completePairing): the answer's account key number is 0."
+}
