@@ -118,6 +118,22 @@ impl Object {
         self.person
     }
 
+    /// Whether the rich-text field `name` of this object holds a document
+    /// someone wrote, in the copy of its space: a field nobody wrote holds
+    /// an empty one. A move and an ad-hoc copy refuse such a field until
+    /// an RFC says how its document travels (NOC-539, NOC-543).
+    #[cfg(ncdb_rich_text)]
+    pub(crate) fn rich_text_written(&self, inner: &Inner, name: &str) -> Result<bool, Error> {
+        let row = inner
+            .view
+            .get(self.space.0, &self.collection, self.id.0)
+            .map_err(storage)?;
+        Ok(matches!(
+            row.and_then(|mut row| row.fields.remove(name)),
+            Some(FieldState::RichText(state)) if !state.document().is_empty()
+        ))
+    }
+
     /// Reads `object` of `collection` in `space` from the view, or `None`
     /// when the copy holds no create of it in that collection.
     pub(crate) fn read(

@@ -108,7 +108,7 @@ impl Spaces<'_> {
         let mut cleared_links = 0;
         let mut plugin_fields_not_copied = 0;
         for source in &sources {
-            let copied = values(&inner, &source.object, &copies);
+            let copied = values(&inner, &source.object, &copies)?;
             cleared_links += copied.cleared_links;
             plugin_fields_not_copied += copied.plugin_fields_not_copied;
             let values = copied
@@ -196,11 +196,12 @@ struct Copied {
 
 /// The values of the copy of `object`: each set field that is neither
 /// personal nor of a plugin; a link to the copy of its target, or none.
+/// A written rich-text field is refused with `NotAllowed` (NOC-539).
 fn values(
     inner: &Inner,
     object: &Object,
     copies: &BTreeMap<(CoreSpaceId, CoreObjectId), CoreObjectId>,
-) -> Copied {
+) -> Result<Copied, Error> {
     let collection = object.collection();
     let fields = &inner.model.collections[collection];
     let space = object.space().0;
@@ -216,6 +217,20 @@ fn values(
         plugin_fields_not_copied: 0,
     };
     for (name, value) in object.fields() {
+        // A plugin field whose type no plugin implements is in no model and
+        // reads unset: nothing to copy.
+        let Some(field) = fields.get(name) else {
+            continue;
+        };
+        // A written rich-text document is refused until an RFC says how it
+        // travels to another space (NOC-539, NOC-543).
+        #[cfg(ncdb_rich_text)]
+        if matches!(field, Field::RichText(_)) && object.rich_text_written(inner, name)? {
+            return Err(Error::new(
+                ErrorCode::NotAllowed,
+                crate::texts::error::copy_rich_text_later(object.id(), name),
+            ));
+        }
         let Some(value) = value else { continue };
         if inner.model.person(collection, name).is_some() {
             continue;
@@ -224,36 +239,41 @@ fn values(
             Repr::List(elements) => elements.as_slice(),
             _ => &[],
         };
-        let written = match fields.get(name) {
-            Some(Field::Basic(_)) => Some(value.clone()),
-            Some(Field::Set(_)) if !elements.is_empty() => Some(Value::add(elements.to_vec())),
-            Some(Field::Link(_)) => {
+        let written = match field {
+            Field::Basic(_) => Some(value.clone()),
+            Field::Set(_) => (!elements.is_empty()).then(|| Value::add(elements.to_vec())),
+            Field::Link(_) => {
                 let target = copy_of(value);
                 copied.cleared_links += usize::from(target.is_none());
                 target
             }
-            Some(Field::Links(_)) => {
+            Field::Links(_) => {
                 let targets: Vec<Value> = elements.iter().filter_map(copy_of).collect();
                 copied.cleared_links += elements.len() - targets.len();
                 (!targets.is_empty()).then(|| Value::add(targets))
             }
             // A reference names an object of any space by its id, so it
             // is never copied.
-            Some(Field::Ref(_)) => {
+            Field::Ref(_) => {
                 copied.cleared_links += 1;
                 None
             }
-            Some(Field::Plugin(_)) => {
+            Field::Plugin(_) => {
                 copied.plugin_fields_not_copied += 1;
                 None
             }
-            _ => None,
+            // `$person` is no field an object reads.
+            Field::Person(_) => None,
+            // A rich-text field reads no value; a written one is refused
+            // above.
+            #[cfg(ncdb_rich_text)]
+            Field::RichText(_) => None,
         };
         if let Some(written) = written {
             copied.values.push((name.clone(), written));
         }
     }
-    copied
+    Ok(copied)
 }
 
 impl Space {

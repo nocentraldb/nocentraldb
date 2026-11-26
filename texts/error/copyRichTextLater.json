@@ -1,0 +1,7 @@
+{
+  "id": "error.copyRichTextLater",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "the object {id} has a written rich-text field {name}, and a rich-text document cannot be copied into an ad-hoc space yet",
+  "when": "Spaces::create_ad_hoc (db.spaces.createAdHoc) when an object to copy has a rich-text field that was written: no decided RFC says yet how a rich-text document travels to another space, so the call creates nothing (NOC-539; owner question NOC-543)."
+}
