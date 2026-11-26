@@ -19,7 +19,7 @@ use ncdb_core::field_op::{Encoding, Origin};
 use ncdb_core::ids::{ChangeId, MemberId, ObjectId, OperationId};
 use ncdb_core::rich_text::{Edit, Fit, RichText, State, client_id};
 
-use rich_text_support::{add_block, apply, delete_text, doc, plain_text, type_text};
+use rich_text_support::{add_block, apply, delete_text, doc, plain_text, set_attribute, type_text};
 
 const NONCE: [u8; 8] = [5; 8];
 
@@ -242,4 +242,31 @@ fn a_state_with_placeholders_reads_back_from_its_bytes() {
     let state = fold(&[&e.base, &e.bob], &[&e.carol]);
     assert_eq!(State::from_bytes(&state.bytes()), Ok(state.clone()));
     assert_ne!(state.bytes(), fold(&[&e.base, &e.bob], &[]).bytes());
+}
+
+#[test]
+fn an_attribute_the_rejected_change_set_ends_unset_and_the_value_it_overwrote_is_lost() {
+    let alice = doc(client(1));
+    let block = add_block(&alice, "heading", "Title");
+    let level = set_attribute(&alice, 0, "level", "1");
+    let carol_doc = doc(client(3));
+    apply(&carol_doc, &block);
+    apply(&carol_doc, &level);
+    let raised = set_attribute(&carol_doc, 0, "level", "2");
+    let (block, level, raised) = (edit(1, 1, &block), edit(2, 1, &level), edit(3, 3, &raised));
+    let state = fold(&[&block, &level], &[&raised]);
+    let xml = plain_xml(&state);
+    assert!(!xml.contains("level"), "{xml}");
+    assert_eq!(text(&state), "Title");
+    assert_eq!(RichText.outcome(&state, level.id), Some(Outcome::Lost));
+    assert_eq!(RichText.outcome(&state, block.id), Some(Outcome::Visible));
+}
+
+/// A state's document as Yrs writes it as XML.
+fn plain_xml(state: &State) -> String {
+    use yrs::{GetString, Transact};
+    let doc = doc(0);
+    apply(&doc, state.document());
+    doc.get_or_insert_xml_fragment(rich_text_support::ROOT)
+        .get_string(&doc.transact())
 }
