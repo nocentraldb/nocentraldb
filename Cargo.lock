@@ -2331,6 +2331,7 @@ dependencies = [
  "wasm-bindgen-test",
  "web-sys",
  "windows-native-keyring-store",
+ "yrs",
  "zbus-secret-service-keyring-store",
  "zeroize",
 ]

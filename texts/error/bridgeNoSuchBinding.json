@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeNoSuchBinding",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "no rich-text binding {lease} is open",
+  "when": "The bridge, on a request from the TypeScript SDK: a richText.write, richText.pull or richText.close of a binding that was closed or never opened."
+}

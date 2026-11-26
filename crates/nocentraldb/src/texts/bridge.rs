@@ -47,6 +47,13 @@ pub(crate) const OPEN_TAKES_IN_MEMORY_OR_NAME: &str =
 pub(crate) const NOT_AFIELD_VALUE: &str =
     "not a value a field takes";
 
+/// `bridgeNoSuchBinding` (invalidValue): The bridge, on a request from the
+/// TypeScript SDK: a richText.write, richText.pull or richText.close of a
+/// binding that was closed or never opened.
+pub(crate) fn no_such_binding(lease: impl std::fmt::Display) -> String {
+    format!("no rich-text binding {lease} is open")
+}
+
 /// `bridgeNoSuchCall` (invalidValue): The bridge, on a request from the
 /// TypeScript SDK: a request whose call the bridge does not have.
 pub(crate) fn no_such_call(call: impl std::fmt::Display) -> String {
@@ -69,6 +76,11 @@ pub(crate) const COPY_IS_ALIST: &str =
 pub(crate) const EQUAL_IS_AN_ARRAY: &str =
     "equal is an array";
 
+/// `bridgeNotAStateVector` (invalidValue): The bridge, on a request from the
+/// TypeScript SDK: a richText.pull whose stateVector Yjs cannot read.
+pub(crate) const NOT_ASTATE_VECTOR: &str =
+    "a state vector is a Yjs state vector in encoding v1";
+
 /// `bridgeTakeIsANumber` (invalidValue): The bridge, on a request from the
 /// TypeScript SDK: find given a take that is not a number.
 pub(crate) const TAKE_IS_ANUMBER: &str =
@@ -90,6 +102,20 @@ pub(crate) const RELAY_ANSWER_TAKES_AREQUEST: &str =
 /// or not text.
 pub(crate) fn argument_is_text(key: impl std::fmt::Display) -> String {
     format!("{key} is text")
+}
+
+/// `bridgeArgumentIsANumber` (invalidValue): The bridge, on a request from the
+/// TypeScript SDK: a request whose argument, such as the lease of a rich-text
+/// binding, is missing or not a whole number.
+pub(crate) fn argument_is_anumber(key: impl std::fmt::Display) -> String {
+    format!("{key} is a number")
+}
+
+/// `bridgeArgumentIsBytes` (invalidValue): The bridge, on a request from the
+/// TypeScript SDK: a request whose argument, such as update or stateVector of a
+/// rich-text binding, is missing or not bytes.
+pub(crate) fn argument_is_bytes(key: impl std::fmt::Display) -> String {
+    format!("{key} is bytes")
 }
 
 /// `bridgeNotARole` (invalidValue): The bridge, on a request from the

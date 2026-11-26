@@ -162,7 +162,8 @@ pub(crate) const NOT_ARECOVERY_CODE: &str =
     "the words are not a recovery code";
 
 /// `fieldDoesNotHold` (invalidValue): Object::get::<T> when the field holds
-/// another kind of value than T.
+/// another kind of value than T; the bridge's rich-text editor binding
+/// (richText.open) on a field that is not rich text.
 pub(crate) fn field_does_not_hold(asked: impl std::fmt::Display) -> String {
     format!("the field does not hold {asked}")
 }
