@@ -35,10 +35,12 @@ fn a_written_change_names_the_lock_that_wrote_it() {
 
     let inner = db.lock();
     let log = inner.view.log(space.id().0).unwrap();
-    let change = log.get(log.position_of(written.change.0).unwrap()).unwrap();
+    let change = log
+        .change(written.change.0, &mut inner.view.stored_frames())
+        .unwrap();
     let payload = inner.spaces[&space.id().0]
         .checks
-        .open(change)
+        .open(&change)
         .expect("the member opens its own change");
 
     let lock = ModelLock::from_json(LOCK).unwrap();

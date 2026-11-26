@@ -168,7 +168,9 @@ impl Moves<'_> {
         let Some(log) = inner.view.log(space.0) else {
             return Ok(Vec::new());
         };
-        let objects = ncdb_core::moves::moved_objects(log, &state.checks);
+        let mut frames = inner.view.stored_frames();
+        let objects = ncdb_core::moves::moved_objects(log, &state.checks, &mut frames);
+        frames.finish().map_err(crate::error::storage)?;
         Ok(objects
             .into_iter()
             .filter_map(|(id, object)| {
@@ -201,7 +203,9 @@ fn later_edits(inner: &Inner, space: SpaceId) -> Result<Vec<LaterEdits>, Error> 
     let Some(log) = inner.view.log(space.0) else {
         return Ok(Vec::new());
     };
-    let later = ncdb_core::moves::later_edits(log, &state.checks);
+    let mut frames = inner.view.stored_frames();
+    let later = ncdb_core::moves::later_edits(log, &state.checks, &mut frames);
+    frames.finish().map_err(crate::error::storage)?;
     let mut all = Vec::new();
     for (object, edits) in later {
         let Some(first) = edits.first() else { continue };

@@ -18,7 +18,7 @@ use crate::change::Operation;
 use crate::clock::Hlc;
 use crate::field_op::{self, MOVE};
 use crate::ids::{ChangeId, MemberId, ObjectId, OperationId};
-use crate::log::Log;
+use crate::log::{Frames, Log};
 use crate::object::{MOVED_FROM, Object};
 use crate::receive::Checks;
 
@@ -47,13 +47,21 @@ impl LaterEdit {
 }
 
 /// The later edits of each moved object of `log`'s space, in clock order
-/// (stamp, then author, then id). `checks` opens the folded changes; a
-/// change that no longer opens counts for nothing. An object that is not
-/// moved, or whose move was taken back, has none.
-pub fn later_edits(log: &Log, checks: &impl Checks) -> BTreeMap<ObjectId, Vec<LaterEdit>> {
+/// (stamp, then author, then id). `checks` opens the folded changes,
+/// which `frames` gives when the log released them; a change that no
+/// longer opens counts for nothing. An object that is not moved, or whose
+/// move was taken back, has none.
+pub fn later_edits(
+    log: &Log,
+    checks: &impl Checks,
+    frames: &mut impl Frames,
+) -> BTreeMap<ObjectId, Vec<LaterEdit>> {
     let mut dependencies: BTreeMap<ChangeId, BTreeSet<ChangeId>> = BTreeMap::new();
     let mut folded = Vec::new();
-    for (change, parked) in log.folded_sealed() {
+    for (id, parked) in log.folded_sealed() {
+        let Some(change) = log.change(id, frames) else {
+            continue;
+        };
         let Ok(payload) = checks.open_folded(&change) else {
             continue;
         };
@@ -96,9 +104,17 @@ pub fn later_edits(log: &Log, checks: &impl Checks) -> BTreeMap<ObjectId, Vec<La
 /// copy holds of it: its creates, its deletion and its move, whose
 /// conflicts are the moves that lost (RFC 0016, "Two moves at once"). An
 /// object whose move was taken back is among them, and reads as not moved.
-pub fn moved_objects(log: &Log, checks: &impl Checks) -> BTreeMap<ObjectId, Object> {
+/// `frames` gives the folded changes the log released.
+pub fn moved_objects(
+    log: &Log,
+    checks: &impl Checks,
+    frames: &mut impl Frames,
+) -> BTreeMap<ObjectId, Object> {
     let mut folded = Vec::new();
-    for (change, parked) in log.folded_sealed() {
+    for (id, parked) in log.folded_sealed() {
+        let Some(change) = log.change(id, frames) else {
+            continue;
+        };
         let Ok(payload) = checks.open_folded(&change) else {
             continue;
         };

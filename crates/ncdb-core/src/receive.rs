@@ -13,13 +13,14 @@
 //! says where the change stops, as a [`Stop`]. [`crate::checks`] implements
 //! [`Checks`] with the signature and decryption of RFC 0003.
 
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 
 use std::fmt;
 
 use crate::change::{Change, ChangeError, Header, Kind, Operation, Payload};
 use crate::field_op::{self, Origin};
-use crate::ids::ObjectId;
+use crate::ids::{ChangeId, ObjectId, SpaceId};
 use crate::log::{
     AppendError, Appended, Log, OperationParkReason, ParkReason, ParkedOperation, RejectReason,
     State,
@@ -103,6 +104,14 @@ pub trait Checks {
     fn open_folded(&self, change: &Change) -> Result<Payload, Stop> {
         self.open(change)
     }
+    /// Whether a folded sealed change with this header, which holds no
+    /// payload, may fail [`Checks::is_member`] or [`Checks::still_opens`]
+    /// now. Un-folding reads only the changes this names from the store
+    /// that keeps their frames (NOC-452), so it may name more than fail,
+    /// never fewer. The default names every change.
+    fn may_unfold(&self, _header: &Header) -> bool {
+        true
+    }
     /// The `model.id` the space's genesis names, once the checks can read
     /// it (RFC 0008, "What it names"). A sealed change of a space whose
     /// genesis names another model than [`Fold::model_id`] is parked whole
@@ -147,6 +156,9 @@ impl<C: Checks + ?Sized> Checks for Box<C> {
     }
     fn open_folded(&self, change: &Change) -> Result<Payload, Stop> {
         (**self).open_folded(change)
+    }
+    fn may_unfold(&self, header: &Header) -> bool {
+        (**self).may_unfold(header)
     }
     fn space_model_id(&self) -> Option<[u8; 16]> {
         (**self).space_model_id()
@@ -220,6 +232,13 @@ pub trait Fold {
     /// operations parks as on the live object, and forgets it after
     /// (RFC 0016; RFC 0013, "The same id twice").
     fn refolding(&mut self, _field: Option<(ObjectId, &str, &str)>) {}
+    /// The change `id` of `space` as the store this fold folds into keeps
+    /// its frame, for a log that released the change's bytes (NOC-452).
+    /// A fold without such a store keeps the default, `None`: its log
+    /// holds every change in memory.
+    fn stored(&mut self, _space: SpaceId, _id: ChangeId) -> Option<Change> {
+        None
+    }
 }
 
 /// Why a received frame was not appended.
@@ -310,7 +329,10 @@ impl Log {
     fn check_rejected_again(&mut self, checks: &mut impl Checks, fold: &mut impl Fold) {
         loop {
             let mut control_passed = false;
-            for change in self.rejected() {
+            for id in self.rejected() {
+                let Some(change) = self.change(id, fold).map(Cow::into_owned) else {
+                    continue;
+                };
                 let (state, opened) = check(&change, checks, fold);
                 control_passed |= is_folded_control(&change, &state);
                 self.set_state_opened(change.id(), state, opened);

@@ -91,7 +91,7 @@ fn recount(view: &View, space: SpaceId, checks: &SealChecks, me: MemberId) -> Ex
     let log = view.log(space).expect("the space's log");
     let mut covered = BTreeSet::new();
     let mut controls_covered = BTreeSet::new();
-    for (_, change) in log.after(Position::START) {
+    for (_, change) in log.after(Position::START, &mut view.stored_frames()) {
         let header = change.header();
         if header.author == me {
             expected.sequence = expected.sequence.max(header.sequence + 1);
@@ -108,7 +108,7 @@ fn recount(view: &View, space: SpaceId, checks: &SealChecks, me: MemberId) -> Ex
                 expected.control_heads.insert(change.id());
                 dependencies
             }
-            _ => match checks.open(change) {
+            _ => match checks.open(&change) {
                 Ok(payload) => {
                     expected.seen = expected.seen.max(payload.clock);
                     payload.dependencies
@@ -163,9 +163,10 @@ fn write(space: &Space, n: usize) {
 fn un_folded(db: &Db, space: &Space) -> bool {
     let inner = db.lock();
     let log = inner.view.log(space.id().0).expect("the space's log");
-    log.after(Position::START).any(|(_, change)| {
-        log.state(change.id()) == Some(&State::Rejected(RejectReason::NotMember))
-    })
+    log.after(Position::START, &mut inner.view.stored_frames())
+        .any(|(_, change)| {
+            log.state(change.id()) == Some(&State::Rejected(RejectReason::NotMember))
+        })
 }
 
 #[test]

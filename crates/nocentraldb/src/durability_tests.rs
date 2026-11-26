@@ -28,10 +28,13 @@ fn own_changes(db: &Db, space: &Space) -> Vec<ncdb_core::ids::ChangeId> {
     let inner = db.lock();
     let me = inner.member.key().id();
     let log = inner.view.log(space.id().0).expect("the space's log");
-    log.after(ncdb_core::log::Position::START)
-        .filter(|(_, change)| change.header().author == me)
-        .map(|(_, change)| change.id())
-        .collect()
+    log.after(
+        ncdb_core::log::Position::START,
+        &mut inner.view.stored_frames(),
+    )
+    .filter(|(_, change)| change.header().author == me)
+    .map(|(_, change)| change.id())
+    .collect()
 }
 
 /// `db` writes one task into `space`.
@@ -144,7 +147,10 @@ fn confirm_account(db: &Db) {
         .view
         .log(account)
         .expect("the account space's log")
-        .after(ncdb_core::log::Position::START)
+        .after(
+            ncdb_core::log::Position::START,
+            &mut inner.view.stored_frames(),
+        )
         .filter(|(_, change)| change.header().author == me)
         .map(|(_, change)| change.id())
         .collect();

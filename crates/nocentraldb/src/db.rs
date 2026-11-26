@@ -17,12 +17,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use ncdb_core::change::Kind;
 use ncdb_core::checks::SealChecks;
 use ncdb_core::clock::Clock;
 use ncdb_core::ids::SpaceId as CoreSpaceId;
 use ncdb_core::keys::{MemberKey, PersonKey};
-use ncdb_core::log::{Position, State};
+use ncdb_core::log::State;
 use ncdb_core::membership::MemberKind;
 use ncdb_core::model_lock::ModelLock;
 use ncdb_core::plugins::Registry;
@@ -141,13 +140,11 @@ impl SpaceState {
     pub(crate) fn from_log(view: &View, space: CoreSpaceId, member: MemberKey) -> SpaceState {
         let mut state = SpaceState::new(space, member);
         if let Some(log) = view.log(space) {
-            let controls = log.after(Position::START).filter(|(_, change)| {
-                change.header().kind == Kind::CONTROL
-                    && matches!(log.state(change.id()), Some(State::Folded { .. }))
-            });
-            state
-                .checks
-                .add_controls(controls.map(|(_, change)| change));
+            let controls = log
+                .controls()
+                .filter(|(_, state)| matches!(state, Some(State::Folded { .. })))
+                .map(|(change, _)| change);
+            state.checks.add_controls(controls);
         }
         state
     }

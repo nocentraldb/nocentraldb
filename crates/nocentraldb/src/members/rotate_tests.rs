@@ -56,7 +56,11 @@ fn person_key(admin: &Db, space: &Space) {
 fn changes(admin: &Db, space: &Space) -> usize {
     let inner = admin.lock();
     let log = inner.view.log(space.id().0).expect("the space's log");
-    log.after(ncdb_core::log::Position::START).count()
+    log.after(
+        ncdb_core::log::Position::START,
+        &mut inner.view.stored_frames(),
+    )
+    .count()
 }
 
 /// The admin creates the person key `PERSON` in `space`: its person-key
@@ -277,12 +281,15 @@ fn copy_some(from: &Db, to: &Db, space: &Space, keep: impl Fn(&Entry) -> bool) {
     let changes: Vec<Vec<u8>> = {
         let inner = from.lock();
         let log = inner.view.log(space.id().0).expect("the space's log");
-        log.after(ncdb_core::log::Position::START)
-            .filter(|(_, change)| {
-                ControlBody::decode(&change.header().payload).is_ok_and(|body| keep(&body.entry))
-            })
-            .map(|(_, change)| change.bytes().to_vec())
-            .collect()
+        log.after(
+            ncdb_core::log::Position::START,
+            &mut inner.view.stored_frames(),
+        )
+        .filter(|(_, change)| {
+            ControlBody::decode(&change.header().payload).is_ok_and(|body| keep(&body.entry))
+        })
+        .map(|(_, change)| change.bytes().to_vec())
+        .collect()
     };
     let mut inner = to.lock();
     let crate::db::Inner { view, spaces, .. } = &mut *inner;

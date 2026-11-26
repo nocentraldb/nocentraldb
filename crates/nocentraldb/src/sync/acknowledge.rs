@@ -18,10 +18,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use ncdb_core::cbor::Value;
-use ncdb_core::change::Kind;
 use ncdb_core::ids::{ChangeId, SpaceId};
 use ncdb_core::keys::MemberKey;
-use ncdb_core::log::Position;
 use ncdb_core::membership::{ACKNOWLEDGEMENT, ControlBody, Entry};
 use ncdb_core::view::View;
 
@@ -129,9 +127,9 @@ fn acknowledged(
         return (seen, deleted);
     };
     let own = log
-        .after(Position::START)
-        .map(|(_, change)| change)
-        .filter(|change| change.header().author == member && change.header().kind == Kind::CONTROL);
+        .controls()
+        .map(|(change, _)| change)
+        .filter(|change| change.header().author == member);
     for change in own {
         let Ok(body) = ControlBody::decode(&change.header().payload) else {
             continue;

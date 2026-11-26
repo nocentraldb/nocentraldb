@@ -17,7 +17,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use crate::change::{Change, Kind, Payload};
+use crate::change::{Change, Header, Kind, Payload};
 use crate::envelope;
 use crate::ids::{ChangeId, MemberId, SpaceId};
 use crate::keys::{MemberKey, MemberPublicKey, SpaceKey};
@@ -358,6 +358,18 @@ impl Checks for SealChecks {
             return Ok(());
         }
         self.open(change).map(drop)
+    }
+
+    /// Exactly the changes [`Checks::is_member`] does not admit, or whose
+    /// generation [`Checks::still_opens`] cannot pass without opening the
+    /// change: its key was replaced, or is not held.
+    fn may_unfold(&self, header: &Header) -> bool {
+        let generation = header.key_generation;
+        let replaced = self
+            .held
+            .get(&generation)
+            .is_some_and(|keys| keys.len() > 1);
+        !self.resolved.admits(header) || replaced || self.space_key(generation).is_none()
     }
 
     /// With the key held now, else with each key held for the generation

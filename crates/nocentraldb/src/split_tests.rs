@@ -43,10 +43,13 @@ const TASKS: usize = 72;
 fn sealed(db: &Db, space: &Space) -> Vec<Change> {
     let inner = db.lock();
     let log = inner.view.log(space.id().0).unwrap();
-    log.after(ncdb_core::log::Position::default())
-        .map(|(_, change)| change.clone())
-        .filter(|change| change.header().kind == Kind::SEALED)
-        .collect()
+    log.after(
+        ncdb_core::log::Position::default(),
+        &mut inner.view.stored_frames(),
+    )
+    .map(|(_, change)| change.into_owned())
+    .filter(|change| change.header().kind == Kind::SEALED)
+    .collect()
 }
 
 #[test]

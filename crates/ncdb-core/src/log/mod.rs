@@ -1,24 +1,48 @@
-//! An append-only log of one space, in memory (RFC 0002, "The log on
-//! disk").
+//! An append-only log of one space (RFC 0002, "The log on disk").
 //!
 //! Entries get dense positions 1, 2, 3, ... in the order they are appended,
 //! and keep them. The log never changes or removes an entry, and holds each
 //! change id once. A cursor is a position: the entries after it are handed
-//! out in order. Persistence to SQLite is a later ticket.
+//! out in order.
 //!
 //! On a member, each entry also carries its [`State`]: folded, parked or
 //! rejected (RFC 0002, "Rejected changes"), and the relay's refusal when there is
-//! one, beside the frame bytes. [`Log::receive`](crate::receive) sets both.
+//! one. [`Log::receive`](crate::receive) sets both.
 //! The relay's log holds no states: an entry appended with [`Log::append`]
 //! has none.
 //!
 //! The log also keeps its [`Tips`] as it appends changes and sets their
 //! states: what the member's next change takes from it (NOC-138).
+//!
+//! What the log holds in memory (NOC-452): for every change its id, its
+//! header without the payload, its state, the relay's answer and when the
+//! member wrote it, and beside them the positions, the tips, the counts
+//! and the reports a space's status reads. Every control change stays in
+//! memory whole: the membership checks fold all of them, and a control
+//! change is small. A sealed change stays in memory only until the store
+//! that keeps the log's frames, such as the view's `log` table, has it;
+//! [`Log::release`] then drops its bytes, and a pass that needs them reads
+//! the change back through [`Frames`]. Such passes are rare: checking a
+//! rejected change again, un-folding, folding a field again, reading a
+//! move's later edits, and the tips once after a reopen. The memory of a
+//! log so grows with its number of changes, a few hundred bytes each, not
+//! with their bytes.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use crate::change::{Change, Kind};
+mod frames;
+mod state;
+
+pub use frames::{Frames, Held, NoFrames};
+
+pub use state::{
+    OperationParkReason, ParkReason, ParkedOperation, RejectReason, RelayCounts, RelayRefusal,
+    State, StateCounts,
+};
+
+use crate::change::{Change, Header, Kind};
 use crate::ids::{ChangeId, MemberId, SpaceId};
 use crate::receive::Checks;
 use crate::texts;
@@ -60,174 +84,43 @@ impl fmt::Display for AppendError {
 
 impl std::error::Error for AppendError {}
 
-/// Where a member's check of a change stopped (RFC 0002, "What
-/// a member does with a change it receives"). New states and reasons may
-/// follow, so the enums are open to extension.
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum State {
-    /// Passed every check and folded. Operations the member's model does
-    /// not know yet are parked on their own (RFC 0002, "The atomic unit"),
-    /// listed here in order. A
-    /// sealed change moves on to rejected, and is un-folded, when a later
-    /// control change makes its membership check fail (RFC 0006,
-    /// "Un-folding").
-    Folded {
-        /// The operations of the change that were not folded.
-        parked: Vec<ParkedOperation>,
-    },
-    /// Kept and not folded, because this client does not understand it
-    /// yet; folded after an upgrade.
-    Parked(ParkReason),
-    /// Kept and not folded, because it failed a check, or un-folded,
-    /// because a later control change made it fail; checked again when a
-    /// control change of the space passes (RFC 0002, "Rejected changes").
-    Rejected(RejectReason),
-}
-
-/// Why a change is parked: steps 2 and 6.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[non_exhaustive]
-pub enum ParkReason {
-    /// The suite id is unknown.
-    UnknownSuite,
-    /// The kind is unknown.
-    UnknownKind,
-    /// The header format is unknown.
-    UnknownHeaderFormat,
-    /// The header carries an unknown "must understand" key.
-    UnknownHeaderKey,
-    /// The payload format is unknown, or the payload is not a map this
-    /// core can read, as a newer format may not be.
-    UnknownPayloadFormat,
-    /// The payload carries an unknown "must understand" key.
-    UnknownPayloadKey,
-    /// Payload key 64 names another model than the member's lock, or has
-    /// the wrong shape: the change is parked whole (RFC 0002, "The
-    /// writer's model").
-    AnotherModel,
-}
-
-/// An operation of a folded change that was parked on its own (RFC 0002,
-/// "The atomic unit").
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ParkedOperation {
-    /// The operation's position in the change's operation array.
-    pub position: u64,
-    /// Why it was parked.
-    pub reason: OperationParkReason,
-}
-
-/// Why an operation is parked on its own: step 7.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[non_exhaustive]
-pub enum OperationParkReason {
-    /// The member's model does not know the collection.
-    UnknownCollection,
-    /// The member's model does not know the field.
-    UnknownField,
-    /// The member's model names the field, and no code implements its
-    /// plugin type and rule (RFC 0011, "A type that is not registered").
-    UnknownType,
-    /// The operation carries an unknown "must understand" key.
-    UnknownKey,
-    /// The field's type does not define the operation's number (RFC 0004,
-    /// "Operations a member does not understand").
-    UnknownOperation,
-    /// The operation's arguments carry a "must understand" key, 4 to 63,
-    /// that the operation does not define (RFC 0004, "Operations a member
-    /// does not understand").
-    UnknownArgument,
-    /// The operation's arguments are malformed (RFC 0004, "Operations a
-    /// member does not understand").
-    MalformedArguments,
-}
-
-/// Why a change is rejected: steps 3 to 5.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[non_exhaustive]
-pub enum RejectReason {
-    /// Step 3: no membership entry the member holds names the author.
-    UnknownAuthor,
-    /// Step 3: the signature does not verify.
-    BadSignature,
-    /// Step 4: the author is not a member at the change's key generation.
-    NotMember,
-    /// Step 5: the member holds no key envelope for the key generation.
-    NoKey,
-    /// Step 5: the AEAD fails.
-    Undecryptable,
-}
-
-/// The relay's refusal of a change the member holds: the relay's error
-/// code (RFC 0007), such as `author_not_member`. It is recorded beside the
-/// change and never changes its [`State`] (RFC 0002, "A change the relay
-/// refuses after the member folded it"): no other member sees the
-/// relay's answer, so a state that followed it could differ between
-/// members that hold the same changes.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RelayRefusal(pub String);
-
-/// How many of one author's changes in a log the relay has neither
-/// confirmed nor refused, and how many it refused (NOC-147). A refused
-/// change counts as refused alone, even when the relay also confirmed it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct RelayCounts {
-    /// The changes with neither a relay position nor a refusal.
-    pub unconfirmed: u64,
-    /// The changes the relay refused.
-    pub refused: u64,
-}
-
-/// How many changes of a log are parked and rejected, per reason, and how
-/// many operations of its folded changes are parked, per reason: what a
-/// member reports per space (RFC 0009, "Sync and status"). The log keeps
-/// them as states are set, so reading them costs no pass over the log.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct StateCounts {
-    /// The parked changes, per reason.
-    pub parked: BTreeMap<ParkReason, u64>,
-    /// The parked operations of folded changes, per reason.
-    pub parked_operations: BTreeMap<OperationParkReason, u64>,
-    /// The rejected changes, per reason.
-    pub rejected: BTreeMap<RejectReason, u64>,
-}
-
-impl StateCounts {
-    /// Adds `state` to the counts, or takes it away.
-    fn count(&mut self, state: &State, add: bool) {
-        fn step<K: Ord>(map: &mut BTreeMap<K, u64>, key: K, add: bool) {
-            if add {
-                *map.entry(key).or_default() += 1;
-            } else if let Some(count) = map.get_mut(&key) {
-                *count -= 1;
-                if *count == 0 {
-                    map.remove(&key);
-                }
-            }
-        }
-        match state {
-            State::Folded { parked } => {
-                for operation in parked {
-                    step(&mut self.parked_operations, operation.reason, add);
-                }
-            }
-            State::Parked(reason) => step(&mut self.parked, *reason, add),
-            State::Rejected(reason) => step(&mut self.rejected, *reason, add),
-        }
-    }
-}
-
-/// One entry: the change, and on a member its state, whether the relay
-/// confirmed it, the relay's refusal and when the member wrote it.
+/// One entry: the change or its header, and on a member its state,
+/// whether the relay confirmed it, the relay's refusal and when the member
+/// wrote it.
 #[derive(Clone)]
 struct Entry {
-    change: Change,
+    id: ChangeId,
+    body: Body,
     state: Option<State>,
     confirmed: bool,
     refusal: Option<RelayRefusal>,
     /// When the member wrote the change, for one it wrote.
     written_at: Option<u64>,
+}
+
+impl Entry {
+    fn header(&self) -> &Header {
+        match &self.body {
+            Body::Held(change) => change.header(),
+            Body::Stored(header) => header,
+        }
+    }
+
+    fn held(&self) -> Option<&Change> {
+        match &self.body {
+            Body::Held(change) => Some(change),
+            Body::Stored(_) => None,
+        }
+    }
+}
+
+/// What an entry holds of its change.
+#[derive(Clone)]
+enum Body {
+    /// The change.
+    Held(Change),
+    /// The header without its payload: the store keeps the frame.
+    Stored(Header),
 }
 
 /// The log of one space. Its `Debug` output shows the space and the number
@@ -310,7 +203,7 @@ impl Log {
         if let Some(position) = self.position_of(id) {
             return Ok(Appended::Duplicate(position));
         }
-        self.tips.appended(&change);
+        self.tips.appended(change.header());
         self.counts_mut(change.header().author).unconfirmed += 1;
         let key = (change.header().author, change.header().sequence);
         let same = self.sequences.entry(key).or_default();
@@ -319,7 +212,8 @@ impl Log {
             self.equivocating.insert(key);
         }
         self.entries.push(Entry {
-            change,
+            id,
+            body: Body::Held(change),
             state: None,
             confirmed: false,
             refusal: None,
@@ -345,10 +239,66 @@ impl Log {
         Position(u64::try_from(self.entries.len()).expect("a length fits 64 bits"))
     }
 
-    /// The entry at a position.
+    /// The change at a position, when the log holds it in memory: every
+    /// change of a log that never released one, and every control change.
+    /// [`Log::change_at`] also reads a released change from its store.
     pub fn get(&self, position: Position) -> Option<&Change> {
         let index = usize::try_from(position.0.checked_sub(1)?).ok()?;
-        self.entries.get(index).map(|entry| &entry.change)
+        self.entries.get(index)?.held()
+    }
+
+    /// The change at a position: from memory, or read from `frames` when
+    /// the log released it.
+    pub fn change_at(&self, position: Position, frames: &mut impl Frames) -> Option<Held<'_>> {
+        let index = usize::try_from(position.0.checked_sub(1)?).ok()?;
+        let entry = self.entries.get(index)?;
+        match entry.held() {
+            Some(change) => Some(Cow::Borrowed(change)),
+            None => frames.stored(self.space, entry.id).map(Cow::Owned),
+        }
+    }
+
+    /// The change `id`: from memory, or read from `frames` when the log
+    /// released it.
+    pub fn change(&self, id: ChangeId, frames: &mut impl Frames) -> Option<Held<'_>> {
+        self.change_at(self.position_of(id)?, frames)
+    }
+
+    /// The header of the change `id`, without its payload when the log
+    /// released the change.
+    pub fn header(&self, id: ChangeId) -> Option<&Header> {
+        Some(self.entry(id)?.header())
+    }
+
+    /// Drops the bytes of the sealed change `id`, whose frame the log's
+    /// store now keeps: the log keeps its header without the payload, and
+    /// reads the change back through [`Frames`] when a pass needs it. A
+    /// control change stays in memory. Says whether the log released it.
+    pub fn release(&mut self, id: ChangeId) -> bool {
+        let Some(entry) = self.entry_mut(id) else {
+            return false;
+        };
+        let Body::Held(change) = &entry.body else {
+            return false;
+        };
+        if change.header().kind == Kind::CONTROL {
+            return false;
+        }
+        entry.body = Body::Stored(change.header().without_payload());
+        true
+    }
+
+    /// The ids of the log's changes, in log order.
+    pub fn ids(&self) -> impl Iterator<Item = ChangeId> + '_ {
+        self.entries.iter().map(|entry| entry.id)
+    }
+
+    /// The control changes of the log, in log order, each with its state.
+    pub fn controls(&self) -> impl Iterator<Item = (&Change, Option<&State>)> {
+        self.entries.iter().filter_map(|entry| {
+            let change = entry.held()?;
+            (change.header().kind == Kind::CONTROL).then_some((change, entry.state.as_ref()))
+        })
     }
 
     /// The member's state of a change, when the log holds it with one.
@@ -373,7 +323,7 @@ impl Log {
             .flatten()
             .filter_map(|position| {
                 let entry = &self.entries[index(*position)];
-                Some((entry.change.id(), entry.refusal.as_ref()?))
+                Some((entry.id, entry.refusal.as_ref()?))
             })
     }
 
@@ -386,7 +336,7 @@ impl Log {
             return false;
         };
         let newly = entry.refusal.replace(refusal).is_none();
-        let (author, confirmed) = (entry.change.header().author, entry.confirmed);
+        let (author, confirmed) = (entry.header().author, entry.confirmed);
         if newly {
             let position = self.position_of(id).expect("the log holds the change");
             self.refused.entry(author).or_default().insert(position);
@@ -412,7 +362,7 @@ impl Log {
         if entry.refusal.take().is_none() {
             return false;
         }
-        let (author, confirmed) = (entry.change.header().author, entry.confirmed);
+        let (author, confirmed) = (entry.header().author, entry.confirmed);
         let position = self.position_of(id).expect("the log holds the change");
         if let Some(positions) = self.refused.get_mut(&author) {
             positions.remove(&position);
@@ -433,7 +383,7 @@ impl Log {
             return false;
         };
         let newly = !std::mem::replace(&mut entry.confirmed, true);
-        let (author, refused) = (entry.change.header().author, entry.refusal.is_some());
+        let (author, refused) = (entry.header().author, entry.refusal.is_some());
         let written_at = entry.written_at;
         if newly && !refused {
             self.counts_mut(author).unconfirmed -= 1;
@@ -481,7 +431,7 @@ impl Log {
                 self.unconfirmed_written.insert((at, Position(position)));
             }
             if entry.refusal.is_none() {
-                returned.push(entry.change.header().author);
+                returned.push(entry.header().author);
             }
         }
         for author in returned {
@@ -496,13 +446,19 @@ impl Log {
     /// operations, whose key 64 names `model`. A change parked as another
     /// model, or for a payload this core cannot read, does not count, nor
     /// does one without key 64. It opens each such change with `checks`,
-    /// so it costs one decryption per counted change.
-    pub fn newest_model(&self, checks: &impl Checks, model: [u8; 16]) -> Option<u64> {
+    /// so it costs one decryption per counted change, and reads it from
+    /// `frames` when the log released it.
+    pub fn newest_model(
+        &self,
+        checks: &impl Checks,
+        model: [u8; 16],
+        frames: &mut impl Frames,
+    ) -> Option<u64> {
         self.parked
             .iter()
-            .map(|position| &self.entries[index(*position)])
-            .filter_map(|entry| {
-                let writer = checks.open(&entry.change).ok()?.writer_model()?.ok()?;
+            .filter_map(|position| {
+                let change = self.change_at(*position, frames)?;
+                let writer = checks.open(&change).ok()?.writer_model()?.ok()?;
                 (writer.id == model).then_some(writer.version)
             })
             .max()
@@ -566,7 +522,8 @@ impl Log {
         }
         entry.state = Some(state);
         if folded(&entry.state) {
-            self.tips.folded(&entry.change, opened);
+            let id = entry.id;
+            self.tips.folded(id, entry.header(), opened);
         }
         self.changed.insert(id);
     }
@@ -581,11 +538,14 @@ impl Log {
     /// The tips of the log: what the member's next change takes from it.
     /// A folded sealed change whose state was read back from storage, and
     /// so whose payload the log has not read, is opened with `checks`
-    /// once, here; one that does not open is left out until it does.
-    pub fn tips(&mut self, checks: &impl Checks) -> &Tips {
+    /// once, here, read from `frames` when the log released it; one that
+    /// does not open is left out until it does.
+    pub fn tips(&mut self, checks: &impl Checks, frames: &mut impl Frames) -> &Tips {
         for id in self.tips.unread().clone() {
-            let change = &self.entries[self.index_of(id).expect("the log holds the change")].change;
-            if let Ok(payload) = checks.open(change) {
+            let Some(change) = self.change(id, frames) else {
+                continue;
+            };
+            if let Ok(payload) = checks.open(&change) {
                 let opened = Opened {
                     dependencies: payload.dependencies,
                     clock: payload.clock,
@@ -603,33 +563,29 @@ impl Log {
     }
 
     /// The rejected changes, in log order.
-    pub(crate) fn rejected(&self) -> Vec<Change> {
+    pub(crate) fn rejected(&self) -> Vec<ChangeId> {
         self.entries
             .iter()
             .filter(|entry| matches!(entry.state, Some(State::Rejected(_))))
-            .map(|entry| entry.change.clone())
+            .map(|entry| entry.id)
             .collect()
     }
 
     /// The control changes that passed their checks, in log order.
     pub(crate) fn folded_controls(&self) -> impl Iterator<Item = &Change> {
-        self.entries
-            .iter()
-            .filter(|entry| {
-                entry.change.header().kind == Kind::CONTROL
-                    && matches!(entry.state, Some(State::Folded { .. }))
-            })
-            .map(|entry| &entry.change)
+        self.controls()
+            .filter(|(_, state)| matches!(state, Some(State::Folded { .. })))
+            .map(|(change, _)| change)
     }
 
     /// The folded changes that are not control changes, in log order, with
-    /// their parked operations.
-    pub(crate) fn folded_sealed(&self) -> Vec<(Change, Vec<ParkedOperation>)> {
+    /// their parked operations. [`Log::change`] gives each change.
+    pub(crate) fn folded_sealed(&self) -> Vec<(ChangeId, Vec<ParkedOperation>)> {
         self.entries
             .iter()
-            .filter(|entry| entry.change.header().kind != Kind::CONTROL)
+            .filter(|entry| entry.header().kind != Kind::CONTROL)
             .filter_map(|entry| match &entry.state {
-                Some(State::Folded { parked }) => Some((entry.change.clone(), parked.clone())),
+                Some(State::Folded { parked }) => Some((entry.id, parked.clone())),
                 _ => None,
             })
             .collect()
@@ -653,14 +609,27 @@ impl Log {
         self.positions.get(&id).copied()
     }
 
-    /// The entries after a cursor, in order, with their positions.
-    pub fn after(&self, cursor: Position) -> impl Iterator<Item = (Position, &Change)> {
+    /// The entries after a cursor, in order, with their positions: each
+    /// from memory, or read from `frames` when the log released it. An
+    /// entry `frames` cannot read is left out.
+    pub fn after<'a, F: Frames>(
+        &'a self,
+        cursor: Position,
+        frames: &'a mut F,
+    ) -> impl Iterator<Item = (Position, Held<'a>)> + 'a {
         let skip = usize::try_from(cursor.0).unwrap_or(usize::MAX);
+        let space = self.space;
         self.entries
             .iter()
             .zip(1..)
             .skip(skip)
-            .map(|(entry, position)| (Position(position), &entry.change))
+            .filter_map(move |(entry, position)| {
+                let change = match entry.held() {
+                    Some(change) => Cow::Borrowed(change),
+                    None => Cow::Owned(frames.stored(space, entry.id)?),
+                };
+                Some((Position(position), change))
+            })
     }
 }
 

@@ -1,17 +1,21 @@
 //! The member's log in the view's database (RFC 0002, "The log on disk";
 //! RFC 0006, "Where the view lives"): each change's frame, its state and
 //! its reason, written in the transaction that folds it, and read back
-//! into the in-memory [`Log`] of each space when the view opens.
+//! into the in-memory [`Log`] of each space when the view opens. The
+//! table is the store of the logs' frames (NOC-452): once it holds a
+//! sealed change, the log in memory releases its bytes, and reads the
+//! change back from here when a pass needs it.
 
 use std::collections::BTreeMap;
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 
 use super::Error;
 use crate::change::Change;
 use crate::ids::{ChangeId, SpaceId};
 use crate::log::{
-    Log, OperationParkReason, ParkReason, ParkedOperation, RejectReason, RelayRefusal, State,
+    Frames, Log, OperationParkReason, ParkReason, ParkedOperation, RejectReason, RelayRefusal,
+    State,
 };
 use crate::texts;
 
@@ -129,9 +133,54 @@ pub(super) fn update(conn: &Connection, log: &Log, id: ChangeId) -> Result<(), E
     Ok(())
 }
 
+/// The change `id` of `space` as the table keeps its frame; a change the
+/// table does not hold, or whose frame does not decode, is corrupt.
+pub(super) fn stored(conn: &Connection, space: SpaceId, id: ChangeId) -> Result<Change, Error> {
+    let frame: Option<Vec<u8>> = conn
+        .query_row(
+            "SELECT frame FROM log WHERE space_id = ?1 AND change_id = ?2",
+            params![space.0, id.0],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let frame = frame.ok_or(Error::Corrupt(texts::UNREADABLE_LOG_FRAME))?;
+    Change::decode(&frame).map_err(|_| Error::Corrupt(texts::UNREADABLE_LOG_FRAME))
+}
+
+/// The `log` table as the store of the view's logs, outside a fold: it
+/// keeps the first read that fails, for [`StoredFrames::finish`].
+pub struct StoredFrames<'a> {
+    conn: &'a Connection,
+    error: Option<Error>,
+}
+
+impl<'a> StoredFrames<'a> {
+    pub(super) fn new(conn: &'a Connection) -> StoredFrames<'a> {
+        StoredFrames { conn, error: None }
+    }
+
+    /// The first read that failed, if any.
+    pub fn finish(self) -> Result<(), Error> {
+        self.error.map_or(Ok(()), Err)
+    }
+}
+
+impl Frames for StoredFrames<'_> {
+    fn stored(&mut self, space: SpaceId, id: ChangeId) -> Option<Change> {
+        match stored(self.conn, space, id) {
+            Ok(change) => Some(change),
+            Err(error) => {
+                self.error.get_or_insert(error);
+                None
+            }
+        }
+    }
+}
+
 /// The log of every space the database holds, in local-position order,
 /// with each change's state, whether the relay confirmed it, the relay's
-/// refusal and when the member wrote it.
+/// refusal and when the member wrote it. Each log releases its sealed
+/// changes as it reads them: the table keeps their frames.
 pub(super) fn load(conn: &Connection) -> Result<BTreeMap<SpaceId, Log>, Error> {
     let mut logs = BTreeMap::new();
     let mut statement = conn.prepare(
@@ -169,6 +218,7 @@ pub(super) fn load(conn: &Connection) -> Result<BTreeMap<SpaceId, Log>, Error> {
         if row.get::<_, bool>(5)? {
             log.record_relay_confirmation(id);
         }
+        log.release(id);
     }
     Ok(logs)
 }

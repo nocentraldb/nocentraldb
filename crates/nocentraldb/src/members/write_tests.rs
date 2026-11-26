@@ -21,7 +21,11 @@ use crate::value::Value;
 fn changes(db: &Db, space: &Space) -> usize {
     let inner = db.lock();
     let log = inner.view.log(space.id().0).expect("the space's log");
-    log.after(ncdb_core::log::Position::START).count()
+    log.after(
+        ncdb_core::log::Position::START,
+        &mut inner.view.stored_frames(),
+    )
+    .count()
 }
 
 /// A write of one task into `space`.

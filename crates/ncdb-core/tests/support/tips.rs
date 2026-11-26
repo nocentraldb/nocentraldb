@@ -17,7 +17,7 @@ use ncdb_core::checks::SealChecks;
 use ncdb_core::clock::Hlc;
 use ncdb_core::field_op;
 use ncdb_core::ids::{ChangeId, MemberId, ObjectId, SpaceId};
-use ncdb_core::log::{Log, Position, State};
+use ncdb_core::log::{Frames, Log, Position, State};
 use ncdb_core::membership::{ControlBody, Role};
 use ncdb_core::receive::{Checks, Stop};
 use ncdb_core::seal;
@@ -170,14 +170,14 @@ pub struct Recount {
 /// Reads and opens every change of `log`, as the Rust SDK did on each
 /// write before NOC-138. A change the log holds but did not fold is no
 /// head; a folded sealed change that does not open is skipped.
-pub fn recount(log: &Log, checks: &impl Checks) -> Recount {
+pub fn recount(log: &Log, checks: &impl Checks, frames: &mut impl Frames) -> Recount {
     let mut heads = BTreeSet::new();
     let mut control_heads = BTreeSet::new();
     let mut covered = BTreeSet::new();
     let mut controls_covered = BTreeSet::new();
     let mut sequences = BTreeMap::new();
     let mut seen = Hlc::default();
-    for (_, change) in log.after(Position::START) {
+    for (_, change) in log.after(Position::START, frames) {
         let header = change.header();
         let next = sequences.entry(header.author).or_insert(1);
         *next = (*next).max(header.sequence + 1);
@@ -193,7 +193,7 @@ pub fn recount(log: &Log, checks: &impl Checks) -> Recount {
                 control_heads.insert(change.id());
                 dependencies
             }
-            _ => match checks.open(change) {
+            _ => match checks.open(&change) {
                 Ok(payload) => {
                     seen = seen.max(payload.clock);
                     payload.dependencies
