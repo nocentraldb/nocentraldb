@@ -7,7 +7,7 @@
 // - The editor's edits are written as one change at each pause in typing:
 //   after PAUSE_MS without an edit, after at most MAX_HOLD_MS of typing,
 //   and when the page is hidden or the binding closes (Carsten,
-//   2026-11-21, D3).
+//   2026-11-21, NOC-430).
 // - While an IME composition is open, the write waits for its end, and for
 //   at most MAX_HOLD_MS since the first edit not yet written (Carsten,
 //   2026-11-22, NOC-467).
@@ -17,7 +17,7 @@
 //   uses (Carsten, 2026-11-22, NOC-467).
 import * as Y from "yjs";
 
-/** The pause in typing after which the binding writes (RFC 0013, D3). */
+/** The pause in typing after which the binding writes (RFC 0013, "An editor: the binding"). */
 export const PAUSE_MS = 500;
 /** The longest an edit waits to be written: while typing goes on, or while an IME composition is open. */
 export const MAX_HOLD_MS = 2000;
