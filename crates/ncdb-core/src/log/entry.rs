@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 
 use super::state::{RelayRefusal, State};
-use crate::change::{Change, Header, Kind};
+use crate::change::{Change, HeaderFields, Kind};
 use crate::ids::{ChangeId, MemberId, SpaceId};
 
 /// One entry: the change's id and header fields, the change while the log
@@ -59,20 +59,18 @@ impl Entry {
         self.held.as_deref()
     }
 
-    /// The change's header without its payload and without the keys this
-    /// core does not know.
-    pub(super) fn header(&self, space: SpaceId, authors: &Authors) -> Header {
-        let mut header = Header::new(
+    /// The fields of the change's header besides its payload and its
+    /// unknown keys.
+    pub(super) fn fields(&self, space: SpaceId, authors: &Authors) -> HeaderFields {
+        HeaderFields {
             space,
-            authors.id(self.author),
-            self.sequence,
-            self.key_generation,
-            self.kind,
-            Vec::new(),
-            self.suite,
-        );
-        header.format = self.format;
-        header
+            author: authors.id(self.author),
+            sequence: self.sequence,
+            key_generation: self.key_generation,
+            kind: self.kind,
+            format: self.format,
+            suite: self.suite,
+        }
     }
 }
 

@@ -48,7 +48,7 @@ pub use state::{
     State, StateCounts,
 };
 
-use crate::change::{Change, Header, Kind};
+use crate::change::{Change, HeaderFields, Kind};
 use crate::ids::{ChangeId, MemberId, SpaceId};
 use crate::receive::Checks;
 use crate::texts;
@@ -223,11 +223,12 @@ impl Log {
         self.change_at(self.position_of(id)?, frames)
     }
 
-    /// The header of the change `id`, without its payload and without
-    /// the keys this core does not know: what the log keeps of it in
-    /// memory, whether it holds the change or released it (NOC-518).
-    pub fn header(&self, id: ChangeId) -> Option<Header> {
-        Some(self.entry(id)?.header(self.space, &self.authors))
+    /// The fields of the header of the change `id` besides its payload
+    /// and its unknown keys: what the log keeps of it in memory, whether
+    /// it holds the change or released it (NOC-518). [`Log::change`]
+    /// gives the whole header.
+    pub fn fields(&self, id: ChangeId) -> Option<HeaderFields> {
+        Some(self.entry(id)?.fields(self.space, &self.authors))
     }
 
     /// Drops the bytes of the sealed change `id`, whose frame the log's
