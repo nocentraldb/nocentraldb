@@ -16,6 +16,12 @@
 //! times, and a new person-key entry after them costs its own judgement.
 //! The state a call returns is `resolve`'s, byte for byte, which the
 //! convergence tests check against [`Resolver::from_scratch`].
+//!
+//! [`Resolver::resolve`] still reads every change of the set it is given,
+//! so its cost grows with the control changes even when it judges one. A
+//! holder that keeps the resolver while its set only grows, such as the
+//! relay, adds a new person-key entry with [`Resolver::add`] instead,
+//! which reads only that entry (NOC-497).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -48,8 +54,19 @@ pub struct Resolver {
     /// Whether a fold may be carried on from the fold of the set before;
     /// without, every node's past is folded from scratch.
     extends: bool,
+    /// The input of the last call and its judgements, while the running
+    /// fold is the fold of all its nodes: what [`Resolver::add`] adds to
+    /// (NOC-497).
+    last: Option<Last>,
+    read: usize,
     judged: usize,
     folded: usize,
+}
+
+/// The input of the last call, and the judgement of each of its nodes.
+struct Last {
+    input: Input,
+    judged: Judged,
 }
 
 /// A node's judgement, the past it was judged from, and for a valid shred
@@ -69,6 +86,8 @@ impl Resolver {
             judgements: BTreeMap::new(),
             running: None,
             extends: true,
+            last: None,
+            read: 0,
             judged: 0,
             folded: 0,
         }
@@ -90,8 +109,10 @@ impl Resolver {
     /// The control state of the control changes of the space among
     /// `changes`: [`super::resolve`]'s.
     pub fn resolve<'a>(&mut self, changes: impl IntoIterator<Item = &'a Change>) -> Resolved {
+        self.last = None;
         let input = Input::new(self.space, changes, &mut self.inputs);
         let mut judged = Judged::default();
+        self.read = input.len();
         self.judged = 0;
         self.folded = 0;
         let mut running = self.running.take().filter(|_| self.extends);
@@ -168,8 +189,87 @@ impl Resolver {
                 folded
             }
         };
-        finish(input, folded)
+        let resolved = finish(&input, folded);
+        // The running fold is now the fold of every node exactly when the
+        // set has no gap.
+        if gap_free && self.extends {
+            self.last = Some(Last { input, judged });
+        }
+        resolved
     }
+
+    /// The control state of the set of the last call with `changes` added
+    /// in this order: what [`Resolver::resolve`] returns for that set
+    /// (NOC-497). It adds a change without reading the set again when the
+    /// change is a person-key entry of the space whose causal past is
+    /// exactly that set, from an author the set made a member, and which
+    /// no change of the set depends on: as [`Resolver::resolve`] does, it
+    /// judges it and adds it to the fold of the set. None for any other
+    /// change, or when the last call's set has a gap; the caller then
+    /// resolves the whole set, and until it does, every call to this gives
+    /// None.
+    pub fn add<'a>(&mut self, changes: impl IntoIterator<Item = &'a Change>) -> Option<Resolved> {
+        self.read = 0;
+        self.judged = 0;
+        self.folded = 0;
+        let mut last = self.last.take()?;
+        for change in changes {
+            self.read += 1;
+            if !self.add_one(&mut last, change) {
+                return None;
+            }
+        }
+        let folded = self.running.as_ref()?.folded().clone();
+        let resolved = finish(&last.input, folded);
+        self.last = Some(last);
+        Some(resolved)
+    }
+
+    /// Adds one change to `last` and the running fold, which is the fold
+    /// of all its nodes; false, and the running fold unchanged, when
+    /// [`Resolver::add`] cannot add it.
+    fn add_one(&mut self, last: &mut Last, change: &Change) -> bool {
+        let Some(running) = self.running.as_mut() else {
+            return false;
+        };
+        let Some(node) = last.input.person_key_node(change, &mut self.inputs) else {
+            return false;
+        };
+        if !running.admits(&node) {
+            return false;
+        }
+        // Step 1, as `resolve` judges it: from the memory while the past
+        // is the very same, else from the fold of the past, which is the
+        // running fold.
+        let same = self
+            .judgements
+            .get(&node.id)
+            .filter(|before| Arc::ptr_eq(&before.past, &node.past))
+            .map(|before| before.judgement);
+        let judgement = same.unwrap_or_else(|| {
+            self.judged += 1;
+            let judgement = judge(&last.input, &last.judged, &node, running.folded());
+            let remembered = Remembered {
+                past: Arc::clone(&node.past),
+                judgement,
+                shred_past_members: None,
+            };
+            self.judgements.insert(node.id, remembered);
+            judgement
+        });
+        let id = node.id;
+        last.judged.judgements.insert(id, judgement);
+        last.input.insert(node);
+        running.extend(&last.input, &last.judged, &last.input.nodes[&id])
+    }
+
+    /// How many control changes of the space the last call read: every
+    /// one of the set for [`Resolver::resolve`], the added ones for
+    /// [`Resolver::add`].
+    pub fn read(&self) -> usize {
+        self.read
+    }
+
     /// How many control changes the last call judged from the fold of
     /// their causal past, rather than taking the judgement from its
     /// memory.

@@ -68,8 +68,21 @@ impl Mergeable for Remembering {
     type Read = control::Read;
 
     fn apply(&mut self, op: &Op<Change>) {
+        // A resolver of the set before the change, to add the change to
+        // (NOC-497).
+        let (space, _, base) = base();
+        let mut adding = (!self.copy.changes.contains_key(&op.id)).then(|| {
+            let mut resolver = Resolver::new(*space);
+            resolver.resolve(base.iter().chain(self.copy.changes.values()));
+            resolver
+        });
         self.copy.apply(op);
         self.check();
+        if let Some(added) = adding.as_mut().and_then(|r| r.add([&op.body])) {
+            let changes = base.iter().chain(self.copy.changes.values());
+            let oracle = Resolver::from_scratch(*space).resolve(changes);
+            assert_eq!(added, oracle, "add gives what resolve gives");
+        }
     }
 
     fn state_bytes(&self) -> Vec<u8> {

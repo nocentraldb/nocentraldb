@@ -7,8 +7,11 @@
 //! resolved from scratch on each request, a space with many persons costs
 //! a read and a resolve of all its control changes on every new person. A
 //! warm process, such as a Lambda instance between invocations, now reads
-//! only the control changes appended since, and the resolver judges only
-//! those.
+//! only the control changes appended since, and keeps the change it
+//! appends itself. The resolver adds a person-key entry written after the
+//! whole space to the fold it holds, reading no other control change
+//! (NOC-497); any other new control change is resolved with all of them,
+//! and the resolver judges only the new ones.
 //!
 //! The relay stays stateless in what it answers: the memory holds nothing
 //! the log does not, the resolver returns `resolve`'s state exactly, and
@@ -21,13 +24,14 @@
 //!
 //! The memory a space takes grows with its control changes, since the
 //! resolver keeps each one's causal past as a range of node numbers
-//! (NOC-442): about 7.7 KiB per control change on Linux, 75 MiB held for
-//! a space of 10,000 persons, and a cold request on such a space allocates
-//! at most about 104 MiB at once (NOC-492). A Lambda instance has 256 MB,
+//! (NOC-442) and the input of its last call, which it adds a person-key
+//! entry to (NOC-497): about 8.8 KiB per control change on Linux, 85 MiB
+//! held for a space of 10,000 persons, and a cold request on such a space
+//! allocates at most about 93 MiB at once. A Lambda instance has 256 MB,
 //! so the memory holds at most [`SPACES`] spaces and at most [`WEIGHT`]
 //! control changes over all of them, about the memory of one space of
 //! 10,000 persons: what it holds and one request's work on a space it
-//! would keep take about 185 MiB, which leaves the rest to the process.
+//! would keep take about 181 MiB, which leaves the rest to the process.
 //! It forgets the spaces used least recently first, and keeps no space
 //! heavier than all of it: such a space is resolved from scratch on every
 //! request, as before. A request takes a space's memory out while it works
@@ -51,7 +55,7 @@ use crate::store::{Entry as LogEntry, Epoch, RelayStore};
 pub const SPACES: usize = 16;
 
 /// The most weight the memory holds: the control changes of all its
-/// spaces, about 77 MiB (NOC-492). It holds a space of 10,000 persons and
+/// spaces, about 88 MiB (NOC-492, NOC-497). It holds a space of 10,000 persons and
 /// the control changes beside them.
 pub const WEIGHT: usize = 10_240;
 
@@ -162,8 +166,9 @@ impl<S: RelayStore> Relay<S> {
     }
 
     /// Reads the control changes after the last one `known` holds, and
-    /// resolves them all if there are new ones. False, reading nothing,
-    /// when the store no longer holds that last one at its position.
+    /// adds the new ones to its resolve, or resolves them all when the
+    /// resolver cannot add them. False, reading nothing, when the store no
+    /// longer holds that last one at its position.
     async fn read_new(&self, space: SpaceId, known: &mut Known) -> Result<bool, ErrorCode> {
         let last = known
             .entries
@@ -195,13 +200,22 @@ impl<S: RelayStore> Relay<S> {
             return Ok(false);
         }
         if !new.is_empty() {
+            let added = known.resolver.add(new.iter().map(|(_, change)| change));
             known.entries.append(&mut new);
-            let changes = known.entries.iter().map(|(_, change)| change);
-            known.resolved = known.resolver.resolve(changes);
+            known.resolved = match added {
+                Some(resolved) => resolved,
+                None => {
+                    let changes = known.entries.iter().map(|(_, change)| change);
+                    known.resolver.resolve(changes)
+                }
+            };
         }
         Ok(true)
     }
 }
+
+#[cfg(test)]
+mod warm;
 
 #[cfg(test)]
 mod tests {

@@ -58,6 +58,17 @@ impl Running {
         &self.folded
     }
 
+    /// Whether [`Running::extend`] adds `node`: it is a person-key entry
+    /// without a gap, its causal past is exactly the set, the set has a
+    /// genesis, and its author already has a place in the seniority.
+    pub(super) fn admits(&self, node: &Node) -> bool {
+        matches!(node.body.entry, Entry::PersonKey(_))
+            && !node.gap
+            && *node.past == self.set
+            && self.folded.genesis.is_some()
+            && self.folded.seniority.contains(&node.author)
+    }
+
     /// Adds `node`, which step 1 has judged, when the fold of the set with
     /// it is this fold plus the node: it is a person-key entry without a
     /// gap, its causal past is exactly the set, the set has a genesis, and
@@ -67,14 +78,10 @@ impl Running {
         let Entry::PersonKey(entry) = &node.body.entry else {
             return false;
         };
-        let state = &mut self.folded;
-        if node.gap
-            || *node.past != self.set
-            || state.genesis.is_none()
-            || !state.seniority.contains(&node.author)
-        {
+        if !self.admits(node) {
             return false;
         }
+        let state = &mut self.folded;
         let walk = &mut self.walk;
         // Step 5 for the last change of the order, as `apply_order` judges
         // it; a person-key entry is none that is final when valid, nor an
