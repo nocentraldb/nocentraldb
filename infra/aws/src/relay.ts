@@ -54,11 +54,7 @@ import {
   Function as LambdaFunction,
   Runtime,
 } from "aws-cdk-lib/aws-lambda";
-import {
-  FilterPattern,
-  LogGroup,
-  MetricFilter,
-} from "aws-cdk-lib/aws-logs";
+import { FilterPattern, LogGroup, MetricFilter } from "aws-cdk-lib/aws-logs";
 import {
   BlockPublicAccess,
   Bucket,

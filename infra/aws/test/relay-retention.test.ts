@@ -40,9 +40,7 @@ describe("the relay's retention", () => {
   });
 
   test("by default, connection records go on close and logs stay 14 days", () => {
-    expect(defaults.variables).not.toHaveProperty(
-      "NCDB_KEEP_CONNECTIONS_DAYS",
-    );
+    expect(defaults.variables).not.toHaveProperty("NCDB_KEEP_CONNECTIONS_DAYS");
     expect(defaults.retention).toBe(14);
   });
 
@@ -57,7 +55,9 @@ describe("the relay's retention", () => {
     for (const bad of [0, -1, 1.5, Number.NaN]) {
       expect(() =>
         relayEnvironment({ ...base, keepConnectionRecordsDays: bad }),
-      ).toThrow("keepConnectionRecordsDays is a whole number of days, at least 1");
+      ).toThrow(
+        "keepConnectionRecordsDays is a whole number of days, at least 1",
+      );
     }
   });
 
