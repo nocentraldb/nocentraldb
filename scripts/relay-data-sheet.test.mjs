@@ -17,14 +17,12 @@ const SHEET = "docs/relay-data-sheet.md";
 /** The rows of the first Markdown table in `markdown`, as arrays of cells, without the header and the rule. */
 const tableRows = (markdown) => {
   const lines = markdown.split("\n").filter((l) => l.startsWith("|"));
-  return lines
-    .slice(2)
-    .map((l) =>
-      l
-        .slice(1, -1)
-        .split(" | ")
-        .map((c) => c.trim()),
-    );
+  return lines.slice(2).map((l) =>
+    l
+      .slice(1, -1)
+      .split(" | ")
+      .map((c) => c.trim()),
+  );
 };
 
 const sheet = () => read(SHEET);
@@ -45,7 +43,8 @@ test("the table names each item, why, how long, where to change it, and its sour
   );
   for (const row of rows()) {
     assert.equal(row.length, 5, `five cells: ${row[0]}`);
-    for (const cell of row) assert.ok(cell.length > 0, `no empty cell: ${row[0]}`);
+    for (const cell of row)
+      assert.ok(cell.length > 0, `no empty cell: ${row[0]}`);
     assert.match(
       row[4],
       /\]\(rfc\/00(01|02|03|07|08|10|15)-[^)]+#[^)]+\)/,
@@ -92,7 +91,8 @@ test("every retention period the sheet states stands in the RFC it comes from", 
   );
   for (const period of found) {
     assert.ok(
-      rfc7.includes(period) || read("docs/rfc/0015-relay-admission.md").includes(period),
+      rfc7.includes(period) ||
+        read("docs/rfc/0015-relay-admission.md").includes(period),
       `${period} in the sheet stands in RFC 0007 or RFC 0015`,
     );
   }
