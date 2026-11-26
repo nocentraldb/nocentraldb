@@ -166,8 +166,7 @@ fn assert_all_equal<T: PartialEq + std::fmt::Debug>(ends: &[T]) {
 }
 
 #[test]
-fn a_late_removal_leaves_the_removed_members_text_as_placeholders_next_to_which_later_text_stays()
-{
+fn a_late_removal_leaves_the_removed_members_text_as_placeholders_next_to_which_later_text_stays() {
     let (mut space, setup) = space();
     let alice = doc(client(ALICE));
     let base = add_block(&alice, "paragraph", "Base.");
@@ -205,10 +204,7 @@ fn the_text_a_rejected_change_deleted_is_back() {
     let base = space.sealed(ALICE, vec![body_op(ALICE, &base)]);
     let cut = space.sealed(CAROL, vec![body_op(CAROL, &cut)]);
     let removal = space.remove(ALICE, CAROL, 0, &[&setup[4]]);
-    let orders = [
-        vec![&base, &cut, &removal],
-        vec![&removal, &cut, &base],
-    ];
+    let orders = [vec![&base, &cut, &removal], vec![&removal, &cut, &base]];
     let ends = ends_of(&space, &setup, &orders, &[&cut]);
     assert_all_equal(&ends);
     assert_eq!(ends[0].0.1, "Keep this.");
@@ -266,4 +262,42 @@ fn a_change_whose_rejection_is_itself_rejected_folds_again_whole() {
     // removal.
     let without = ends_of(&space, &setup, &[vec![&base, &carols]], &[]);
     assert_eq!(ends[0].0, without[0].0);
+}
+
+#[test]
+fn a_field_the_model_adds_later_places_the_changes_rejected_before() {
+    let (mut space, setup) = space();
+    let alice = doc(client(ALICE));
+    let base = add_block(&alice, "paragraph", "Base.");
+    let carol_doc = doc(client(CAROL));
+    apply(&carol_doc, &base);
+    let carols = type_text(&carol_doc, 0, 5, " Carol.");
+    let bob_doc = doc(client(BOB));
+    apply(&bob_doc, &base);
+    apply(&bob_doc, &carols);
+    let bobs = type_text(&bob_doc, 0, 12, " Bob after Carol.");
+    let base = space.sealed(ALICE, vec![body_op(ALICE, &base)]);
+    let carols = space.sealed(CAROL, vec![body_op(CAROL, &carols)]);
+    let bobs = space.sealed(BOB, vec![body_op(BOB, &bobs)]);
+    let removal = space.remove(ALICE, CAROL, 0, &[&setup[4]]);
+    // Bob's view first folds by a model without the body, which parks the
+    // body's operations; then the model adds the body.
+    let db = TempDb::new("rich-text-unfold-migrate");
+    let checks = |space| SealChecks::new(space, space::key(BOB));
+    {
+        let mut view = View::open_with(&db.0, &lock(), checks).unwrap();
+        let mut c = checks(space.space);
+        for change in setup.iter().chain([&removal, &base, &carols, &bobs]) {
+            view.receive(change.bytes(), &mut c).unwrap();
+        }
+    }
+    let view = View::open_with(&db.0, &lock_with_body(), checks).unwrap();
+    let expected = ends_of(
+        &space,
+        &setup,
+        &[vec![&removal, &base, &carols, &bobs]],
+        &[],
+    );
+    assert_eq!(body(&view, space.space), expected[0].0);
+    assert_eq!(expected[0].0.1, "Base. Bob after Carol.");
 }
