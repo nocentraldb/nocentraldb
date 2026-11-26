@@ -232,7 +232,7 @@ RFC 0007 estimates about 10 USD a month for a small team. The stack holds:
 - **A budget of 20 USD a month.** It mails `ALARM_EMAIL` at 50, 80 and 100 percent of actual cost.
 - **Two alarms on the function,** one for errors and one for throttles. They mail through SNS.
 - **The orphan sweep,** which deletes frames in S3 that no change holds and that are older than a day (RFC 0007, "How large changes go to S3"). It runs every hour at :17, in runs that stop 5 seconds before the function's 29-second timeout and continue where the last stopped, and starts a new pass at most once a day (NOC-293). Each run writes two log lines, `{"sweep":"orphans","phase":"start",…}` and `…"phase":"end",…,"pass":"paused"` (or `"completed"`, `"skipped"`). A failed run counts as an error of the function, so the error alarm mails you. `SweepUnfinished` mails you within the hour when a run started and never ended, and `SweepPassOverdue` when no pass completed in two days.
-- **The function's logs,** kept 14 days. They hold ids, sizes, codes and times; no content and no keys.
+- **The function's logs,** kept 14 days, or the longer period of `logRetentionDays`. They hold ids, sizes, codes and times; no content and no keys.
 
 ## Use the relay in your own stack
 
@@ -260,6 +260,8 @@ An app can run its own relay in its own AWS account, with the construct `Relay` 
        relayId: "…", // 32 hex digits, drawn once: openssl rand -hex 16
        allowedAccounts: ["…"], // the identities of section 1.3
        admissionKeys: ["…"], // optional: your app's admission key, public half, 64 hex digits
+       keepConnectionRecordsDays: 30, // optional: keep connection records 30 days after they end
+       logRetentionDays: 90, // optional: keep the function's logs 90 days instead of 14
      },
      lambdaPackage: "vendor/nocentraldb/target/lambda/ncdb-relay-lambda",
    });
@@ -270,8 +272,10 @@ An app can run its own relay in its own AWS account, with the construct `Relay` 
 What the construct takes and gives:
 
 - **`stage`** names the tables (`ncdb-<stage>-log` and so on), the API and its stage. Table names are fixed, so two relays in one account and region need two stages.
-- **`settings`** is what the relay itself is told: `relayId`, which never changes once members use the relay, `allowedAccounts`, as in section 1.3, and `admissionKeys`, below. They become the function's `NCDB_*` variables (`infra/aws/src/relay-settings.ts`), and the construct refuses malformed values when it synthesizes.
+- **`settings`** is what the relay itself is told: `relayId`, which never changes once members use the relay, `allowedAccounts`, as in section 1.3, and `admissionKeys`, `keepConnectionRecordsDays` and `logRetentionDays`, below. They become the function's `NCDB_*` variables and the log group's retention (`infra/aws/src/relay-settings.ts`), and the construct refuses malformed values when it synthesizes.
 - **`admissionKeys`**, optional, lets an app with open signup admit its own users without listing them ([RFC 0015, "Admission tokens"](rfc/0015-relay-admission.md#admission-tokens)). Your app's backend holds an Ed25519 admission key and signs an admission for each user's identity; the relay takes the admissions that verify under one of these public halves, 64 lowercase hex digits each, and sets `NCDB_ADMISSION_KEYS` from them. Left out or empty, the relay takes none. A leaked admission key admits any identity until you remove it; each admitted identity's record names the key that signed it, so you find what it admitted.
+- **`keepConnectionRecordsDays`**, optional, keeps a connection's records for that many days after the connection ends, for abuse investigation ([RFC 0007, "What the relay sees"](rfc/0007-relay.md#what-the-relay-sees)): which member id was connected when, and to which spaces it subscribed. RFC 0007 suggests 30. It is a whole number of days, at least 1, and sets `NCDB_KEEP_CONNECTIONS_DAYS`. The function then marks an ended connection's items in the `connections` table as ended instead of deleting them, and their TTL deletes them when the days are over. Left out, the records go when the connection closes. Kept records are personal data: name them, and the period, in your privacy notice ([What a relay keeps](relay-data-sheet.md)).
+- **`logRetentionDays`**, optional, keeps the function's logs longer than RFC 0007's 14 days: 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288 or 3653, the periods CloudWatch Logs offers. Shorter than 14 days, and keeping logs forever, are refused.
 - **`addAlarms()`** adds the four alarms of "What it costs" and returns the SNS topic they notify. Without it there are none. The project's budget of 20 USD is part of `RelayStack`, not of the construct; set your own.
 - **Public properties:** `api` (the WebSocket API), `stage`, `connectRoute` (the `$connect` route), `handler` (the function), `logGroup` and `url`.
 
@@ -356,7 +360,7 @@ The same pattern takes any token your app can check, for example a delegation to
 
 ## What the relay logs, and what to leave off around it
 
-The relay writes one fixed JSON line per invocation (`crates/ncdb-relay-lambda/src/log.rs`): the route, the connection id, the member id, the message's type, the bytes in and out, error and refusal codes, and when and how long. It never logs an event, a frame, a key or a token, and its logs are kept 14 days. Its tables are keyed by space ids, member ids and change ids, not content, and the changes it stores are ciphertext.
+The relay writes one fixed JSON line per invocation (`crates/ncdb-relay-lambda/src/log.rs`): the route, the connection id, the member id, the message's type, the bytes in and out, error and refusal codes, and when and how long. It never logs an event, a frame, a key or a token, and its logs are kept 14 days, or the longer period of `logRetentionDays`. Its tables are keyed by space ids, member ids and change ids, not content, and the changes it stores are ciphertext.
 
 [What a relay keeps](relay-data-sheet.md) lists everything the relay stores or sees, why and for how long, as a starting point for your privacy notice.
 
