@@ -100,7 +100,10 @@ async fn main() -> ExitCode {
     let mut config = Config::new(settings.allowed_accounts);
     config.admission_keys = settings.admission_keys;
     config.max_frame = ncdb_relay::MAX_FRAME;
-    let connections = DynamoConnections::new(db, settings.connections, runtime.clone());
+    let mut connections = DynamoConnections::new(db, settings.connections, runtime.clone());
+    if let Some(days) = settings.keep_connections_days {
+        connections = connections.keeping(days);
+    }
     let api = aws_sdk_apigatewaymanagement::config::Builder::from(&aws)
         .endpoint_url(settings.connections_url)
         .build();
