@@ -20,7 +20,14 @@ type Id = string;
 interface Elements<E> {
     readonly "nc.elements": E;
 }
-type Write<T> = [T] extends [readonly (infer E)[] | undefined] ? Elements<E> : Exclude<T, undefined> | null;
+type ReferenceForms = {
+    readonly $space: Id;
+    readonly $id: Id;
+} | Id;
+type Write<T> = [T] extends [readonly (infer E)[] | undefined] ? Elements<E> : [T] extends [{
+    space: Id;
+    id: Id;
+} | undefined] ? Exclude<T, undefined> | ReferenceForms | null : Exclude<T, undefined> | null;
 type Values<C> = C extends AnyCollection ? {
     [K in keyof Infer<C>]?: Write<Infer<C>[K]> | undefined;
 } : never;
