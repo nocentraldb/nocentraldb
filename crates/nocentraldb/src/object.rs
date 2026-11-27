@@ -118,6 +118,21 @@ impl Object {
         self.person
     }
 
+    /// The document of the rich-text field `name` of this object, as the
+    /// copy of its space holds it: empty for a field nobody wrote. A move
+    /// and an ad-hoc copy re-create it in the other space (NOC-539).
+    #[cfg(ncdb_rich_text)]
+    pub(crate) fn rich_text_document(&self, inner: &Inner, name: &str) -> Result<Vec<u8>, Error> {
+        let row = inner
+            .view
+            .get(self.space.0, &self.collection, self.id.0)
+            .map_err(storage)?;
+        Ok(match row.and_then(|mut row| row.fields.remove(name)) {
+            Some(FieldState::RichText(state)) => state.document().to_vec(),
+            _ => Vec::new(),
+        })
+    }
+
     /// Reads `object` of `collection` in `space` from the view, or `None`
     /// when the copy holds no create of it in that collection.
     pub(crate) fn read(

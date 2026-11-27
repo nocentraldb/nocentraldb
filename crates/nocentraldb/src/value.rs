@@ -50,7 +50,7 @@ pub(crate) enum Repr {
     Clear,
     /// A rich-text update under a leased client id, which only the bridge's
     /// editor binding writes (RFC 0013, "An editor: the binding").
-    #[cfg(all(ncdb_rich_text, any(test, feature = "bridge")))]
+    #[cfg(ncdb_rich_text)]
     RichText(crate::rich_text::RichTextUpdate),
     /// A rich-text field's document, as a read gives it (RFC 0013, "The
     /// Rust SDK").
@@ -242,7 +242,7 @@ impl Value {
                 return None;
             }
             // Operation 5's arguments, which `crate::encode` makes.
-            #[cfg(all(ncdb_rich_text, any(test, feature = "bridge")))]
+            #[cfg(ncdb_rich_text)]
             Repr::RichText(_) => return None,
             // A document is no single value of a change.
             #[cfg(ncdb_rich_text)]

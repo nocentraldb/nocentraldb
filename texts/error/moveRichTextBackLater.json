@@ -1,0 +1,7 @@
+{
+  "id": "error.moveRichTextBackLater",
+  "kind": "error",
+  "code": "notAllowed",
+  "text": "the object {id} has a written rich-text field {name}, and the space it moves to already holds the object, so its document cannot be moved there yet",
+  "when": "Space::move_objects (space.move) when an object with a written rich-text field moves into a space whose copy already holds the object, such as a move back: re-creating the document there would show its text twice, so it is refused until a move back writes only the difference (Carsten, 2026-11-27, NOC-560; NOC-581)."
+}

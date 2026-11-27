@@ -42,7 +42,7 @@ The relay reads the identity from what it already receives. The certificate in a
 
 ## Admission tokens
 
-An app with open signup cannot list its users when the relay is deployed. Its backend already knows them, so the backend admits them. It signs an **admission** for an account's identity with an **admission key**, an Ed25519 key that only the backend holds. The operator configures the public half of each app's admission key on the relay, in `NCDB_ADMISSION_KEYS`, as it configures the allowlist: once per app, not once per account.
+An app with open signup cannot list its users when the relay is deployed. Its backend already knows them, so the backend admits them. It signs an **admission** for an account's identity with an **admission key**, an Ed25519 key that only the backend holds. The operator configures the public half of each app's admission key on the relay, as it configures the allowlist: once per app, not once per account. The relay on AWS reads them from `NCDB_ADMISSION_KEYS`, and a self-hosted `ncdb-relay` takes each with `--admission-key` (2026-11-27, NOC-516).
 
 ### The admission
 
@@ -241,3 +241,4 @@ It changes who may create a space in [RFC 0007](0007-relay.md#what-the-relay-che
 
 - 2026-11-22 · First published (NOC-413, #423)
 - 2026-11-23 · Its status line names nobody who decided; the decision log records it (NOC-454, #449)
+- 2026-11-27 · Admission tokens names `--admission-key`, with which a self-hosted `ncdb-relay` takes its admission keys (NOC-500)

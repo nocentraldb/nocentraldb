@@ -69,7 +69,7 @@ fn c3_with_rejected_changes_the_same_cases_end_in_the_same_state_bytes_on_every_
     );
     assert_eq!(
         digest,
-        "c7e815ac965698b01e9588646cf6c1ae43877ed8c73b6090cc1636c20842ce73"
+        "21ba9bbac19ba0c096d13e410dac0e09d61ad9c9dea3e7c7a10bce05abcf7a07"
     );
 }
 

@@ -1,0 +1,10 @@
+{
+  "name": "@nocentraldb/example-notes-backend",
+  "version": "0.2.0",
+  "private": true,
+  "license": "MIT OR Apache-2.0",
+  "type": "module",
+  "dependencies": {
+    "@nocentraldb/sdk": "workspace:*"
+  }
+}

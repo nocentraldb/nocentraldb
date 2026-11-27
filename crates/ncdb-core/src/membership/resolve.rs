@@ -21,7 +21,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::cbor::{self, Value};
-use crate::change::{Change, Header};
+use crate::change::{Change, HeaderFields};
 use crate::ids::{ChangeId, MemberId, SpaceId};
 
 use super::body::{Action, Entry, MembershipEntry, Role};
@@ -234,9 +234,11 @@ impl Resolved {
     }
 
     /// RFC 0008's membership verdict for a sealed change ("Sealed
-    /// changes"), from its header alone: [`MemberState::admits`] of its
-    /// author, over this space's generation graph.
-    pub fn admits(&self, header: &Header) -> bool {
+    /// changes"), from its header's fields alone, a [`Header`](crate::change::Header) or the
+    /// [`HeaderFields`] a log keeps: [`MemberState::admits`] of its author, over
+    /// this space's generation graph.
+    pub fn admits(&self, header: impl Into<HeaderFields>) -> bool {
+        let header = header.into();
         self.members.0.get(&header.author).is_some_and(|state| {
             state.admits(header, &self.seen, |generation, from| {
                 self.descends(generation, from)

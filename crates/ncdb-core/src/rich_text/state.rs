@@ -1,6 +1,6 @@
 //! A rich-text field's state (RFC 0013, "Folding", "The state"): the
 //! document as one Yjs update of its whole state, encoded v1 with garbage
-//! collection, which holds pending items too; for each operation it took,
+//! collection and every map in key order, which holds pending items too; for each operation it took,
 //! its author, its stamp, the runs of ids it added and the ids its delete
 //! set named; the same of each rejected operation it holds as
 //! placeholders (RFC 0013, "Un-folding a rejected change"); and the client

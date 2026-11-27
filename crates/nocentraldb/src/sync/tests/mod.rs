@@ -47,6 +47,7 @@ mod provisional;
 mod pull;
 mod push;
 mod push_again;
+mod push_pages;
 mod reconnect;
 mod refusals;
 mod relay_token;
@@ -55,6 +56,8 @@ mod remove_member;
 mod removed;
 mod renewed_key;
 mod reopen;
+#[cfg(ncdb_rich_text)]
+mod rich_text_move_lost;
 #[cfg(ncdb_rich_text)]
 mod rich_text_roles;
 mod rotation;

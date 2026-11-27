@@ -142,7 +142,7 @@ impl Site<'_> {
             (Field::Plugin(plugin), FieldState::Plugin(state), Intent::Set(value)) => {
                 self.plugin(plugin, state, value)
             }
-            #[cfg(all(ncdb_rich_text, any(test, feature = "bridge")))]
+            #[cfg(ncdb_rich_text)]
             (
                 Field::RichText(rich_text),
                 FieldState::RichText(state),

@@ -39,6 +39,11 @@ export const REPO_DOCS = [
     label: "Bursts of writes",
   },
   {
+    file: "spaces-and-invitations.md",
+    slug: "docs/guides/spaces-and-invitations",
+    label: "Spaces and invitations",
+  },
+  {
     file: "browser-durability.md",
     slug: "docs/browser-durability",
     label: "Browser apps and durability",
