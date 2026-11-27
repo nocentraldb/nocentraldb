@@ -14,7 +14,7 @@
 // what `Infer` reads.
 
 import type { Query } from "./db.ts";
-import { fromMarkdown } from "./firstDocument.ts";
+import { fromMarkdown } from "./markdown.ts";
 import { makeQuery } from "./query.ts";
 import * as texts from "./texts.ts";
 

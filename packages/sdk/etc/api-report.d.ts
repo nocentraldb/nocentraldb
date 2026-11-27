@@ -11,7 +11,7 @@ export declare const pairingAnswer: (text: string) => PairingAnswer;
 // file: db.d.ts
 import type { RecoveryCode } from "./account.ts";
 import type { Durability, ViewStatus } from "./durability.ts";
-import type { FirstDocument } from "./firstDocument.ts";
+import type { FirstDocument } from "./markdown.ts";
 import type { Invitation, Members } from "./members.ts";
 import type { Infer, model } from "./nc.ts";
 import type { SpaceStatus } from "./status.ts";
@@ -292,15 +292,6 @@ export declare class NcError extends Error {
     readonly fingerprint?: string;
     constructor(code: string, message: string, ids?: readonly string[], fingerprint?: string);
 }
-// file: firstDocument.d.ts
-export interface FirstDocument {
-    readonly "nc.firstDocument": true;
-}
-export declare class Markdown {
-    readonly markdown: string;
-    constructor(markdown: string);
-}
-export declare const fromMarkdown: (markdown: string) => FirstDocument;
 // file: index.d.ts
 export declare function name(): string;
 export type { RecoveryCode } from "./account.ts";
@@ -313,6 +304,15 @@ export * as nc from "./nc.ts";
 export type { SpaceStatus } from "./status.ts";
 export type { SyncStatus } from "./sync.ts";
 export type PairingAnswer = import("./account.ts").PairingAnswer;
+// file: markdown.d.ts
+export interface FirstDocument {
+    readonly "nc.firstDocument": true;
+}
+export declare class Markdown {
+    readonly markdown: string;
+    constructor(markdown: string);
+}
+export declare const fromMarkdown: (markdown: string) => FirstDocument;
 // file: members.d.ts
 export interface Invitation {
     readonly fingerprint?: string;
@@ -350,7 +350,7 @@ export declare const invitation: (text: string) => Invitation;
 export {};
 // file: nc.d.ts
 import type { Query } from "./db.ts";
-import { fromMarkdown } from "./firstDocument.ts";
+import { fromMarkdown } from "./markdown.ts";
 interface Value<T = unknown, D extends boolean = false> {
     readonly "nc.reads": T;
     readonly "nc.deprecated": D;

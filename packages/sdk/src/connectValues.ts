@@ -11,7 +11,7 @@
 import { fromCore, toCore } from "./dates.ts";
 import { SetElements } from "./elements.ts";
 import { NcError } from "./error.ts";
-import { Markdown } from "./firstDocument.ts";
+import { Markdown } from "./markdown.ts";
 import * as texts from "./texts.ts";
 
 /** The model's collections as `nc.model` describes them: each field's type, and a set's element type. */

@@ -12,7 +12,7 @@ import type { RecoveryCode } from "./account.ts";
 import { connectWorker } from "./connect.ts";
 import type { Durability, ViewStatus } from "./durability.ts";
 import { SetElements } from "./elements.ts";
-import type { FirstDocument } from "./firstDocument.ts";
+import type { FirstDocument } from "./markdown.ts";
 import type { Invitation, Members } from "./members.ts";
 import type { Infer, model } from "./nc.ts";
 import type { SpaceStatus } from "./status.ts";
