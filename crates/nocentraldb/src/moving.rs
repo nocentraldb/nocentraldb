@@ -371,8 +371,9 @@ fn carried(
 }
 
 /// The fields of `object` whose basic value, link or reference holds a
-/// conflict in the copy of `space`: the move writes their winning values
-/// (RFC 0016, "Conflicts at the move").
+/// conflict in the copy of `space`, or whose rich-text document holds a
+/// lost operation: the move writes their winning values (RFC 0016,
+/// "Conflicts at the move", "Its rich-text fields").
 fn conflicted(
     inner: &Inner,
     space: CoreSpaceId,
@@ -389,24 +390,26 @@ fn conflicted(
     Ok(row
         .fields
         .iter()
-        .filter(|(name, state)| {
-            let FieldState::Basic(state) = state else {
-                return false;
-            };
-            let read = match fields.get(*name) {
-                Some(Field::Basic(t)) => t.read(state),
-                Some(Field::Link(t)) => t.read(state),
-                Some(Field::Ref(t)) => t.read(state),
-                // Only basic values, links and references hold a conflict
-                // the move writes the winner of.
-                Some(Field::Set(_) | Field::Links(_) | Field::Person(_) | Field::Plugin(_))
-                | None => {
-                    return false;
-                }
-                #[cfg(ncdb_rich_text)]
-                Some(Field::RichText(_)) => return false,
-            };
-            !read.conflicts.is_empty()
+        .filter(|(name, state)| match fields.get(*name) {
+            Some(Field::Basic(t)) => {
+                matches!(state, FieldState::Basic(s) if !t.read(s).conflicts.is_empty())
+            }
+            Some(Field::Link(t)) => {
+                matches!(state, FieldState::Basic(s) if !t.read(s).conflicts.is_empty())
+            }
+            Some(Field::Ref(t)) => {
+                matches!(state, FieldState::Basic(s) if !t.read(s).conflicts.is_empty())
+            }
+            #[cfg(ncdb_rich_text)]
+            Some(Field::RichText(t)) => {
+                matches!(state, FieldState::RichText(s) if !t.read(s).lost.is_empty())
+            }
+            // Sets and links of many keep every element; the person field
+            // and a plugin's state hold no conflict the move writes the
+            // winner of.
+            Some(Field::Set(_) | Field::Links(_) | Field::Person(_) | Field::Plugin(_)) | None => {
+                false
+            }
         })
         .map(|(name, _)| (object.id(), name.clone()))
         .collect())
