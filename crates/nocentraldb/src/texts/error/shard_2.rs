@@ -78,6 +78,13 @@ pub(crate) const NO_LONGER_MEMBER: &str =
 pub(crate) const ALREADY_ADEVICE: &str =
     "the invitation's member is a device of this account already";
 
+/// `richTextNotEmpty` (richTextNotEmpty): RichText::from_markdown written into
+/// a rich-text field that holds content in the copy (RFC 0013, "The first
+/// content").
+pub(crate) fn rich_text_not_empty(field: impl std::fmt::Display, collection: impl std::fmt::Display) -> String {
+    format!("the rich-text field {field} of {collection} holds content, so a first document from Markdown is not written into it")
+}
+
 /// `indexScope` (invalidValue): A query of a space-scoped index with db.find,
 /// or of any other index with space.find.
 pub(crate) const INDEX_SCOPE: &str =

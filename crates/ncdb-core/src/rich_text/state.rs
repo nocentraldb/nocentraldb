@@ -73,6 +73,13 @@ impl State {
         &self.document
     }
 
+    /// Whether the document holds a node: one that no deletion removed.
+    /// A field nobody wrote, and one whose every block was deleted, hold
+    /// none (RFC 0013, "The first content").
+    pub fn holds_content(&self) -> bool {
+        super::document::holds_content(&self.document)
+    }
+
     /// The canonical CBOR: `{1: document, 2: [[[change, position], author,
     /// stamp, [[client, clock, len, digest]…], [[client, clock, len]…]]…],
     /// 3: {client: nonce}, 4: [placeholders, as 2]}`, operations in id

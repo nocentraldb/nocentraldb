@@ -147,7 +147,23 @@ impl Site<'_> {
                 Field::RichText(rich_text),
                 FieldState::RichText(state),
                 Intent::Set(Value(Repr::RichText(update))),
-            ) => self.rich_text(rich_text, state, update).map(|op| vec![op]),
+            ) => self
+                .rich_text(
+                    rich_text,
+                    state,
+                    &update.update,
+                    update.client,
+                    update.nonce,
+                )
+                .map(|op| vec![op]),
+            #[cfg(ncdb_rich_text)]
+            (
+                Field::RichText(rich_text),
+                FieldState::RichText(state),
+                Intent::Set(Value(Repr::Markdown(markdown))),
+            ) => self
+                .first_document(rich_text, state, markdown)
+                .map(|op| vec![op]),
             _ => Err(invalid()),
         }
     }
@@ -205,30 +221,28 @@ impl Site<'_> {
     /// id, one Yrs refuses and one that gives an id the state holds other
     /// content are `InvalidValue`, so the log never holds a write of this
     /// member that parks.
-    #[cfg(all(ncdb_rich_text, any(test, feature = "bridge")))]
+    #[cfg(ncdb_rich_text)]
     fn rich_text(
         &self,
         field: &ncdb_core::rich_text::RichText,
         state: &ncdb_core::rich_text::State,
-        update: &crate::rich_text::RichTextUpdate,
+        update: &[u8],
+        client: u64,
+        nonce: [u8; 8],
     ) -> Result<Operation, Error> {
         use ncdb_core::field_op::Origin;
         use ncdb_core::rich_text::{Fit, UPDATE};
-        let shape =
-            ncdb_core::rich_text::update::read(&update.update).map_err(|_| self.invalid())?;
+        let shape = ncdb_core::rich_text::update::read(update).map_err(|_| self.invalid())?;
         let clients = match shape.runs.is_empty() {
             true => Vec::new(),
             false => vec![(
-                cbor::Key::Unsigned(update.client),
-                cbor::Value::Bytes(update.nonce.to_vec()),
+                cbor::Key::Unsigned(client),
+                cbor::Value::Bytes(nonce.to_vec()),
             )],
         };
         let arguments = cbor::Value::Map(
             [
-                (
-                    cbor::Key::Unsigned(1),
-                    cbor::Value::Bytes(update.update.clone()),
-                ),
+                (cbor::Key::Unsigned(1), cbor::Value::Bytes(update.to_vec())),
                 (
                     cbor::Key::Unsigned(2),
                     cbor::Value::Map(clients.into_iter().collect()),
@@ -259,6 +273,32 @@ impl Site<'_> {
             .try_apply(&mut folded, &edit)
             .map_err(|_| self.invalid())?;
         Ok(operation)
+    }
+
+    /// Operation 5 with a first document read from `markdown` (RFC 0013,
+    /// "The first content"), written under a client id of the author drawn
+    /// for this write, so no item of it can share an id with another. A
+    /// field that holds content is `RichTextNotEmpty`; Markdown the core
+    /// does not write a document from is `InvalidValue`.
+    #[cfg(ncdb_rich_text)]
+    fn first_document(
+        &self,
+        field: &ncdb_core::rich_text::RichText,
+        state: &ncdb_core::rich_text::State,
+        markdown: &str,
+    ) -> Result<Operation, Error> {
+        if state.holds_content() {
+            return Err(Error::new(
+                ErrorCode::RichTextNotEmpty,
+                crate::texts::error::rich_text_not_empty(self.name, self.collection),
+            ));
+        }
+        let mut nonce = [0u8; 8];
+        getrandom::fill(&mut nonce).expect("the platform's secure random generator failed");
+        let client = ncdb_core::rich_text::client_id(&self.author, &nonce);
+        let update = ncdb_core::rich_text::anchor::from_markdown(markdown, client)
+            .ok_or_else(|| self.invalid())?;
+        self.rich_text(field, state, &update, client, nonce)
     }
 
     /// The object in this space that `value`, an object id, names.

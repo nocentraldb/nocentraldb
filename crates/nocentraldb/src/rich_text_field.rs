@@ -74,6 +74,22 @@ impl RichText {
         &self.mentions
     }
 
+    /// The value that writes a first document from `markdown` into a
+    /// rich-text field: CommonMark with GitHub's tables, strikethrough and
+    /// task lists, read into TipTap's standard vocabulary by the core, the
+    /// same reading an agent's edits get. It writes the whole document,
+    /// and only into a field that holds no content in the copy, on
+    /// `create` or on a field nothing was written to or whose every block
+    /// was deleted; on a field with content the write is refused with
+    /// `RichTextNotEmpty`, as replacing a document others may be editing
+    /// would overwrite their edits. Markdown the core does not write a
+    /// document from, such as HTML or an image, is refused with
+    /// `InvalidValue`. An app that imports a document writes it once this
+    /// way and edits it from then on.
+    pub fn from_markdown(markdown: impl Into<String>) -> Value {
+        Value(Repr::Markdown(markdown.into()))
+    }
+
     /// The read value of a rich-text field.
     pub(crate) fn value(self) -> Value {
         Value(Repr::RichTextRead(Box::new(self)))

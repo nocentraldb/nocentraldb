@@ -235,6 +235,9 @@ fn value_of(field: &Field) -> Value {
         // read through the bridge yet.
         #[cfg(ncdb_rich_text)]
         Repr::RichTextRead(_) => Value::Null,
+        // Nor a first document from Markdown, which only a write holds.
+        #[cfg(ncdb_rich_text)]
+        Repr::Markdown(_) => Value::Null,
     }
 }
 

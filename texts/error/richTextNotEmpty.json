@@ -1,0 +1,7 @@
+{
+  "id": "error.richTextNotEmpty",
+  "kind": "error",
+  "code": "richTextNotEmpty",
+  "text": "the rich-text field {field} of {collection} holds content, so a first document from Markdown is not written into it",
+  "when": "RichText::from_markdown written into a rich-text field that holds content in the copy (RFC 0013, \"The first content\")."
+}

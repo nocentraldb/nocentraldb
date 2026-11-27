@@ -56,6 +56,10 @@ pub(crate) enum Repr {
     /// Rust SDK").
     #[cfg(ncdb_rich_text)]
     RichTextRead(Box<crate::rich_text_field::RichText>),
+    /// A first document from Markdown, for a rich-text field that holds no
+    /// content (RFC 0013, "The first content").
+    #[cfg(ncdb_rich_text)]
+    Markdown(String),
 }
 
 impl Value {
@@ -242,7 +246,7 @@ impl Value {
             Repr::RichText(_) => return None,
             // A document is no single value of a change.
             #[cfg(ncdb_rich_text)]
-            Repr::RichTextRead(_) => return None,
+            Repr::RichTextRead(_) | Repr::Markdown(_) => return None,
         })
     }
 
