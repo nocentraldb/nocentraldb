@@ -270,3 +270,12 @@ fn plain_xml(state: &State) -> String {
     doc.get_or_insert_xml_fragment(rich_text_support::ROOT)
         .get_string(&doc.transact())
 }
+
+#[test]
+fn the_core_reads_a_state_with_placeholders_as_if_the_rejected_change_was_never_written() {
+    use ncdb_core::rich_text::read;
+    let e = example();
+    let state = fold(&[&e.base, &e.bob], &[&e.carol]);
+    assert_eq!(read::text(&state).trim_end(), "Base. Bob after Carol.");
+    assert_eq!(read::markdown(&state).trim_end(), "Base. Bob after Carol.");
+}
