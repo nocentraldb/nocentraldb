@@ -10,9 +10,10 @@ export type { RecoveryCode } from "./account.ts";
 export type { Db, Page, Query, Space, Tx } from "./db.ts";
 /** The durability of the copy (RFC 0006, "What the SDK reports"; RFC 0009, "Public names"; NOC-315). */
 export type { Durability } from "./durability.ts";
+/** The names an editor declares beyond a rich-text field's vocabulary, its placeholders (NOC-461). */
+export type { KnownNames } from "./editor.ts";
 /** A rich-text field's binding, its status and its vocabulary (RFC 0013, "An editor: the binding"; NOC-461; the status as the owner decided on NOC-538, Q2). */
 export type {
-  KnownNames,
   RichTextBinding,
   RichTextStatus,
   Vocabulary,
