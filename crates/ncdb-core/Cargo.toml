@@ -96,6 +96,12 @@ libsqlite3-sys = { version = "=0.39.1", default-features = false }
 # meets the plugin contract").
 [target.'cfg(ncdb_rich_text)'.dependencies]
 yrs = "=0.28.2"
+# Reads the Markdown of an agent's anchored edit back into blocks, inline
+# content and marks (RFC 0013, "An agent: anchored edits"), with the source
+# offset of each event, so that a quote's ends can be checked against the
+# Markdown it was found in. Without default features: no HTML writer and
+# no command line.
+pulldown-cmark = { version = "=0.13.6", default-features = false }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(ncdb_rich_text)"] }

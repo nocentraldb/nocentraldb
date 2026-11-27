@@ -69,13 +69,17 @@ fn a_wrong_word_is_invalid_names_its_position_and_keeps_the_code() {
     let wrong = if second == "zoo" { "abandon" } else { "zoo" };
     let error = now(code.confirm([first, wrong])).unwrap_err();
     assert_eq!(error.code(), ErrorCode::InvalidValue);
+    // The text names the position and no word: neither the typed word nor
+    // the code's word. It is compared whole, because the code's word is
+    // random and can be a word of the text itself, such as "word" or
+    // "match" (NOC-535).
     let position = code.challenge()[1];
-    assert!(
-        error.to_string().contains(&format!("word {position}")),
-        "{}",
-        error.to_string()
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "word {position} does not match the recovery code, which stays until two of its words match"
+        )
     );
-    assert!(!error.to_string().contains(wrong) && !error.to_string().contains(second));
     // The code stays, also after the database is opened again, and the
     // same object takes a corrected answer.
     assert!(self::code(&db).is_some());

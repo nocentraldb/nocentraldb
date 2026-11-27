@@ -14,10 +14,10 @@
 //! The log also keeps its [`Tips`] as it appends changes and sets their
 //! states: what the member's next change takes from it (NOC-138).
 //!
-//! What the log holds in memory (NOC-452): for every change its id, its
-//! header without the payload, its state, the relay's answer and when the
-//! member wrote it, and beside them the positions, the tips, the counts
-//! and the reports a space's status reads. Every control change stays in
+//! What the log holds in memory (NOC-452): for every change its id, the
+//! fields of its header besides the payload, its state, the relay's answer
+//! and when the member wrote it, and beside them the positions, the
+//! sequences, the tips, the counts and the reports a space's status reads. Every control change stays in
 //! memory whole: the membership checks fold all of them, and a control
 //! change is small. A sealed change stays in memory only until the store
 //! that keeps the log's frames, such as the view's `log` table, has it;
@@ -25,14 +25,20 @@
 //! the change back through [`Frames`]. Such passes are rare: checking a
 //! rejected change again, un-folding, folding a field again, reading a
 //! move's later edits, and the tips once after a reopen. The memory of a
-//! log so grows with its number of changes, a few hundred bytes each, not
-//! with their bytes.
+//! log so grows with its number of changes, not with their bytes: each
+//! change costs one entry of about 150 bytes, which names its author by a
+//! number, its position, its author sequence, and its node among the
+//! tips' heads with its dependencies as a slice, about 400 bytes in all
+//! (NOC-518).
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+mod entries;
+mod entry;
 mod frames;
+mod sequences;
 mod state;
 
 pub use frames::{Frames, Held, NoFrames};
@@ -42,11 +48,14 @@ pub use state::{
     State, StateCounts,
 };
 
-use crate::change::{Change, Header, Kind};
+use crate::change::{Change, HeaderFields, Kind};
 use crate::ids::{ChangeId, MemberId, SpaceId};
 use crate::receive::Checks;
 use crate::texts;
 use crate::tips::{Opened, Tips};
+use entries::Entries;
+use entry::{Authors, Entry};
+use sequences::Sequences;
 
 /// A position in the log: 1 for the first entry. A cursor at position `p`
 /// hands out the entries after `p`; [`Position::START`] hands out all.
@@ -84,51 +93,13 @@ impl fmt::Display for AppendError {
 
 impl std::error::Error for AppendError {}
 
-/// One entry: the change or its header, and on a member its state,
-/// whether the relay confirmed it, the relay's refusal and when the member
-/// wrote it.
-#[derive(Clone)]
-struct Entry {
-    id: ChangeId,
-    body: Body,
-    state: Option<State>,
-    confirmed: bool,
-    refusal: Option<RelayRefusal>,
-    /// When the member wrote the change, for one it wrote.
-    written_at: Option<u64>,
-}
-
-impl Entry {
-    fn header(&self) -> &Header {
-        match &self.body {
-            Body::Held(change) => change.header(),
-            Body::Stored(header) => header,
-        }
-    }
-
-    fn held(&self) -> Option<&Change> {
-        match &self.body {
-            Body::Held(change) => Some(change),
-            Body::Stored(_) => None,
-        }
-    }
-}
-
-/// What an entry holds of its change.
-#[derive(Clone)]
-enum Body {
-    /// The change.
-    Held(Change),
-    /// The header without its payload: the store keeps the frame.
-    Stored(Header),
-}
-
 /// The log of one space. Its `Debug` output shows the space and the number
 /// of entries.
 #[derive(Clone)]
 pub struct Log {
     space: SpaceId,
-    entries: Vec<Entry>,
+    entries: Entries,
+    authors: Authors,
     positions: BTreeMap<ChangeId, Position>,
     /// The changes whose state was set since [`Log::take_changed`] last
     /// ran, for a store that keeps the states.
@@ -140,13 +111,10 @@ pub struct Log {
     /// The parked and rejected counts, kept as states are set.
     state_counts: StateCounts,
     /// The changes of each author and sequence, kept as changes are
-    /// appended; two or more are an equivocation (RFC 0002).
-    sequences: BTreeMap<(MemberId, u64), Vec<ChangeId>>,
-    /// The authors and sequences with two or more changes, kept as changes
-    /// are appended. This, `refused` and `parked` let a space's status,
-    /// which the SDK reads after every write, be read without a pass over
-    /// the log (NOC-439).
-    equivocating: BTreeSet<(MemberId, u64)>,
+    /// appended. This, `refused` and `parked` let a space's status, which
+    /// the SDK reads after every write, be read without a pass over the
+    /// log (NOC-439).
+    sequences: Sequences,
     /// The positions of each author's changes the relay refused, kept as
     /// refusals are recorded and forgotten.
     refused: BTreeMap<MemberId, BTreeSet<Position>>,
@@ -175,14 +143,14 @@ impl Log {
     pub fn new(space: SpaceId) -> Log {
         Log {
             space,
-            entries: Vec::new(),
+            entries: Entries::default(),
+            authors: Authors::default(),
             positions: BTreeMap::new(),
             changed: BTreeSet::new(),
             tips: Tips::default(),
             relay_counts: BTreeMap::new(),
             state_counts: StateCounts::default(),
-            sequences: BTreeMap::new(),
-            equivocating: BTreeSet::new(),
+            sequences: Sequences::default(),
             refused: BTreeMap::new(),
             parked: BTreeSet::new(),
             unconfirmed_written: BTreeSet::new(),
@@ -204,22 +172,13 @@ impl Log {
             return Ok(Appended::Duplicate(position));
         }
         self.tips.appended(change.header());
-        self.counts_mut(change.header().author).unconfirmed += 1;
-        let key = (change.header().author, change.header().sequence);
-        let same = self.sequences.entry(key).or_default();
-        same.push(id);
-        if same.len() > 1 {
-            self.equivocating.insert(key);
-        }
-        self.entries.push(Entry {
-            id,
-            body: Body::Held(change),
-            state: None,
-            confirmed: false,
-            refusal: None,
-            written_at: None,
-        });
+        let author = change.header().author;
+        self.counts_mut(author).unconfirmed += 1;
+        let number = self.authors.number(author);
+        let sequence = change.header().sequence;
+        self.entries.push(Entry::new(change, number));
         let position = self.head();
+        self.sequences.add(number, sequence, position);
         self.positions.insert(id, position);
         Ok(Appended::New(position))
     }
@@ -264,10 +223,12 @@ impl Log {
         self.change_at(self.position_of(id)?, frames)
     }
 
-    /// The header of the change `id`, without its payload when the log
-    /// released the change.
-    pub fn header(&self, id: ChangeId) -> Option<&Header> {
-        Some(self.entry(id)?.header())
+    /// The fields of the header of the change `id` besides its payload
+    /// and its unknown keys: what the log keeps of it in memory, whether
+    /// it holds the change or released it (NOC-518). [`Log::change`]
+    /// gives the whole header.
+    pub fn fields(&self, id: ChangeId) -> Option<HeaderFields> {
+        Some(self.entry(id)?.fields(self.space, &self.authors))
     }
 
     /// Drops the bytes of the sealed change `id`, whose frame the log's
@@ -278,14 +239,10 @@ impl Log {
         let Some(entry) = self.entry_mut(id) else {
             return false;
         };
-        let Body::Held(change) = &entry.body else {
-            return false;
-        };
-        if change.header().kind == Kind::CONTROL {
+        if entry.kind == Kind::CONTROL {
             return false;
         }
-        entry.body = Body::Stored(change.header().without_payload());
-        true
+        entry.held.take().is_some()
     }
 
     /// The ids of the log's changes, in log order.
@@ -297,7 +254,7 @@ impl Log {
     pub fn controls(&self) -> impl Iterator<Item = (&Change, Option<&State>)> {
         self.entries.iter().filter_map(|entry| {
             let change = entry.held()?;
-            (change.header().kind == Kind::CONTROL).then_some((change, entry.state.as_ref()))
+            (entry.kind == Kind::CONTROL).then_some((change, entry.state.as_ref()))
         })
     }
 
@@ -308,7 +265,7 @@ impl Log {
 
     /// The relay's refusal of a change, when one was recorded.
     pub fn relay_refusal(&self, id: ChangeId) -> Option<&RelayRefusal> {
-        self.entry(id)?.refusal.as_ref()
+        self.entry(id)?.refusal.as_deref()
     }
 
     /// The changes of `author` the relay refused, in local order, with the
@@ -323,7 +280,7 @@ impl Log {
             .flatten()
             .filter_map(|position| {
                 let entry = &self.entries[index(*position)];
-                Some((entry.id, entry.refusal.as_ref()?))
+                Some((entry.id, entry.refusal.as_deref()?))
             })
     }
 
@@ -332,11 +289,12 @@ impl Log {
     /// after the member folded it"). Returns `false`, and records
     /// nothing, when the log does not hold the change.
     pub fn record_relay_refusal(&mut self, id: ChangeId, refusal: RelayRefusal) -> bool {
-        let Some(entry) = self.entry_mut(id) else {
+        let Some(index) = self.index_of(id) else {
             return false;
         };
-        let newly = entry.refusal.replace(refusal).is_none();
-        let (author, confirmed) = (entry.header().author, entry.confirmed);
+        let entry = &mut self.entries[index];
+        let newly = entry.refusal.replace(Box::new(refusal)).is_none();
+        let (author, confirmed) = (self.authors.id(entry.author), entry.confirmed);
         if newly {
             let position = self.position_of(id).expect("the log holds the change");
             self.refused.entry(author).or_default().insert(position);
@@ -356,13 +314,14 @@ impl Log {
     /// `false`, and changes nothing, when the log does not hold the change
     /// or holds no refusal of it.
     pub fn clear_relay_refusal(&mut self, id: ChangeId) -> bool {
-        let Some(entry) = self.entry_mut(id) else {
+        let Some(index) = self.index_of(id) else {
             return false;
         };
+        let entry = &mut self.entries[index];
         if entry.refusal.take().is_none() {
             return false;
         }
-        let (author, confirmed) = (entry.header().author, entry.confirmed);
+        let (author, confirmed) = (self.authors.id(entry.author), entry.confirmed);
         let position = self.position_of(id).expect("the log holds the change");
         if let Some(positions) = self.refused.get_mut(&author) {
             positions.remove(&position);
@@ -379,11 +338,12 @@ impl Log {
     /// the member keeps elsewhere. Returns `false`, and records nothing,
     /// when the log does not hold the change.
     pub fn record_relay_confirmation(&mut self, id: ChangeId) -> bool {
-        let Some(entry) = self.entry_mut(id) else {
+        let Some(index) = self.index_of(id) else {
             return false;
         };
+        let entry = &mut self.entries[index];
         let newly = !std::mem::replace(&mut entry.confirmed, true);
-        let (author, refused) = (entry.header().author, entry.refusal.is_some());
+        let (author, refused) = (self.authors.id(entry.author), entry.refusal.is_some());
         let written_at = entry.written_at;
         if newly && !refused {
             self.counts_mut(author).unconfirmed -= 1;
@@ -431,10 +391,11 @@ impl Log {
                 self.unconfirmed_written.insert((at, Position(position)));
             }
             if entry.refusal.is_none() {
-                returned.push(entry.header().author);
+                returned.push(entry.author);
             }
         }
         for author in returned {
+            let author = self.authors.id(author);
             self.counts_mut(author).unconfirmed += 1;
         }
     }
@@ -475,14 +436,12 @@ impl Log {
     /// 0002, "Author sequence"). Both are kept and folded; the SDK reports
     /// them.
     pub fn equivocations(&self) -> Vec<ChangeId> {
-        let mut ids: Vec<ChangeId> = self
-            .equivocating
-            .iter()
-            .flat_map(|key| &self.sequences[key])
-            .copied()
-            .collect();
-        ids.sort_by_key(|id| self.position_of(*id));
-        ids
+        let mut positions: Vec<Position> = self.sequences.equivocating().collect();
+        positions.sort();
+        positions
+            .into_iter()
+            .map(|position| self.entries[index(position)].id)
+            .collect()
     }
 
     /// The relay counts of `author`'s changes in this log.
@@ -522,8 +481,10 @@ impl Log {
         }
         entry.state = Some(state);
         if folded(&entry.state) {
-            let id = entry.id;
-            self.tips.folded(id, entry.header(), opened);
+            match entry.held().filter(|_| entry.kind == Kind::CONTROL) {
+                Some(control) => self.tips.folded_control(entry.id, control.header()),
+                None => self.tips.folded_sealed(entry.id, opened),
+            }
         }
         self.changed.insert(id);
     }
@@ -583,7 +544,7 @@ impl Log {
     pub(crate) fn folded_sealed(&self) -> Vec<(ChangeId, Vec<ParkedOperation>)> {
         self.entries
             .iter()
-            .filter(|entry| entry.header().kind != Kind::CONTROL)
+            .filter(|entry| entry.kind != Kind::CONTROL)
             .filter_map(|entry| match &entry.state {
                 Some(State::Folded { parked }) => Some((entry.id, parked.clone())),
                 _ => None,

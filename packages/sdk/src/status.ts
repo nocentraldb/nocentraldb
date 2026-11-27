@@ -34,6 +34,8 @@ export interface SpaceStatus {
   readonly waitingForKey: boolean;
   /** The fingerprints of accounts whose person-key records failed their checks. */
   readonly badPersonKeyRecords: readonly string[];
+  /** How many person keys of this space this device does not hold, though no erasure destroyed them; personal values sealed under them read as unset until it does (NOC-547). `0` when every personal value can be read. */
+  readonly missingPersonKeys: number;
   /** The erasures of this space that are still provisional; an app must show them. */
   readonly provisionalErasures: readonly ProvisionalErasure[];
   /** Whether this member is the space's only member. Recovery restores the account, not its spaces, so losing this device loses the space; an app that must not lose it adds a second member, another person or an agent (RFC 0010, "What it restores"). */

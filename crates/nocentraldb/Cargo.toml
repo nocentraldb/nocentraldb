@@ -124,3 +124,13 @@ rusqlite = { version = "=0.41.1", default-features = false, features = ["bundled
 # wasm-bindgen-test, the version the core's wasm tests pin.
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "=0.3.80"
+
+# Rich text is built only with the compiler cfg `ncdb_rich_text`, which only
+# the project's own CI sets (NOC-468; crates/ncdb-core/Cargo.toml). The
+# bridge's editor binding (NOC-461) gives a binding the part of a field's
+# document it does not hold yet, with Yrs at the version the core pins.
+[target.'cfg(ncdb_rich_text)'.dependencies]
+yrs = "=0.28.2"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(ncdb_rich_text)"] }

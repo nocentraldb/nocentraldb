@@ -42,3 +42,31 @@ fn two_changes_of_one_author_under_one_sequence_are_listed_in_local_order() {
     assert_eq!(m.log.equivocations(), [first.id(), second.id(), third.id()]);
     assert!(!m.log.equivocations().contains(&other.id()));
 }
+
+/// The log keeps an author's sequences in a list up to the first gap and
+/// the ones after it apart (NOC-518): an equivocation is found on both
+/// sides of a gap, and after the gap closes.
+#[test]
+fn equivocations_are_found_when_changes_arrive_out_of_sequence_order() {
+    let mut m = with_key();
+    let four = m.receive(&sealed(FOUNDER, 4, 0, vec![set_title(4)]));
+    let three = m.receive(&sealed(FOUNDER, 3, 0, vec![set_title(3)]));
+    let four_again = m.receive(&sealed(FOUNDER, 4, 0, vec![set_title(40)]));
+    let two = m.receive(&sealed(FOUNDER, 2, 0, vec![set_title(2)]));
+    let three_again = m.receive(&sealed(FOUNDER, 3, 0, vec![set_title(30)]));
+    let five = m.receive(&sealed(FOUNDER, 5, 0, vec![set_title(5)]));
+    let two_again = m.receive(&sealed(FOUNDER, 2, 0, vec![set_title(20)]));
+
+    assert_eq!(
+        m.log.equivocations(),
+        [
+            four.id(),
+            three.id(),
+            four_again.id(),
+            two.id(),
+            three_again.id(),
+            two_again.id()
+        ]
+    );
+    assert!(!m.log.equivocations().contains(&five.id()));
+}

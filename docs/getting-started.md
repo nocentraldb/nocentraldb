@@ -57,7 +57,7 @@ export const model = nc.model({
     },
     {
       indexes: {
-        byStatus: nc.index(["status", "title"], { equal: 1 }),
+        byStatus: nc.index({ where: ["status"], orderBy: ["title"] }),
       },
     },
   ),
@@ -206,7 +206,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lock = std::fs::read_to_string("model.lock.json")?;
     let db = Db::open(OpenOptions::new(&lock).path("data")).await?;
 
-    let open = db.index("tasks", "byStatus")?.equal(["open"]).take(20);
+    let open = db.index("tasks", "byStatus")?.where_eq(["open"]).take(20);
     let mut page = db.find(&open).await?;
     loop {
         for task in &page.items {
@@ -238,7 +238,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lock = std::fs::read_to_string("model.lock.json")?;
     let db = Db::open(OpenOptions::new(&lock).path("data")).await?;
 
-    let open = db.index("tasks", "byStatus")?.equal(["open"]).take(50);
+    let open = db.index("tasks", "byStatus")?.where_eq(["open"]).take(50);
     let mut pages = db.subscribe(open);
     while let Some(page) = pages.next().await {
         println!("{} open tasks", page?.items.len());

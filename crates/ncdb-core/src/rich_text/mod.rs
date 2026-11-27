@@ -14,11 +14,21 @@
 //! deleted, from which its outcome follows ([`outcome`]). Of two operations
 //! that give one item id different content, the earlier in stamp order
 //! keeps it ([`RichText::fit`]).
+//!
+//! Un-folding (RFC 0013, "Un-folding a rejected change"): a rejected
+//! operation is placed in the field as deleted placeholders, without its
+//! delete set ([`RichText::place`]). A placeholder gives way to every
+//! operation the field takes that adds one of its ids, and of two
+//! placeholders that give one id different content, the earlier in stamp
+//! order keeps it ([`RichText::fit_placeholder`]).
 
+pub mod anchor;
 mod client_id;
 mod document;
 mod edit;
 mod outcome;
+mod placeholder;
+pub mod read;
 mod state;
 pub mod update;
 
@@ -42,13 +52,19 @@ use update::Run;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct RichText;
 
-/// What the app reads from a rich-text field, until the core's reads of
-/// RFC 0013 step 3b: the document as Yrs writes it as XML, and the
-/// operations that lost.
-#[derive(Clone, Default, PartialEq, Eq)]
+/// What the app reads from a rich-text field (RFC 0013, "Reading"): the
+/// document as Markdown, as plain text, as a tree and as the references
+/// its mentions hold ([`read`]), and the operations that lost.
+#[derive(Clone, PartialEq)]
 pub struct Read {
-    /// The document's root fragment as XML.
-    pub xml: String,
+    /// The document as Markdown, as [`read::markdown`].
+    pub markdown: String,
+    /// The document as plain text, as [`read::text`].
+    pub text: String,
+    /// The document as ProseMirror JSON, as [`read::tree`].
+    pub tree: ncdb_plugin::Data,
+    /// The references its mentions hold, as [`read::mentions`].
+    pub mentions: Vec<read::Mention>,
     /// The operations whose outcome is lost: `$conflicts` names the field
     /// while there is one.
     pub lost: BTreeSet<OperationId>,
@@ -57,7 +73,10 @@ pub struct Read {
 impl fmt::Debug for Read {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Read")
-            .field("xml", &Size(self.xml.len(), "bytes <redacted>"))
+            .field("markdown", &Size(self.markdown.len(), "bytes <redacted>"))
+            .field("text", &Size(self.text.len(), "bytes <redacted>"))
+            .field("tree", &self.tree)
+            .field("mentions", &Size(self.mentions.len(), "<redacted>"))
             .field("lost", &self.lost)
             .finish()
     }
@@ -73,8 +92,8 @@ pub enum Fit {
     /// content: it parks as "malformed arguments".
     Later,
     /// It is earlier than these operations the state holds, which give one
-    /// of its ids other content: they park, and the field folds again
-    /// without them.
+    /// of its ids other content, or it adds an id these placeholders hold:
+    /// they park or give way, and the field folds again without them.
     Displaces(Vec<OperationId>),
 }
 
@@ -91,10 +110,69 @@ impl RichText {
             }
             displaced.push(*id);
         }
+        // A placeholder gives way to every operation that adds one of its
+        // ids, its own operation's included.
+        for (id, record) in &state.placeholders {
+            if placeholder::overlap(&record.runs, edit.runs()) {
+                displaced.push(*id);
+            }
+        }
         match displaced.is_empty() {
             true => Fit::Fits,
             false => Fit::Displaces(displaced),
         }
+    }
+
+    /// Whether `edit`, an operation of a rejected change, fits `state` as
+    /// placeholders: [`Fit::Later`] when an operation the state took adds
+    /// one of its ids, or an earlier placeholder gives one of them other
+    /// content; [`Fit::Displaces`] the later placeholders that do.
+    pub fn fit_placeholder(&self, state: &State, edit: &Edit) -> Fit {
+        if state
+            .edits
+            .values()
+            .any(|record| placeholder::overlap(&record.runs, edit.runs()))
+        {
+            return Fit::Later;
+        }
+        let mut displaced = Vec::new();
+        for (id, record) in &state.placeholders {
+            if *id == edit.id || !conflict(&record.runs, edit.runs()) {
+                continue;
+            }
+            if record.order(*id) < edit.order() {
+                return Fit::Later;
+            }
+            displaced.push(*id);
+        }
+        match displaced.is_empty() {
+            true => Fit::Fits,
+            false => Fit::Displaces(displaced),
+        }
+    }
+
+    /// Places `edit`, an operation of a rejected change, in `state`: its
+    /// items as deleted placeholders, without its delete set. One that
+    /// does not fit, or that Yrs refuses, leaves the state as it was; one
+    /// that displaces others is placed, and the caller folds the field
+    /// again without them.
+    pub fn place(&self, state: &mut State, edit: &Edit) {
+        if state.placeholders.contains_key(&edit.id)
+            || self.fit_placeholder(state, edit) == Fit::Later
+        {
+            return;
+        }
+        let Ok(update) = placeholder::update(&edit.update, edit.runs()) else {
+            return;
+        };
+        let Ok(document) = document::apply(&state.document, &update) else {
+            return;
+        };
+        state.document = document;
+        state.placeholders.insert(edit.id, Record::of(edit));
+        state
+            .clients
+            .extend(edit.clients.iter().map(|(c, n)| (*c, *n)));
     }
 
     /// Applies `edit` to `state`, or says why it parks: an edit that is
@@ -146,8 +224,17 @@ impl FieldType for RichText {
     }
 
     fn read(&self, state: &State) -> Read {
+        let read::Reads {
+            markdown,
+            text,
+            tree,
+            mentions,
+        } = read::all(state);
         Read {
-            xml: document::xml(&state.document),
+            markdown,
+            text,
+            tree,
+            mentions,
             lost: outcome::lost(state),
         }
     }

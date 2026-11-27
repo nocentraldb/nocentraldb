@@ -146,7 +146,7 @@ relay  → member  ok     {req}
 ```
 
 - `admit` carries an admission token, the canonical CBOR map that an app's backend signed with its admission key ([RFC 0015, "The admission"](0015-relay-admission.md#the-admission)), as bytes. The SDK reads the token's text form, `ncdb-admit-1:`, and sends the map; it refuses a text that is not one before anything reaches the relay (pm, 2026-11-23, NOC-469).
-- A member sends it after `auth`, as any request. The relay answers `malformed` when the bytes are not an admission's canonical map, and `not_allowed` when the admission names another relay id, verifies under none of the admission keys the operator configured (`NCDB_ADMISSION_KEYS` on AWS), or has lapsed by the relay's clock: it holds while the clock, in milliseconds, is below its until × 1000 (pm, 2026-11-23, NOC-469).
+- A member sends it after `auth`, as any request. The relay answers `malformed` when the bytes are not an admission's canonical map, and `not_allowed` when the admission names another relay id, verifies under none of the admission keys the operator configured (`NCDB_ADMISSION_KEYS` on AWS, `--admission-key` on a self-hosted `ncdb-relay`; 2026-11-27, NOC-516), or has lapsed by the relay's clock: it holds while the clock, in milliseconds, is below its until × 1000 (pm, 2026-11-23, NOC-469).
 - Otherwise the relay records, under the admission's identity, its until, its spaces and the admission key that signed it, and answers `ok`. A later admission for the same identity replaces those three and keeps the count of spaces the identity created under its admissions, so an app renews an admission or raises its spaces by issuing a new one, and renewing grants no new spaces (2026-11-23, NOC-493).
 - The admission gates only the creation of spaces ([What the relay checks](#what-the-relay-checks), "Who may create a space"). Its identity's spaces keep working when it lapses.
 
@@ -735,6 +735,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - **2026-11-23 · `admit` carries an admission's bytes, its refusals are `malformed` and `not_allowed`, and a genesis goes through the allowlist, then an admission, then the guest's one space.** ([decision](../../factory/decisions/2026-11-23-NOC-469-admit-carries-an-admission-s-bytes-and-is-refused-with-malformed-or-not-allowed.md))
 - **2026-11-23 · A change at the 16 MiB limit fits in 256 MiB of core memory, natively and in a browser tab's WebAssembly memory; a phone was not measured.** ([decision](../../factory/decisions/2026-11-23-NOC-479-a-change-at-the-16-mib-limit-fits-in-256-mib-of-core-memory.md))
 - **2026-11-23 · The SDK splits a write above the largest frame between objects, and refuses one object above it.** ([decision](../../factory/decisions/2026-11-23-NOC-421-a-write-above-the-relay-change-limit-is-split-between-objects.md))
+- **2026-11-27 · A self-hosted `ncdb-relay` takes its admission keys with `--admission-key`, once per key.** ([decision](../../factory/decisions/2026-11-27-NOC-500-a-self-hosted-ncdb-relay-takes-admission-keys-with-admission-key.md))
 
 ## History
 
@@ -760,3 +761,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - 2026-11-23 · Inline attributions keep the date and the ticket and name nobody who decided; the decision log records it (NOC-481, #475)
 - 2026-11-23 · Large changes states the memory budget of a change at the 16 MiB limit, 256 MiB, which a release-only guard test holds (NOC-479)
 - 2026-11-23 · The SDK splits a write above the largest frame between objects and refuses one object above it, so its own writes no longer meet `too_large` (NOC-421, #468)
+- 2026-11-27 · Admit names `--admission-key`, with which a self-hosted `ncdb-relay` takes its admission keys (NOC-500)

@@ -85,8 +85,14 @@ impl Site<'_> {
                 Ok(vec![self.operation(basic, &write)])
             }
             (Field::Link(link), FieldState::Basic(state), Intent::Set(value)) => {
-                let target = match value.0 {
+                // A link takes a reference too, and refuses one into another
+                // space (RFC 0018, "Existing link fields read as references").
+                let target = match &value.0 {
                     Repr::Clear => None,
+                    Repr::Ref(reference) => Some(Target {
+                        space: reference.space.0,
+                        object: reference.id.0,
+                    }),
                     _ => Some(self.target(value)?),
                 };
                 let write = link
@@ -95,12 +101,15 @@ impl Site<'_> {
                 Ok(vec![self.operation(link, &write)])
             }
             (Field::Ref(reference), FieldState::Basic(state), Intent::Set(value)) => {
+                // A bare object id names the written object's own space
+                // (RFC 0018, "One function, two cases").
                 let target = match value.0 {
                     Repr::Clear => None,
                     Repr::Ref(reference) => Some(Target {
                         space: reference.space.0,
                         object: reference.id.0,
                     }),
+                    Repr::Id(_) => Some(self.target(value)?),
                     _ => return Err(invalid()),
                 };
                 let write = reference.set(state, id, author, stamp, target);
@@ -133,6 +142,12 @@ impl Site<'_> {
             (Field::Plugin(plugin), FieldState::Plugin(state), Intent::Set(value)) => {
                 self.plugin(plugin, state, value)
             }
+            #[cfg(ncdb_rich_text)]
+            (
+                Field::RichText(rich_text),
+                FieldState::RichText(state),
+                Intent::Set(Value(Repr::RichText(update))),
+            ) => self.rich_text(rich_text, state, update).map(|op| vec![op]),
             _ => Err(invalid()),
         }
     }
@@ -181,6 +196,69 @@ impl Site<'_> {
                 ))
             })
             .collect()
+    }
+
+    /// Operation 5 with `update` (RFC 0013, "How an edit travels in a
+    /// change"), listing the leased client id when the update adds items.
+    /// The change is checked before it is made, as every member folds it:
+    /// an update Yjs cannot read, one that adds items under another client
+    /// id, one Yrs refuses and one that gives an id the state holds other
+    /// content are `InvalidValue`, so the log never holds a write of this
+    /// member that parks.
+    #[cfg(ncdb_rich_text)]
+    fn rich_text(
+        &self,
+        field: &ncdb_core::rich_text::RichText,
+        state: &ncdb_core::rich_text::State,
+        update: &crate::rich_text::RichTextUpdate,
+    ) -> Result<Operation, Error> {
+        use ncdb_core::field_op::Origin;
+        use ncdb_core::rich_text::{Fit, UPDATE};
+        let shape =
+            ncdb_core::rich_text::update::read(&update.update).map_err(|_| self.invalid())?;
+        let clients = match shape.runs.is_empty() {
+            true => Vec::new(),
+            false => vec![(
+                cbor::Key::Unsigned(update.client),
+                cbor::Value::Bytes(update.nonce.to_vec()),
+            )],
+        };
+        let arguments = cbor::Value::Map(
+            [
+                (
+                    cbor::Key::Unsigned(1),
+                    cbor::Value::Bytes(update.update.clone()),
+                ),
+                (
+                    cbor::Key::Unsigned(2),
+                    cbor::Value::Map(clients.into_iter().collect()),
+                ),
+            ]
+            .into(),
+        );
+        let operation = Operation::new(
+            self.object,
+            self.collection.to_owned(),
+            Some(self.name.to_owned()),
+            UPDATE,
+            Some(arguments),
+        );
+        let origin = Origin {
+            id: Site::ID,
+            author: self.author,
+            stamp: Site::STAMP,
+        };
+        let edit = field
+            .decode(&operation, origin)
+            .map_err(|_| self.invalid())?;
+        if field.fit(state, &edit) != Fit::Fits {
+            return Err(self.invalid());
+        }
+        let mut folded = state.clone();
+        field
+            .try_apply(&mut folded, &edit)
+            .map_err(|_| self.invalid())?;
+        Ok(operation)
     }
 
     /// The object in this space that `value`, an object id, names.

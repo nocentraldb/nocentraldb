@@ -2,7 +2,7 @@
 
 REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-411
 
-This RFC designs `nc.richText`, the field type that [RFC 0005](0005-schema-and-model-lock.md#field-types) reserves and [RFC 0001](0001-nocentraldb.md#field-types-we-ship) promises: a shared document built on Yjs, with Yrs in the core, that people edit in TipTap and agents change with focused edits. It says how a rich-text field's operations travel in a change and fold, how Yjs updates map to those operations, how the TypeScript SDK binds an editor, and what the Rust SDK reads. nexflow.it waits for it: every note body there is rich text.
+This RFC designs `nc.richText`, the field type that [RFC 0005](0005-schema-and-model-lock.md#field-types) reserves and [RFC 0001](0001-nocentraldb.md#field-types-we-ship) promises: a shared document built on Yjs, with Yrs in the core, that people edit in TipTap and agents change with focused edits. It says how a rich-text field's operations travel in a change and fold, how Yjs updates map to those operations, how the TypeScript SDK binds an editor, and what the Rust SDK reads. An app whose note bodies are rich text waits for it.
 
 It checks Yjs's behaviour against the design with four spikes on Yjs 13.6.33, Yrs 0.28.2 and TipTap 3.35 ([What the spikes found](#what-the-spikes-found)), and its findings are the reasons for the choices below. [Follow-up tickets](#follow-up-tickets) lists the work it leads to, in order.
 
@@ -20,13 +20,14 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operations carry a
 
 | Question | Answer |
 | --- | --- |
-| What is a rich-text field? | One Yjs document per object and field, whose root is the `XmlFragment` named `default`, the shape TipTap's collaboration extension edits. Its type id is `ncdb/richText`, rule 1. |
+| What is a rich-text field? | One Yjs document per object and field, whose root is the `XmlFragment` named `default`, the shape TipTap's collaboration extension edits. Its type id is `ncdb/richText`, rule 1. It declares its vocabulary, the nodes and marks its editor uses, in the schema and the lock, and the vocabulary may only grow. |
 | How does an edit travel? | As one operation, number 5, "rich-text update": a Yjs update in encoding v1, and for each Yjs client id whose items it adds, the nonce that binds that id to the change's author. One change carries at most one such operation per field. |
 | How does it fold? | The core applies the update to the field's Yrs document, in any order of arrival. Yjs keeps content whose dependencies have not arrived as pending, so a gap delays content and never reorders it. |
 | What can lose? | Text typed into a block that a concurrent change deleted, and a block attribute, such as a heading's level, set at the same time by two members. Both stay identifiable: the outcome is `lost`, and `space.inspect` gives what was lost and who wrote it. |
 | How does TipTap bind? | `space.richText(collection, id, field)` returns a binding with a `Y.Doc`; the app passes it to TipTap's `Collaboration` extension. The SDK collects the editor's updates, writes one change per pause in typing, and applies what other members write. |
 | What does an agent do? | It reads the field as Markdown, with a version. It edits by quoting the Markdown it read and giving the Markdown that replaces it; the core looks the quote up in the version the agent read and writes the smallest Yjs update made at that version, which Yjs merges with whatever a person typed since ([An agent: anchored edits](#an-agent-anchored-edits)). |
 | What does the Rust SDK read? | `get::<RichText>`, with the document as Markdown, as plain text, as a tree and as the references its mentions hold. |
+| What happens when the object moves or is copied? | The document is re-created in the other space from its tree, under a client id of the member that moves or copies it. Who wrote which part stays in the old space's log ([Moving and copying the object](#moving-and-copying-the-object)). |
 | What does the relay see? | Nothing new: the update sits inside the sealed payload. It sees one change per pause in typing, not one per keystroke. |
 | Does erasure reach rich text? | No, as for every unmarked text. A mention should store only a reference to the person object, never the name, so an erased person's name never was in the text; this is a recommendation, which the core does not enforce. Deleted text stays in the log. |
 
@@ -45,6 +46,7 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operations carry a
 | Binding | What the TypeScript SDK gives an editor: a `Y.Doc` kept in step with the core's document. |
 | Anchored edit | An edit that quotes the Markdown it changes and gives the Markdown that replaces it. |
 | Mention | A node in the document that holds a reference to an object, such as a person, and no name. |
+| Vocabulary | The names of the nodes and marks a rich-text field declares in the schema and the lock, such as `paragraph`, `heading` and `bold`. |
 
 ## Where things stand today
 
@@ -93,7 +95,7 @@ F1 to F10 come from a first spike, on Yjs 13.6.33 (the latest stable release; 14
 | F19 | With the editor's schema widened from the document before it opened, the content check on and the editor rebuilt on `contentError`, the older client kept editing and lost nothing, also when a new kind of node arrived while it was open. A guard on the binding's transactions flagged every loss of the scenario and nothing in ordinary edits. | Three measures together keep every client editing; the binding requires them ([An editor that cannot show a node](#an-editor-that-cannot-show-a-node)). |
 | F20 | A listener registered on the editor's `contentError` event never ran: TipTap's default `onContentError` option threw first, and the editor stayed paused. Given as the editor's `onContentError` option, the rebuild ran. | The rebuild goes in the editor's option. |
 | F21 | An IME composition held open past the pause was written before the person committed it, and replaced by a second change when they did. | A pause does not end inside a composition ([An editor: the binding](#an-editor-the-binding)). |
-| F22 | A rebuild while a composition was open kept the uncommitted text in the document, lost the committed text, and left the editor without focus. | A rebuild waits for `compositionend` and restores focus and selection. |
+| F22 | A rebuild while a composition was open kept the uncommitted text in the document, lost the committed text, and left the editor without focus. | The editor must not meet a new kind of node during a composition: TipTap ends the composition itself before any rebuild could wait for it (the spike on NOC-555), so the binding defers its pull while one is open, and a rebuild restores focus and selection. |
 | F23 | After a rebuild, undo did nothing with the new editor's own UndoManager; with one UndoManager kept for the `Y.Doc` and passed to each editor, undo took back the text typed before the rebuild. | A rebuild need not cost the undo history. |
 | F24 | A guard without the other two measures refused the editor's deletion of unknown parts, reloaded, and the rebuilt editor deleted them again, at every pause; the person's typing, in the same pending write, was refused with it. | The guard reloads once and then makes the field read-only. |
 
@@ -103,17 +105,42 @@ F1 to F10 come from a first spike, on Yjs 13.6.33 (the latest stable release; 14
 export const model = nc.model({
   notes: nc.collection({
     title: nc.string(),
-    body: nc.richText(),
+    body: nc.richText({
+      vocabulary: {
+        nodes: ["paragraph", "heading", "callout"],
+        marks: ["bold", "link"],
+      },
+    }),
   }),
 });
 ```
 
-`nc.richText()` builds into the lock as `{ "type": "ncdb/richText", "rule": 1, "since": 4 }`. Rule 1 is this RFC's rule: the operation below, Yjs's integration as Yrs 0.28 implements it, and the outcomes. The Markdown vocabulary of [Reading](#reading) is not part of the rule: it changes what members read, never the state they converge on. A later Yjs format, such as Yjs 14's if it changes how items integrate, is a new rule version, which an existing field reaches only through a migration ([RFC 0004, "How a field type adds operations"](0004-merge-rules-basic-types.md#how-a-field-type-adds-operations)).
+`nc.richText({ vocabulary })` builds into the lock as:
+
+```json
+{
+  "rule": 1,
+  "since": 4,
+  "type": "ncdb/richText",
+  "vocabulary": {
+    "marks": ["bold", "link"],
+    "nodes": ["callout", "heading", "paragraph"]
+  }
+}
+```
+
+Rule 1 is this RFC's rule: the operation below, Yjs's integration as Yrs 0.28 implements it, and the outcomes. Neither the field's vocabulary nor the Markdown rendering of [Reading](#reading) is part of the rule: they change what an editor accepts and what members read, never the state they converge on. A later Yjs format, such as Yjs 14's if it changes how items integrate, is a new rule version, which an existing field reaches only through a migration ([RFC 0004, "How a field type adds operations"](0004-merge-rules-basic-types.md#how-a-field-type-adds-operations)).
 
 - **One document per object and field.** A field's document is its own `Y.Doc`, whose root is the `XmlFragment` named `default`. One document per field keeps each field's state, read and outcomes separate, as for every other type. The name `default` is TipTap's, so an app binds the editor without naming a fragment.
 - **Not indexed, not sorted.** A rich-text field cannot be indexed and has no column in `c_<collection>` ([RFC 0006, "Where the view lives"](0006-local-view.md#where-the-view-lives)). A preview in a list reads the field from the object.
 - **Not personal in rule 1.** Only basic values can be personal ([RFC 0005, "Personal fields"](0005-schema-and-model-lock.md#personal-fields)); [Erasure](#rfc-0008-and-rfc-0005-erasure) says why rich text stays so.
-- **No configuration.** The field takes no options in rule 1. The vocabulary is the core's, not the lock's ([Reading](#reading)).
+- **A vocabulary that may only grow.** The field takes one option, `vocabulary`: the names of the nodes and the marks its editor's schema holds, `nodes` and `marks`. ProseMirror's own `doc` and `text`, which every editor holds, are never listed. The lock keeps each list sorted and without duplicates, so the order in the schema is no change. `nc.richText()` without the option declares an empty vocabulary, and its lock entry has no `vocabulary` key. A later model may add names, and `ncdb model build` and the check on the device accept that; removing a name is refused ([RFC 0005, "The additive-change rule"](0005-schema-and-model-lock.md#the-additive-change-rule)). The vocabulary is the one configuration of a field that may change at all, and only by growing ([RFC 0011, "A type that is not registered"](0011-plugin-field-types.md#a-type-that-is-not-registered)): an editor of an older version of the app does not know a node that a newer version added, whatever its lock says, and the binding's three measures keep it editing ([An editor that cannot show a node](#an-editor-that-cannot-show-a-node)), so a name that is added takes nothing from an older client. A name that is removed would take something from a newer one: content written with it would turn into a node the app no longer declares.
+- **A contract the binding checks, not the core.** The lock records which nodes and marks the app's editor uses, so the data model changes when the editor's extensions change, in the same pull request, and a reviewer sees it. The binding checks the editor against it ([An editor: the binding](#an-editor-the-binding)). The core does not: it folds an update whatever nodes it holds, since an older client must keep folding a document that a newer client extended. An older core, which knows no `vocabulary` key, ignores it, as a reader ignores every key of the lock it does not know ([RFC 0005, "The keys"](0005-schema-and-model-lock.md#the-keys)); since the vocabulary is no part of the merge rule, it folds the field the same way as a core that reads it.
+
+**Options not taken for the vocabulary.**
+
+- **A lock without a vocabulary,** with the app keeping one module of its editor's extensions that the editor and the binding both import. Nothing in the lock would change when an app adds an extension, but nothing in the data model would record it either: an added extension would silently widen what the same field may hold, and a device could not tell that a document holds more than its app version declares.
+- **The core enforces the vocabulary,** refusing an update that holds a node or a mark the lock does not declare. The lock would then bind every writer, not only the binding, but an older client could no longer fold a document that a newer client extended, against this RFC's rule that every client keeps editing ([An editor that cannot show a node](#an-editor-that-cannot-show-a-node)), and members on different app versions would fold the same changes differently (principle 2).
 
 ## How an edit travels in a change
 
@@ -164,7 +191,7 @@ The core folds an operation 5 with Yrs, natively and in WebAssembly alike, so ev
 2. **Apply.** It applies the update to the field's document. Items whose dependencies have not arrived stay pending in the document (F4); they appear once the change that holds their dependencies is folded, whatever the order.
 3. **Record.** It records which item ids the operation added and which its delete set named, so that outcomes and un-folding can be computed ([Outcomes](#outcomes-applied-replaced-and-lost)).
 
-**The state.** `fs_<collection>` holds the field's state as one canonical CBOR map: the document as a Yjs update of its whole state, encoded v1 with garbage collection, which holds pending items too; the items each operation added and the deletions it named, as id ranges; and the client ids and their nonces. F8 found the document's bytes equal for every order of arrival; the harness checks it for every generated case. Garbage collection keeps deleted text out of the view's state, but not out of the log ([What erasure reaches](#deleted-text-stays-in-the-log)).
+**The state.** `fs_<collection>` holds the field's state as one canonical CBOR map: the document as a Yjs update of its whole state, encoded v1 with garbage collection and every map in key order, which holds pending items too; the items each operation added and the deletions it named, as id ranges; and the client ids and their nonces. Yrs keeps a value's maps, such as a link mark's attributes, in hash maps and writes them in the order each hash map gives, so the core writes every map of the encoded document in key order; then the document's bytes are equal for every order of arrival, as F8 found for text without such maps, and the harness checks it for every generated case. Garbage collection keeps deleted text out of the view's state, but not out of the log ([What erasure reaches](#deleted-text-stays-in-the-log)).
 
 **Performance.** Decoding and encoding the whole document on every apply, as [RFC 0011](0011-plugin-field-types.md#the-field-type-a-plugin-implements) does for a plugin's state, costs time in proportion to the document. The core may keep a document it folds often in memory between applies, as a cache that changes no result. A follow-up spike measures it on large documents.
 
@@ -203,7 +230,7 @@ A rich-text field's read value is its document. The core renders it on read, fro
 - **As a tree**, the ProseMirror JSON of the document (`{ type, attrs, content, marks, text }`), as `Data` in Rust and as a plain object in TypeScript, for apps that render the document themselves. The core reads it from Yrs, never through y-prosemirror's conversion, which deletes what its schema does not know (F16).
 - **Its mentions**, the references the mention nodes hold, for an app that resolves names.
 
-Storing and syncing a document needs no vocabulary: the core only applies Yjs updates. It needs one only where it renders the document itself, as Markdown. The core knows TipTap's standard vocabulary and renders anything else as an HTML tag, so nothing is hidden from an agent. The vocabulary belongs to the renderer, not to the merge rule, so a later core can render a new standard node in its Markdown form without a migration. Two members with the same core version render the same state the same way (C7); a member on an older core may render a newer standard node as a tag until it upgrades. The Markdown rendering knows the names TipTap's StarterKit and its task lists use:
+Storing and syncing a document needs no names of nodes: the core only applies Yjs updates. It needs them only where it renders the document itself, as Markdown. The core knows TipTap's standard nodes and marks and renders anything else as an HTML tag, so nothing is hidden from an agent. These names belong to the renderer, not to the merge rule, so a later core can render a new standard node in its Markdown form without a migration. The rendering is the same whatever the field's vocabulary declares: a declared custom node renders as a tag too. Two members with the same core version render the same state the same way (C7); a member on an older core may render a newer standard node as a tag until it upgrades. The Markdown rendering knows the names TipTap's StarterKit and its task lists use:
 
 | Node or mark | Markdown |
 | --- | --- |
@@ -213,13 +240,12 @@ Storing and syncing a document needs no vocabulary: the core only applies Yjs up
 | `mention` (`space`, `id`) | `[@](ncdb:<space id>/<object id>)`, a link without a name ([Mentions](#mentions)). |
 | Any other node or mark | An HTML tag with its name and attributes around its content, as a block or inline, such as `<callout tone="warn">Careful.</callout>`. The tree keeps it whole, and the document is never changed because of it. |
 
-The vocabulary needs no configuration, and an app that uses TipTap's defaults needs nothing. The tags show an agent a part outside the vocabulary, so it can quote around it. Whether a client can keep editing parts it cannot interpret does not depend on this vocabulary: an older client always meets names it does not know, and the binding's three measures keep it editing ([An editor that cannot show a node](#an-editor-that-cannot-show-a-node)).
+The tags show an agent a part the rendering does not know, so it can quote around it. Whether a client can keep editing parts it cannot interpret does not depend on the rendering, nor on the field's vocabulary: an older client always meets names it does not know, and the binding's three measures keep it editing ([An editor that cannot show a node](#an-editor-that-cannot-show-a-node)).
 
 **Options not taken.**
 
-- **The vocabulary declared in the lock,** as the field's configuration, with a Markdown form per node. Custom nodes would render in a form of their own, but every added node would be a change of the field's configuration, which [RFC 0011](0011-plugin-field-types.md#a-type-that-is-not-registered) refuses for a field that exists, and an older client would still hold the older lock.
-- **The app owns the vocabulary, and the core renders only plain text.** Nothing in the core would change when an app adds a node. But `space.get` would read plain text, and an agent, or a Rust or command-line tool without the app, would see no headings, lists or marks, and could quote only plain text.
-- **A fixed vocabulary that shows any other part as bare text.** Simpler, but it hides a custom node from an agent, which could then quote across a callout without knowing it is there.
+- **The core renders only plain text.** Nothing in the core would change when an app adds a node. But `space.get` would read plain text, and an agent, or a Rust or command-line tool without the app, would see no headings, lists or marks, and could quote only plain text.
+- **A fixed set of names that shows any other part as bare text.** Simpler, but it hides a custom node from an agent, which could then quote across a callout without knowing it is there.
 - **A read object with `markdown()`, `text()` and `tree()`** in `space.get`. Each form on demand, but a read object would no longer be plain data, unlike every other field.
 
 ### Mentions
@@ -262,6 +288,7 @@ await body.close();
 `space.richText(collection, id, field)` opens a binding: a `Y.Doc` the SDK keeps in step with the field's document in the core, which runs in a worker ([RFC 0009, "Open and close"](0009-sdk-api.md#open-and-close)).
 
 - **On open,** the SDK leases a client id ([Client ids name their author](#client-ids-name-their-author)), creates the `Y.Doc` with it and loads the field's state into it. The object must exist; a binding on an object the copy does not hold is refused with `notFound`.
+- **The vocabulary, at start.** The binding reads the field's vocabulary from the lock, and `NcKeepUnknown` checks the editor's schema against it as the editor is created. Leaving out `doc` and `text`, an editor whose nodes or marks differ from the vocabulary, in either direction, is refused with an error of its own, apart from the error for a missing content check, that names the names on each side. A developer who adds an extension to the editor without adding its names to the schema, or the other way round, finds out at once, at development time, and not when a document drifts. A document that holds a node or a mark the vocabulary does not declare, written by a newer version of the app, is reported as not fully shown, with the reason that the content uses names this version of the app does not declare, so the app can ask for an update; the three measures below keep the field editable.
 - **What the editor writes,** the SDK collects. It merges the editor's updates and writes them as one change at each pause in typing: after 500 ms without an edit, after at most 2 s of continuous typing, and when the binding closes or the page is hidden. Each such change is a `space.write` like any other, folded before it is sent. Collaborators see text within about half a second of a pause, and the relay and the log see writing sessions, not keystrokes. If the tab is killed before a pause, up to 2 s of typing is lost, which the SDK's guide says. A pause does not end inside an IME composition: while one is open, the binding holds the write and writes at `compositionend`, or after 2 s if the composition is still open, so collaborators and the log never see characters the person has not committed, and the person never waits longer than for typing.
 - **What other members write,** the core folds, and the SDK passes the binding the part of the document it does not hold yet, which Yjs computes from the binding's state vector. It applies that with an origin of its own, so the editor's undo leaves it alone and the SDK does not write it back.
 - **A reader** gets a binding with `writable` false, and the editor is made read-only. If an edit reaches the binding anyway, the write is refused with `notAllowed`, and the SDK reloads the `Y.Doc` from the core's state, so the editor never shows text that no change holds.
@@ -278,7 +305,7 @@ Every client must keep editing a document even where it cannot interpret parts o
 So the binding requires three measures, which together kept every client editing and lost nothing (F19):
 
 1. **A schema widened from the document.** Before the editor opens, the binding scans the field's document and gives each unknown node, mark and attribute a placeholder type: a node of that name, inline or block as it sits, with its attributes declared without a default value of their own; a mark with its attributes; an extra attribute on a known node. The editor shows a placeholder, such as a box with the node's name, and keeps the rest editable. `@nocentraldb/tiptap` ships this as `NcKeepUnknown`. A person can still delete a placeholder on purpose, as any block.
-2. **The content check, with a rebuild.** The binding requires `enableContentCheck: true`, with `@tiptap/extension-collaboration` 3.33.0 and `@tiptap/y-tiptap` 3.2.0 or later. When a kind of node arrives that the open editor does not know, TipTap reports `contentError` and pauses editing instead of deleting; `body.rebuild(editor)` builds the editor again with a schema widened anew. The rebuild goes in the editor's `onContentError` option, not in a listener on the editor's events: TipTap's default for that option throws before any such listener runs, and the editor would stay paused (F20). A rebuild waits while an IME composition is open and runs at `compositionend`, so the person's committed text is never lost (F22). After it, the binding restores the focus and the selection, kept as a Yjs relative position. The binding keeps one UndoManager for its `Y.Doc`, `body.undoManager`, which each editor it builds uses, so a rebuild keeps the undo history (F23).
+2. **The content check, with a rebuild.** The binding requires `enableContentCheck: true`, with `@tiptap/extension-collaboration` 3.33.0 and `@tiptap/y-tiptap` 3.2.0 or later. When a kind of node arrives that the open editor does not know, TipTap reports `contentError` and pauses editing instead of deleting; `body.rebuild(editor)` builds the editor again with a schema widened anew. The rebuild goes in the editor's `onContentError` option, not in a listener on the editor's events: TipTap's default for that option throws before any such listener runs, and the editor would stay paused (F20). While an IME composition is open, the binding defers its pull of what the core folded, until `compositionend` and for at most 2 s, so the editor never meets a new kind of node in the middle of a composition and the person's text is never cut off (F22). After it, the binding restores the focus and the selection, kept as a Yjs relative position. The binding keeps one UndoManager for its `Y.Doc`, `body.undoManager`, which each editor it builds uses, so a rebuild keeps the undo history (F23).
 3. **A guard on what the binding writes.** Before the binding writes an editor's update as a change, it checks which parts the update deletes. An update that deletes an element, a format or an attribute the editor's schema does not know is not written, and the binding reloads once: it loads its `Y.Doc` again from the core's state and reports the field as not fully shown. If the guard refuses again, the binding makes the field read-only: it writes nothing more from that editor, makes the editor read-only and keeps reporting the field as not fully shown, until the app rebuilds the editor with a schema widened anew. It never reloads in a loop, which would refuse the person's typing at every pause (F24). Placeholders count as known, so a deliberate deletion passes. The guard works with any editor that edits a `Y.Doc`.
 
 An editor without `enableContentCheck` is refused: `NcKeepUnknown` throws, as the editor is created, an error that names the missing option, so an app that leaves out the content check finds out at once and not when a newer app writes a node it does not know.
@@ -346,6 +373,19 @@ Prior art points the same way. Tiptap's AI Toolkit edits whole nodes by a hash a
 
 The Rust SDK reads a rich-text field with `object.get::<RichText>("body")`: `markdown()`, `plain_text()`, `tree()` as `Data`, and `mentions()` as `Reference`s. It reads a field with its version through `read_rich_text`, edits it with `RichTextEdit::at(version)` and its `replace`, `insert_after` and `append`, and writes a first document with `RichText::from_markdown`. It has no editor binding in rule 1; a native app that wants one asks for it in a follow-up ticket. `space.inspect` gives the lost operations, as in TypeScript.
 
+## Moving and copying the object
+
+When an object moves to another space ([RFC 0016](0016-moving-an-object.md#its-rich-text-fields)), or a parent copies it into an ad-hoc space ([RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space)), the field's document cannot be carried as it is: its items name their writers by client ids, which the other space's members accept only from the members they derive from ([Client ids name their author](#client-ids-name-their-author)).
+
+So the member that moves or copies the object re-creates the document. It reads the field's document from its copy as a tree, and writes it into the create in the other space as one rich-text update under a client id it leases for that field there. The update is an ordinary operation 5: the format, the client-id check and the fold stay as they are. It is built from the tree, not from the Markdown, so every node, mark and attribute arrives, those that the Markdown does not show included ([Reading](#reading)). Deleted text, content still pending in the mover's copy and what lost operations wrote stay behind, in the old space's log.
+
+- **Every item in the other space names the member that moved or copied it.** Who wrote which part, and the document's history, stay in the old space's log, where `space.inspect` keeps showing them.
+- **An update written in the old space after the move** names items the other space does not hold. RFC 0016 lists it as a later edit the SDK cannot write again; its text has to be carried over by hand.
+- **A field nobody wrote** holds no document, and the create leaves it unset.
+- **A move back is refused for now**, for a written field, since the space moved back into holds the document already and would show its text twice; RFC 0016 says how, until a move back writes only the difference (NOC-581; [Its rich-text fields](0016-moving-an-object.md#its-rich-text-fields)).
+
+Carrying the document as it is, with its client ids and nonces, would keep each item's author, but the other space's members would have to accept items under other members' client ids: that needs a change to the format and the fold and weakens the rule above. It comes later, as an option an app chooses per move (NOC-559). Re-creating the document from its Markdown was not taken, because it drops what Markdown does not show.
+
 ## What the relay and the other RFCs see
 
 ### RFC 0003: encryption
@@ -380,8 +420,8 @@ The versions of Yrs and Yjs are pinned exactly, and an upgrade of either has to 
 
 ## What changes for developers
 
-- `nc.richText()` builds, and a rich-text field reads as Markdown in `space.get` and queries.
-- `space.richText(collection, id, field)` opens a binding for an editor; `@nocentraldb/tiptap` gives `NcMention`.
+- `nc.richText({ vocabulary: { nodes, marks } })` builds, and a rich-text field reads as Markdown in `space.get` and queries. `ncdb model build` accepts names added to a vocabulary and refuses a name removed from it.
+- `space.richText(collection, id, field)` opens a binding for an editor, which refuses an editor whose nodes or marks differ from the field's vocabulary; `@nocentraldb/tiptap` gives `NcMention`.
 - `readRichText(...)` reads a field's Markdown with its version; `nc.richText.edit(version, [...])` edits it by quotes; `nc.richText.fromMarkdown(...)` writes a first document. The Rust SDK has the same calls.
 - New errors: `anchorNotFound`, `anchorAmbiguous`, `richTextNotEmpty`, and one for a version the core no longer holds, named in the API review.
 - `space.inspect` lists a rich-text field's lost operations, and `$conflicts` names the field while it has any.
@@ -404,9 +444,12 @@ Step 7c of the build plan writes these into the decided texts ([How a decided RF
 - **No protection against a writer.** A member that may write can delete a whole document, as it can clear any field; the deletion is a change in the log, and an app can bring the text back from history.
 - **Typing in the last 2 s can be lost** if the tab dies before the pause ([An editor: the binding](#an-editor-the-binding)).
 - **An app that leaves out the binding's measures**, or converts the document with a ProseMirror schema of its own, deletes what that schema does not know; the guard catches it in the binding, not in an app's own code ([An editor that cannot show a node](#an-editor-that-cannot-show-a-node)).
-- **Custom nodes read as HTML tags**, not in a Markdown form of their own ([Reading](#reading)). An attribute the vocabulary does not show, on a node it knows, is kept but not shown.
+- **Custom nodes read as HTML tags**, not in a Markdown form of their own, declared in the vocabulary or not ([Reading](#reading)). An attribute the rendering does not show, on a node it knows, is kept but not shown.
+- **The vocabulary binds the binding, not the core.** A writer that does not go through the binding, such as a modified client or an agent's tool of its own, can write a node the vocabulary does not declare, and every member folds it; the binding reports the field as not fully shown. The vocabulary names nodes and marks, not their attributes.
+- **An older `ncdb model build` drops the vocabulary.** It ignores the key it does not know, so a build with an older `ncdb` and an older SDK writes a lock without it. The current `ncdb model check` and the check on the device refuse that lock as a removal, so nothing is folded differently, but the app does not open its database until the lock is built again with the current `ncdb`.
 - **A rejected change's attribute value** leaves the attribute unset, not restored ([Un-folding a rejected change](#un-folding-a-rejected-change)).
 - **No embeds**, such as images or files, and no comments or suggestions.
+- **A moved or copied document starts again in its new space.** Its items there name the member that moved or copied it, and an update written in the old space after a move is not carried over by the SDK ([Moving and copying the object](#moving-and-copying-the-object)).
 - **No Yjs 14.** Rule 1 is Yjs 13's integration; a later Yjs whose integration differs is a new rule.
 
 ## Follow-up tickets
@@ -428,11 +471,11 @@ The build plan, in order. Steps on one line of the table may run in parallel; a 
    - **1b. Yrs under bad input and large documents.** Fuzz decoding and applying of arbitrary updates for panics, natively and in wasm32; measure apply with and without a cached document on a 100 KB document.
 2. **The core rule and the schema.**
    - **2a. Core: the field type `ncdb/richText` rule 1.** State, operation 5, client ids and their check and lease, the same id twice, outcomes, generators and broken fixtures for C1 to C7, and the Yjs and Yrs agreement vectors.
-   - **2b. Schema and lock: `nc.richText()`** in `ncdb model build` and the check on the device.
+   - **2b. Schema and lock: `nc.richText({ vocabulary })`** in `ncdb model build` and the check on the device, with the vocabulary, which accepts additions and refuses a removal.
 3. **The core's un-folding and reads.**
    - **3a. Core: un-folding rich text**: placeholders for the rejected change's items, its deletions undone.
-   - **3b. Core: reading.** Markdown in the core's vocabulary, with HTML tags for any other part; plain text; the tree, read from Yrs, never through y-prosemirror's conversion; and mentions.
-4. **TypeScript: the binding and `@nocentraldb/tiptap`**, through the bridge to the core: the lease of client ids, the write at each pause, the reload of a refused write, `NcMention`, and the three measures, each with a test that fails without it: an older schema opening a newer document loses nothing and stays editable (widening); a node kind arriving while the editor is open pauses and resumes after the rebuild (content check); an update that deletes an unknown element, format or attribute is not written, a second refusal makes the field read-only, and a deliberate deletion of a placeholder is written (guard); an editor without `enableContentCheck` is refused; a composition is not written before `compositionend`, and a rebuild waits for it and keeps the undo history.
+   - **3b. Core: reading.** Markdown in the core's rendering, with HTML tags for any other part; plain text; the tree, read from Yrs, never through y-prosemirror's conversion; and mentions.
+4. **TypeScript: the binding and `@nocentraldb/tiptap`**, through the bridge to the core: the lease of client ids, the write at each pause, the reload of a refused write, `NcMention`, and the three measures, each with a test that fails without it: an editor whose nodes or marks differ from the field's vocabulary is refused, and a document with names the vocabulary does not declare is reported as not fully shown with that reason (vocabulary); an older schema opening a newer document loses nothing and stays editable (widening); a node kind arriving while the editor is open pauses and resumes after the rebuild (content check); an update that deletes an unknown element, format or attribute is not written, a second refusal makes the field read-only, and a deliberate deletion of a placeholder is written (guard); an editor without `enableContentCheck` is refused; a composition is not written before `compositionend`, the binding defers its pull while one is open, and a rebuild keeps the undo history.
 5. **Core: anchored edits**: the read version and its cache, the lookup, the Yrs-level diff, `anchorNotFound` and `anchorAmbiguous`. With three rules: a quote's ends fall on text, not inside markup; a block's type changes only when the replacement changes it; and an agent's edits for one field go through one lease in order.
 6. **Rust SDK: `RichText` reads**: Markdown, plain text, tree and mentions, and `RichText::from_markdown`.
 7. **The rest.**
@@ -486,14 +529,17 @@ F8 applied 60 updates of three documents, each editing at random and syncing now
 
 ## How this RFC relates to the others
 
-It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carries the rich-text update and whose fold never waits for a gap; on [RFC 0004](0004-merge-rules-basic-types.md), whose operation numbers and plugin contract C1 to C7 the type meets; on [RFC 0005](0005-schema-and-model-lock.md), which reserves `nc.richText` and leaves the mention token to this RFC; on [RFC 0006](0006-local-view.md), which keeps the field's state in `fs_<collection>`; on [RFC 0003](0003-keys-and-cryptography.md), whose space key seals the update; on [RFC 0008](0008-membership.md), whose un-folding this RFC applies to a document; on [RFC 0009](0009-sdk-api.md), whose write, read and inspect calls it extends; and on [RFC 0012](0012-multi-tab-browser-storage.md), whose tabs each open their own binding. [RFC 0011](0011-plugin-field-types.md) leaves rich text out: it is a built-in type.
+It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carries the rich-text update and whose fold never waits for a gap; on [RFC 0004](0004-merge-rules-basic-types.md), whose operation numbers and plugin contract C1 to C7 the type meets; on [RFC 0005](0005-schema-and-model-lock.md), which reserves `nc.richText` and leaves the mention token to this RFC; on [RFC 0006](0006-local-view.md), which keeps the field's state in `fs_<collection>`; on [RFC 0003](0003-keys-and-cryptography.md), whose space key seals the update; on [RFC 0008](0008-membership.md), whose un-folding this RFC applies to a document; on [RFC 0009](0009-sdk-api.md), whose write, read and inspect calls it extends; on [RFC 0012](0012-multi-tab-browser-storage.md), whose tabs each open their own binding; and on [RFC 0016](0016-moving-an-object.md), whose move, like RFC 0003's ad-hoc copy, re-creates the document in the other space. [RFC 0011](0011-plugin-field-types.md) leaves rich text out: it is a built-in type, whose vocabulary is the one configuration of a field that may grow.
 
 ## Decisions
 
 - **2026-11-22 · The binding holds a write while an IME composition is open, until `compositionend` and for at most 2 s.** ([decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-binding-holds-a-write-during-an-ime-composition-for-at-most-2-s.md))
-- **2026-11-22 · A rebuild waits for `compositionend`, then restores the focus and the selection.** ([decision](../../factory/decisions/2026-11-22-NOC-467-a-rich-text-editor-rebuild-waits-for-compositionend-and-restores-focus-and-selection.md))
+- **2026-11-27 · The binding defers its pull while an IME composition is open, until `compositionend` and for at most 2 s; a rebuild restores the focus and the selection.** ([decision](../../factory/decisions/2026-11-27-NOC-556-the-rich-text-binding-defers-its-pull-while-an-ime-composition-is-open-for-at-most-2-s.md))
 - **2026-11-22 · One UndoManager per binding outlives the rebuilds, so a rebuild keeps the undo history.** ([decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-binding-keeps-one-undomanager-across-editor-rebuilds.md))
 - **2026-11-22 · The guard reloads once, then makes the field read-only; an editor without `enableContentCheck` is refused.** ([decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-guard-reloads-once-then-the-field-is-read-only-and-an-editor-without-the-content-check-is-refused.md))
+- **2026-11-27 · A rich-text field declares its vocabulary in the schema and the lock, which may only grow, and the binding refuses an editor that differs from it.** ([decision](../../factory/decisions/2026-11-27-NOC-553-a-rich-text-field-declares-its-vocabulary-in-the-schema-and-the-lock-which-may-only-grow.md))
+- **2026-11-27 · A move or an ad-hoc copy re-creates the document from its tree under a client id of the member that moves or copies it; carrying it as it is comes later, as an option per move.** ([decision](../../factory/decisions/2026-11-27-NOC-543-a-move-or-ad-hoc-copy-re-creates-a-rich-text-document-under-a-client-id-of-the-mover.md))
+- **2026-11-27 · A move back of a written document is refused until a move back writes only the difference (NOC-581).** ([decision](../../factory/decisions/2026-11-27-NOC-560-a-move-back-of-a-written-rich-text-document-is-refused-until-it-writes-only-the-difference.md))
 
 ## History
 
@@ -501,3 +547,6 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 - 2026-11-22 · The binding's example rebuilds from `onContentError`; a composition holds the write and a rebuild; one UndoManager outlives rebuilds; the guard reloads once, as the owner decided after the browser spike (NOC-455, NOC-467, #454)
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
 - 2026-11-23 · RFC 0004 gives number 5 to the rich-text update and reserves 7 to 63 (NOC-474, #474)
+- 2026-11-27 · A rich-text field declares its vocabulary in the schema and the lock, which may only grow (NOC-553, NOC-558, NOC-554, #509)
+- 2026-11-27 · The binding defers its pull while a composition is open instead of a rebuild waiting for `compositionend`, as the owner decided after the spike on NOC-555 (NOC-556, NOC-461)
+- 2026-11-27 · A move and an ad-hoc copy re-create the document under the mover's client id, and a move back of a written one is refused for now (NOC-539, NOC-543, NOC-560, #520)

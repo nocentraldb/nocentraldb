@@ -24,7 +24,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::change::{Header, Kind};
+use crate::change::Header;
 use crate::clock::Hlc;
 use crate::ids::{ChangeId, MemberId};
 use crate::membership::ControlBody;
@@ -37,46 +37,85 @@ pub(crate) struct Opened {
 }
 
 /// The heads among a set of changes: the changes of the set no change of
-/// the set depends on.
+/// the set depends on. One node per change of the set and per change one
+/// of them depends on keeps what the heads need, so a change costs one
+/// map entry and its dependencies as a slice (NOC-518).
 #[derive(Clone, Debug, Default)]
 struct Heads {
-    /// The changes of the set, each with its dependencies.
-    members: BTreeMap<ChangeId, BTreeSet<ChangeId>>,
-    /// How many changes of the set depend on each change.
-    covered: BTreeMap<ChangeId, usize>,
+    nodes: BTreeMap<ChangeId, Node>,
     heads: BTreeSet<ChangeId>,
 }
 
+/// What [`Heads`] keeps of one change, in 32 bytes.
+#[derive(Clone, Debug, Default)]
+struct Node {
+    /// The change's dependencies, sorted and without repeats, when the
+    /// change is in the set.
+    dependencies: Option<Box<[ChangeId]>>,
+    /// The change's clock, when `clocked`.
+    clock: Hlc,
+    /// How many changes of the set depend on it.
+    covered: u32,
+    /// Whether the change has a clock: a sealed change in the set whose
+    /// payload was read.
+    clocked: bool,
+}
+
+impl Node {
+    /// Takes the change's clock, if it has one.
+    fn take_clock(&mut self) -> Option<Hlc> {
+        std::mem::take(&mut self.clocked).then_some(self.clock)
+    }
+}
+
 impl Heads {
-    fn insert(&mut self, id: ChangeId, dependencies: BTreeSet<ChangeId>) {
-        self.remove(id);
+    /// Adds `id` to the set, with its dependencies and its clock, and
+    /// returns the clock it had in the set before, if any.
+    fn insert(
+        &mut self,
+        id: ChangeId,
+        dependencies: BTreeSet<ChangeId>,
+        clock: Option<Hlc>,
+    ) -> Option<Hlc> {
+        let old = self.remove(id);
         for dependency in &dependencies {
-            *self.covered.entry(*dependency).or_default() += 1;
+            self.nodes.entry(*dependency).or_default().covered += 1;
             self.heads.remove(dependency);
         }
-        if !self.covered.contains_key(&id) {
+        let node = self.nodes.entry(id).or_default();
+        if node.covered == 0 {
             self.heads.insert(id);
         }
-        self.members.insert(id, dependencies);
+        node.dependencies = Some(dependencies.into_iter().collect());
+        node.clocked = clock.is_some();
+        node.clock = clock.unwrap_or_default();
+        old
     }
 
-    fn remove(&mut self, id: ChangeId) {
-        let Some(dependencies) = self.members.remove(&id) else {
-            return;
-        };
+    /// Takes `id` out of the set, and returns the clock it had in it, if
+    /// any.
+    fn remove(&mut self, id: ChangeId) -> Option<Hlc> {
+        let node = self.nodes.get_mut(&id)?;
+        let dependencies = node.dependencies.take()?;
+        let clock = node.take_clock();
+        if node.covered == 0 {
+            self.nodes.remove(&id);
+        }
         self.heads.remove(&id);
         for dependency in dependencies {
-            let Some(count) = self.covered.get_mut(&dependency) else {
+            let Some(node) = self.nodes.get_mut(&dependency) else {
                 continue;
             };
-            *count -= 1;
-            if *count == 0 {
-                self.covered.remove(&dependency);
-                if self.members.contains_key(&dependency) {
+            node.covered -= 1;
+            if node.covered == 0 {
+                if node.dependencies.is_some() {
                     self.heads.insert(dependency);
+                } else {
+                    self.nodes.remove(&dependency);
                 }
             }
         }
+        clock
     }
 }
 
@@ -90,10 +129,9 @@ pub struct Tips {
     all: Heads,
     /// The folded control changes.
     controls: Heads,
-    /// The clock of each folded sealed change that was opened.
-    clocks: BTreeMap<ChangeId, Hlc>,
-    /// How many of those changes carry each clock, so the highest is known
-    /// when one leaves.
+    /// How many folded sealed changes that were opened carry each clock,
+    /// so the highest is known when one leaves; `all` keeps the clock of
+    /// each.
     seen: BTreeMap<Hlc, usize>,
     /// The folded sealed changes whose payload was not read yet.
     unread: BTreeSet<ChangeId>,
@@ -132,19 +170,21 @@ impl Tips {
         *highest = (*highest).max(header.sequence);
     }
 
-    /// A change of the log was folded. A sealed change's dependencies and
-    /// clock come from `opened`, when the checks opened it; otherwise it
-    /// waits in `unread` until [`Tips::read`]. A control change's header
-    /// carries its payload, its control body.
-    pub(crate) fn folded(&mut self, id: ChangeId, header: &Header, opened: Option<Opened>) {
-        if header.kind == Kind::CONTROL {
-            let dependencies = ControlBody::decode(&header.payload)
-                .map(|body| body.dependencies)
-                .unwrap_or_default();
-            self.controls.insert(id, dependencies.clone());
-            self.all.insert(id, dependencies);
-            return;
-        }
+    /// A control change of the log was folded. Its header carries its
+    /// payload, its control body, which names its dependencies.
+    pub(crate) fn folded_control(&mut self, id: ChangeId, header: &Header) {
+        let dependencies = ControlBody::decode(&header.payload)
+            .map(|body| body.dependencies)
+            .unwrap_or_default();
+        self.controls.insert(id, dependencies.clone(), None);
+        let clock = self.all.insert(id, dependencies, None);
+        self.forget_clock(clock);
+    }
+
+    /// A sealed change of the log was folded. Its dependencies and clock
+    /// come from `opened`, when the checks opened it; otherwise it waits
+    /// in `unread` until [`Tips::read`].
+    pub(crate) fn folded_sealed(&mut self, id: ChangeId, opened: Option<Opened>) {
         match opened {
             Some(opened) => self.read(id, opened),
             None => {
@@ -155,10 +195,10 @@ impl Tips {
 
     /// A folded change of the log is folded no more.
     pub(crate) fn unfolded(&mut self, id: ChangeId) {
-        self.all.remove(id);
+        let clock = self.all.remove(id);
+        self.forget_clock(clock);
         self.controls.remove(id);
         self.unread.remove(&id);
-        self.forget_clock(id);
     }
 
     /// The folded sealed changes whose payload was not read yet.
@@ -169,15 +209,14 @@ impl Tips {
     /// What the payload of the folded sealed change `id` gave.
     pub(crate) fn read(&mut self, id: ChangeId, opened: Opened) {
         self.unread.remove(&id);
-        self.all.insert(id, opened.dependencies);
-        self.forget_clock(id);
-        self.clocks.insert(id, opened.clock);
+        let old = self.all.insert(id, opened.dependencies, Some(opened.clock));
+        self.forget_clock(old);
         *self.seen.entry(opened.clock).or_default() += 1;
     }
 
-    /// Takes the clock of `id` out of the clocks seen, when it is there.
-    fn forget_clock(&mut self, id: ChangeId) {
-        let Some(clock) = self.clocks.remove(&id) else {
+    /// Takes a clock a change no longer carries out of the clocks seen.
+    fn forget_clock(&mut self, clock: Option<Hlc>) {
+        let Some(clock) = clock else {
             return;
         };
         if let Some(count) = self.seen.get_mut(&clock) {

@@ -175,11 +175,11 @@ test("objects live in a space, and a write is one change, with the forms not tak
   );
 });
 
-test("field operations: sets are never written whole, and a reference is written as it reads", () => {
-  // S4, S24
+test("field operations: sets are never written whole, and a reference takes a read object only for its ids", () => {
+  // S4, S24; RFC 0018, "One function, two cases"
   holds(
     part("field-operations-per-field-type"),
-    [/whole array/, /depend on a read of another space/],
+    [/whole array/, /takes only its `\$space` and `\$id`/],
     "Field operations per field type",
   );
 });

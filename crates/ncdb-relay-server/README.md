@@ -5,6 +5,7 @@ The NoCentralDB relay server: the protocol of [RFC 0007](../../docs/rfc/0007-rel
 ```text
 ncdb-relay --database <path> [--listen <address>] [--public-url <url>]
            [--allow-account <hex>]... [--allow-invitation <ncdb-invite-1:…>]...
+           [--admission-key <hex>]...
 ```
 
 - `--database` is the SQLite file that holds the spaces' logs. The relay id lives next to it, in `<path>.relay-id`, and is drawn on the first start.
@@ -12,6 +13,7 @@ ncdb-relay --database <path> [--listen <address>] [--public-url <url>]
 - `--public-url` is where members reach the upload and download URLs of large changes, such as `https://relay.example.com` behind a TLS proxy (see [Large changes](#large-changes)). By default it is `http://` and the address the server listens on, which a member on the same machine reaches.
 - `--allow-account` names, as 64 hex digits, an account key whose members may create spaces (RFC 0007, "What the relay checks", **Who may create a space.**). Give it once per account.
 - `--allow-invitation` names that account by the text of one of its members' invitations, `ncdb-invite-1:…` ([RFC 0003, "Invitation"](../../docs/rfc/0003-keys-and-cryptography.md#invitation)), which an app gets from the SDK (`Db::invitation`, written with `to_string()`) without ever seeing a key. The relay reads the account key from it and admits that account, as `--allow-account` does; it does not check the invitation's certificate, which each member's connection proves later. A text that is not an invitation stops the relay at start, with exit code 2 and a message that says why, and repeats nothing of the text. Give it once per account; it combines with `--allow-account`.
+- `--admission-key` names, as 64 hex digits, the public half of an app's admission key, which lets an app with open signup admit its own users without listing them ([RFC 0015, "Admission tokens"](../../docs/rfc/0015-relay-admission.md#admission-tokens)). The app's backend signs an admission for each user's identity with the key's private half; the relay takes the admissions that verify under one of the keys it is given, as the relay on AWS does with `NCDB_ADMISSION_KEYS`. Give it once per app; without it the relay takes no admission. A malformed key stops the relay at start with exit code 2 and the usage.
 
 A developer who uses only the public SDK starts the relay with their app's invitation, for example:
 

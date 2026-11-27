@@ -86,7 +86,7 @@ project
 # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 # let lock = std::fs::read_to_string("model.lock.json")?;
 # let db = Db::open(OpenOptions::new(&lock).path("data")).await?;
-let query = db.index("tasks", "byStatusPriority")?.equal(["open"]).take(50);
+let query = db.index("tasks", "byStatusPriority")?.where_eq(["open"]).take(50);
 
 let page = db.find(&query).await?;
 for task in &page.items {
@@ -106,7 +106,7 @@ for task in &page.items {
 # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 # let lock = std::fs::read_to_string("model.lock.json")?;
 # let db = Db::open(OpenOptions::new(&lock).path("data")).await?;
-let query = db.index("tasks", "byStatusPriority")?.equal(["open"]).take(50);
+let query = db.index("tasks", "byStatusPriority")?.where_eq(["open"]).take(50);
 
 let mut pages = db.subscribe(query);
 while let Some(page) = pages.next().await {

@@ -5,7 +5,7 @@
 //! and folding the field again, in stamp order, when an operation
 //! displaces others that gave its ids other content.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 use ncdb_core::cbor::{Key, Value};
@@ -241,7 +241,7 @@ pub fn edit(doc: &Doc, &(kind, a, b, word): &Raw) -> Vec<u8> {
         (4, Some(text)) => {
             let at = boundary(&text, &txn, b);
             let end = boundary(&text, &txn, b.wrapping_add(a));
-            let attrs = [(Arc::<str>::from("bold"), Any::Bool(a % 2 == 0))].into();
+            let attrs = [mark(a, word)].into();
             if at != end {
                 text.format(&mut txn, at.min(end), at.max(end) - at.min(end), attrs);
             }
@@ -277,7 +277,33 @@ pub fn edit(doc: &Doc, &(kind, a, b, word): &Raw) -> Vec<u8> {
             }
         }
     }
-    txn.encode_update_v1()
+    // Yrs writes a map in its hash map's order, which differs from run to
+    // run; written in key order, a seed makes the same cases on every run
+    // and target (C3).
+    let update = txn.encode_update_v1();
+    ncdb_core::rich_text::update::canonical(&update).unwrap_or(update)
+}
+
+/// A mark as TipTap writes it, picked by `pick`: a link with its four
+/// attributes, bold with none, or either removed.
+fn mark(pick: u16, word: &str) -> (Arc<str>, Any) {
+    let link = || {
+        let attrs: HashMap<String, Any> = [
+            ("href", Any::from(format!("https://example.com/{word}"))),
+            ("target", Any::from("_blank")),
+            ("rel", Any::from("noopener noreferrer nofollow")),
+            ("class", Any::Null),
+        ]
+        .map(|(key, value)| (key.to_owned(), value))
+        .into();
+        Any::from(attrs)
+    };
+    match pick % 4 {
+        0 => (Arc::from("link"), link()),
+        1 => (Arc::from("bold"), Any::from(HashMap::<String, Any>::new())),
+        2 => (Arc::from("link"), Any::Null),
+        _ => (Arc::from("bold"), Any::Null),
+    }
 }
 
 /// Appends a paragraph holding `text`; returns the whole document, which

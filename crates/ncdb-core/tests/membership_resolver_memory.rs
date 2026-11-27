@@ -1,5 +1,5 @@
 //! Opening a space with many persons holds memory that grows with the
-//! persons, not with their square (NOC-442). nexflow.it measured a tab
+//! persons, not with their square (NOC-442). a consumer using NoCentralDB measured a tab
 //! above 4 GB at 10,000 persons: each node kept its causal past as a set
 //! of change ids, about 2 GB at 10,000 persons. This test binary counts
 //! every allocation, on both targets, so it holds this one test only.

@@ -1,0 +1,6 @@
+{
+  "id": "core.unreadablePersonKeyRecord",
+  "kind": "core",
+  "text": "person-key record",
+  "when": "In core.viewCorrupt, as `what`, when the database holds a person-key record whose ids, generation or signature it cannot read."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "core.anchorLeaseBehind",
+  "kind": "core",
+  "text": "the version is behind the lease",
+  "when": "When the version an edit names holds fewer of the lease's items than the lease wrote. An agent's anchored rich-text edit (RFC 0013, step 5), behind the cfg ncdb_rich_text; not shown to a developer today, the SDK names it (NOC-565)."
+}

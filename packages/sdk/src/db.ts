@@ -28,10 +28,15 @@ interface Elements<E> {
   readonly "nc.elements": E;
 }
 
-/** What a write takes for a field that reads as `T`: the value, `null` to clear it, or for a set or many links `nc.add` / `nc.remove`. */
+/** What a reference field takes besides `{ space, id }` (RFC 0018, "One function, two cases"): an object the SDK read, of which it takes `$space` and `$id`, or a bare object id, which names the written object's own space. */
+type ReferenceForms = { readonly $space: Id; readonly $id: Id } | Id;
+
+/** What a write takes for a field that reads as `T`: the value, `null` to clear it, for a reference also `ReferenceForms`, or for a set or many links `nc.add` / `nc.remove`. */
 type Write<T> = [T] extends [readonly (infer E)[] | undefined]
   ? Elements<E>
-  : Exclude<T, undefined> | null;
+  : [T] extends [{ space: Id; id: Id } | undefined]
+    ? Exclude<T, undefined> | ReferenceForms | null
+    : Exclude<T, undefined> | null;
 
 /** The values a create or an update writes, by field name; `undefined` writes nothing. */
 type Values<C> = C extends AnyCollection
@@ -54,13 +59,15 @@ interface Cursor {
 
 /**
  * A query of a declared index, whose objects are `T`: the handle
- * `model.<collection>.indexes.<index>`, with `.equal` fixing its equality
- * prefix (`E`, its values in index order), `.take` the page size (50 by
+ * `model.<collection>.indexes.<index>`, with `.where` fixing its `where`
+ * fields (`E`, their values in index order), `.take` the page size (50 by
  * default, at most 1000) and `.after` where the page starts (RFC 0009,
- * "Queries and indexes"). Each returns a new query.
+ * "Queries and indexes"; RFC 0018, "Named equality and order in an index"). Each returns a new query.
  */
 export interface Query<T, E extends readonly unknown[] = readonly []> {
-  /** Fixes the index's leading fields, as many as its `equal` declares. */
+  /** Fixes the index's `where` fields, one value each, in their order. */
+  where(...values: E): Query<T>;
+  /** The same call as `where`, for an index declared with `equal`. */
   equal(...values: E): Query<T>;
   /** Sets the page size: 50 by default, at most 1000. */
   take(n: number): Query<T, E>;

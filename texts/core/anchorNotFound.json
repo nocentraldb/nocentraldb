@@ -1,0 +1,6 @@
+{
+  "id": "core.anchorNotFound",
+  "kind": "core",
+  "text": "edit {edit}: the quote is not found",
+  "when": "When edit {edit}'s quote does not occur in the version read with both ends on text. An agent's anchored rich-text edit (RFC 0013, step 5), behind the cfg ncdb_rich_text; not shown to a developer today, the SDK names it (NOC-565)."
+}

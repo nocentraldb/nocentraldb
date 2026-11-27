@@ -10,7 +10,8 @@
 //! (`super::shreds_held`), nor `ad_hoc_copies`: which object each copy in
 //! an ad-hoc space came from (`super::ad_hoc`), nor `pending_moves`: the
 //! moves whose second change this device has still to write
-//! (`super::pending_moves`).
+//! (`super::pending_moves`), nor `person_key_records`: the person-key
+//! records whose keys this device holds (`super::person_key_records`).
 
 use crate::plugins::Registry;
 use std::collections::BTreeMap;
@@ -80,6 +81,16 @@ CREATE TABLE IF NOT EXISTS shreds_held (
     change_id BLOB NOT NULL,
     held_at INTEGER NOT NULL,
     PRIMARY KEY (space_id, change_id)
+) STRICT;
+CREATE TABLE IF NOT EXISTS person_key_records (
+    space_id BLOB NOT NULL,
+    person_key_id BLOB NOT NULL,
+    generation INTEGER NOT NULL,
+    writer BLOB NOT NULL,
+    wrapped BLOB NOT NULL,
+    signature BLOB NOT NULL,
+    waiting INTEGER NOT NULL,
+    PRIMARY KEY (space_id, person_key_id, generation, writer)
 ) STRICT;
 CREATE TABLE IF NOT EXISTS objects (
     space_id BLOB NOT NULL,

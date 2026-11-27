@@ -34,7 +34,7 @@ impl SqlFold<'_> {
     /// object has become a trace.
     pub(super) fn drop_fields(&self, object: ObjectId) -> Result<(), Error> {
         for (collection, fields) in &self.model.collections {
-            self.conn.execute(
+            self.statements.execute(
                 &format!(
                     "DELETE FROM {} WHERE space_id = ?1 AND object_id = ?2",
                     self.states(collection)
@@ -47,7 +47,7 @@ impl SqlFold<'_> {
                 .map(|(name, _)| format!("{} = NULL", column(name)))
                 .collect();
             if !columns.is_empty() {
-                self.conn.execute(
+                self.statements.execute(
                     &format!(
                         "UPDATE {} SET {} WHERE space_id = ?1 AND object_id = ?2",
                         self.rows(collection),

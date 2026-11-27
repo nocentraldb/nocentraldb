@@ -3,12 +3,27 @@
 
 //! The texts of a field's value, and of the plugins that define one.
 
+/// `anchorUnsupported`: When edit {edit} touches or writes a part the core does
+/// not edit from Markdown yet. An agent's anchored rich-text edit (RFC 0013,
+/// step 5), behind the cfg ncdb_rich_text; not shown to a developer today, the
+/// SDK names it (NOC-565).
+pub(crate) fn anchor_unsupported(edit: impl std::fmt::Display) -> String {
+    format!("edit {edit}: the core does not make this edit")
+}
+
 /// `pluginNamespaceTwice`: The whole error of opening with plugins
 /// (OpenOptions::plugin; invalidValue), when two plugins name one namespace.
 /// Rust only: TypeScript's nc.open takes no plugins.
 pub(crate) fn plugin_namespace_twice(namespace: impl std::fmt::Display) -> String {
     format!("two plugins name the namespace {namespace}")
 }
+
+/// `anchorLeaseMismatch`: When the lease an edit goes through is for another
+/// object than its version. An agent's anchored rich-text edit (RFC 0013, step
+/// 5), behind the cfg ncdb_rich_text; not shown to a developer today, the SDK
+/// names it (NOC-565).
+pub(crate) const ANCHOR_LEASE_MISMATCH: &str =
+    "the lease is for another object";
 
 /// `pluginNamespaceReserved`: The whole error of opening with plugins
 /// (OpenOptions::plugin; invalidValue), when a plugin names the built-in types'
@@ -17,11 +32,41 @@ pub(crate) fn plugin_namespace_reserved(namespace: impl std::fmt::Display) -> St
     format!("a plugin names the namespace {namespace}, which is reserved for the built-in types")
 }
 
+/// `anchorVersionUnknown`: When the cache of read versions no longer holds the
+/// version an edit names. An agent's anchored rich-text edit (RFC 0013, step
+/// 5), behind the cfg ncdb_rich_text; not shown to a developer today, the SDK
+/// names it (NOC-565).
+pub(crate) const ANCHOR_VERSION_UNKNOWN: &str =
+    "the version is no longer held";
+
 /// `valueOutsideSchema`: The core's reason when a value does not fit its
 /// field's kind. Not shown to a developer today: the SDK replaces it with
 /// error.valueDoesNotFit.
 pub(crate) const VALUE_OUTSIDE_SCHEMA: &str =
     "the value is outside the field's schema";
+
+/// `anchorLeaseBehind`: When the version an edit names holds fewer of the
+/// lease's items than the lease wrote. An agent's anchored rich-text edit (RFC
+/// 0013, step 5), behind the cfg ncdb_rich_text; not shown to a developer
+/// today, the SDK names it (NOC-565).
+pub(crate) const ANCHOR_LEASE_BEHIND: &str =
+    "the version is behind the lease";
+
+/// `anchorAmbiguous`: When edit {edit}'s quote occurs more than once in the
+/// version read. An agent's anchored rich-text edit (RFC 0013, step 5), behind
+/// the cfg ncdb_rich_text; not shown to a developer today, the SDK names it
+/// (NOC-565).
+pub(crate) fn anchor_ambiguous(edit: impl std::fmt::Display, matches: impl std::fmt::Display) -> String {
+    format!("edit {edit}: the quote occurs {matches} times")
+}
+
+/// `anchorNotFound`: When edit {edit}'s quote does not occur in the version
+/// read with both ends on text. An agent's anchored rich-text edit (RFC 0013,
+/// step 5), behind the cfg ncdb_rich_text; not shown to a developer today, the
+/// SDK names it (NOC-565).
+pub(crate) fn anchor_not_found(edit: impl std::fmt::Display) -> String {
+    format!("edit {edit}: the quote is not found")
+}
 
 /// `linkIntoOtherSpace`: The core's reason when a link names an object of
 /// another space. Not shown to a developer today: the SDK replaces it with

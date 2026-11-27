@@ -15,7 +15,7 @@
 //! knows ([`ModelLock::knows_field`]) and which field type each field has
 //! ([`ModelLock::field`]).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 pub mod build;
@@ -191,6 +191,28 @@ pub struct Field {
     pub description: Option<String>,
     /// When and why the field was deprecated.
     pub deprecated: Option<Deprecation>,
+    /// For `ncdb/richText`: the nodes and marks its editor uses, which may
+    /// only grow (RFC 0013, "The field in the schema and the lock"). Empty
+    /// for every other type.
+    pub vocabulary: Vocabulary,
+}
+
+/// A rich-text field's vocabulary: the names of the nodes and the marks its
+/// editor's schema holds, sorted and without duplicates. It is no part of
+/// the merge rule; the editor binding checks it, not the core.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct Vocabulary {
+    /// `nodes`.
+    pub nodes: BTreeSet<String>,
+    /// `marks`.
+    pub marks: BTreeSet<String>,
+}
+
+impl Vocabulary {
+    /// Whether it declares no name, as a field without the key does.
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty() && self.marks.is_empty()
+    }
 }
 
 /// The deprecation of a field or a collection.
@@ -244,8 +266,8 @@ pub enum Kind {
     /// `ncdb/ref`, a reference into any space, with the collections a
     /// target may be in (RFC 0005, "References into another space").
     Ref(Vec<String>),
-    /// `ncdb/richText`, a shared document, without configuration (RFC 0013,
-    /// "The field in the schema and the lock").
+    /// `ncdb/richText`, a shared document (RFC 0013, "The field in the
+    /// schema and the lock"); its vocabulary is [`Field::vocabulary`].
     RichText,
     /// A plugin's field type: its id `<namespace>/<name>` and its options.
     Plugin {

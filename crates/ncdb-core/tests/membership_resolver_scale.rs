@@ -17,7 +17,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use ncdb_core::membership::{Resolver, Verdict};
 
-/// The persons of a large space of nexflow.it's heavy users, who import an
+/// The persons of a large space of a consumer's heavy users, who import an
 /// address book (NOC-442).
 const PERSONS: u32 = 10_000;
 

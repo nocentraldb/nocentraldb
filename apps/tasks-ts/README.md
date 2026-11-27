@@ -20,7 +20,7 @@ It runs on one device, without a relay. The TypeScript SDK syncs too: [Getting s
 
 ## 1. The schema and its lock
 
-The schema is `apps/tasks-ts/model.ts`: one collection, `tasks`, with a `title` and a `status` of `open` or `done`, and one index, `byStatus`. The index orders tasks by status, then title. Its option `equal: 1` lets a query fix the status, so each list reads one status.
+The schema is `apps/tasks-ts/model.ts`: one collection, `tasks`, with a `title` and a `status` of `open` or `done`, and one index, `byStatus`. The index names `status` in `where`, so a query fixes the status, and orders the tasks of that status by `title`, so each list reads one status.
 
 The app opens its database with the lock built from the schema, `apps/tasks-ts/model.lock.json`, which is checked in. After you change the schema, build the lock again. The build imports the SDK from its build output, so build the SDK's TypeScript first:
 
@@ -55,7 +55,7 @@ Open `http://localhost:8336/?page=2` to see a list a page at a time. Each list s
 ## How the code is laid out
 
 - `model.ts` is the schema, and `model.lock.json` is its lock.
-- `src/app.ts` opens the database with `nc.open({ model, lock, name: "tasks" })`. It uses the device's first space, or `db.spaces.create()` when there is none. It writes with `space.create`, `space.update` and `space.delete`. It follows each list with `db.subscribe(model.tasks.indexes.byStatus.equal("open").take(n), listener)`, and redraws the list from each page the listener receives.
+- `src/app.ts` opens the database with `nc.open({ model, lock, name: "tasks" })`. It uses the device's first space, or `db.spaces.create()` when there is none. It writes with `space.create`, `space.update` and `space.delete`. It follows each list with `db.subscribe(model.tasks.indexes.byStatus.where("open").take(n), listener)`, and redraws the list from each page the listener receives.
 - `src/tasks.ts` holds the logic without the DOM: the lines of a list, the status a tick writes, the title an input adds, and the page size. `test/tasks.test.ts` tests it with vitest, in `pnpm gates`.
 - `index.html` is the page, and `server.mjs` serves it on localhost.
 - `e2e/tasks.e2e.mjs` drives the page in Chromium through Playwright, as the steps above do. The task `tasks-ts:browser` runs it locally, and the workflow `browser-view` runs it in CI. It is not part of `pnpm gates`, which runs without browsers.
