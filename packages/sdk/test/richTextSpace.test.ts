@@ -150,3 +150,38 @@ test("close gives the lease back and stops pulling", async () => {
   await settle();
   expect(calls.filter((c) => c.call === "richText.pull")).toHaveLength(0);
 });
+
+test("hiding the page writes at once, and the guard checks deletions against the vocabulary", async () => {
+  const listeners = new Map<string, () => void>();
+  const page = {
+    visibilityState: "visible",
+    addEventListener: (type: string, listener: () => void) =>
+      listeners.set(type, listener),
+    removeEventListener: (type: string) => listeners.delete(type),
+  };
+  (globalThis as { document?: unknown }).document = page;
+  try {
+    const { core, calls, state } = fake(true);
+    const callout = new Y.XmlElement("callout");
+    const p = new Y.XmlElement("paragraph");
+    state.getXmlFragment("default").insert(0, [p, callout]);
+    const db = await connect(core, { model, lock, inMemory: true } as never);
+    const space = await db.spaces.get(SPACE);
+    const body = await space.richText(model.notes, NOTE, "body");
+    const root = body.doc.getXmlFragment("default");
+    (root.get(0) as Y.XmlElement).insert(0, [new Y.XmlText("Hi")]);
+    page.visibilityState = "hidden";
+    listeners.get("visibilitychange")?.();
+    await settle();
+    expect(calls.filter((c) => c.call === "richText.write")).toHaveLength(1);
+    root.delete(1, 1);
+    listeners.get("visibilitychange")?.();
+    await settle();
+    expect(calls.filter((c) => c.call === "richText.write")).toHaveLength(1);
+    expect(body.status.status).toBe("notFullyShown");
+    await body.close();
+    expect(listeners.has("visibilitychange")).toBe(false);
+  } finally {
+    delete (globalThis as { document?: unknown }).document;
+  }
+});
