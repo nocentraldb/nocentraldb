@@ -77,7 +77,10 @@ fn where_eq_reads_the_pages_equal_reads() {
     let by_where = index.clone().where_eq(["open"]).take(2);
     let by_equal = index.equal(["open"]).take(2);
 
-    let (first, same) = (now(db.find(&by_where)).unwrap(), now(db.find(&by_equal)).unwrap());
+    let (first, same) = (
+        now(db.find(&by_where)).unwrap(),
+        now(db.find(&by_equal)).unwrap(),
+    );
     assert_eq!(titles(&first), ["b1", "a3"]);
     assert_eq!(first, same);
 
@@ -87,6 +90,33 @@ fn where_eq_reads_the_pages_equal_reads() {
     let (second, again) = (after(&by_where, &first), after(&by_equal, &same));
     assert_eq!(titles(&second), ["b4", "a5"]);
     assert_eq!(second, again);
+}
+
+#[test]
+fn a_query_fixes_a_where_field_to_unset_with_a_cleared_value() {
+    // RFC 0006, "Declared indexes and ordered pages": the equality prefix
+    // is written `k IS ?`, so a lookup can fix a key to unset.
+    let db = open();
+    let (a, _) = two_spaces(&db);
+    now(a.write(|tx| {
+        tx.create(
+            "tasks",
+            [("title", Value::from("u2")), ("priority", Value::from(2))],
+        )?;
+        tx.create(
+            "tasks",
+            [("title", Value::from("u1")), ("priority", Value::from(1))],
+        )?;
+        Ok(())
+    }))
+    .unwrap();
+    let index = db.index("tasks", "byStatusPriority").unwrap();
+
+    let by_where = now(db.find(&index.clone().where_eq([Value::clear()]))).unwrap();
+    let by_equal = now(db.find(&index.equal([Value::clear()]))).unwrap();
+
+    assert_eq!(titles(&by_where), ["u1", "u2"]);
+    assert_eq!(by_where, by_equal);
 }
 
 #[test]

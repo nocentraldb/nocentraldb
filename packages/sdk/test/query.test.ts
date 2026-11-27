@@ -141,6 +141,29 @@ describe("db.find and space.find", () => {
     });
   });
 
+  test('null fixes a where field to unset, in both spellings (RFC 0006, "Declared indexes and ordered pages")', async () => {
+    const { core, requests } = fake();
+    const db = await connect(core, { model, lock });
+    await db.find(model.tasks.indexes.byStatusPriority.where(null));
+    await db.find(model.tasks.indexes.byStatusPriority.equal(null));
+    expect(finds(requests).map((r) => r.args)).toEqual([
+      {
+        query: {
+          collection: "tasks",
+          index: "byStatusPriority",
+          equal: [null],
+        },
+      },
+      {
+        query: {
+          collection: "tasks",
+          index: "byStatusPriority",
+          equal: [null],
+        },
+      },
+    ]);
+  });
+
   test("a page gives its items as objects, its cursor redacted, and hasMore", async () => {
     const { core } = fake((r) =>
       r.call === "find"
