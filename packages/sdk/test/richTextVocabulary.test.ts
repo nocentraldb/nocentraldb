@@ -14,12 +14,16 @@ const DESCRIBE = Symbol.for("nocentraldb.model.describe");
 const notes = (body: Parameters<typeof nc.collection>[0][string]) =>
   nc.model({ notes: nc.collection({ body }) });
 
-const described = (model: object): unknown =>
-  (
-    (model as Record<symbol, () => unknown>)[DESCRIBE]?.() as {
-      collections: { notes: { fields: { body: unknown } } };
-    }
-  ).collections.notes.fields.body;
+const described = (model: object): unknown => {
+  const describe = (model as Record<symbol, (() => unknown) | undefined>)[
+    DESCRIBE
+  ];
+  if (describe === undefined) throw new Error("not a model");
+  const draft = describe() as {
+    collections: { notes: { fields: { body: unknown } } };
+  };
+  return draft.collections.notes.fields.body;
+};
 
 describe("the schema", () => {
   test("describes the vocabulary as the schema lists it", () => {
