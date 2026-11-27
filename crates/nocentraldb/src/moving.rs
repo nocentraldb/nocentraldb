@@ -105,9 +105,33 @@ impl Space {
         let mut create = Transaction::new(&model);
         let mut cleared_links = 0;
         let mut conflicts = Vec::new();
+        #[cfg(ncdb_rich_text)]
+        let mut leased = Vec::new();
         for object in &sources {
-            let carried = carried(&inner, object, &moved)?;
+            #[cfg_attr(not(ncdb_rich_text), allow(unused_mut))]
+            let mut carried = carried(&inner, object, &moved)?;
             cleared_links += carried.cleared_links;
+            #[cfg(ncdb_rich_text)]
+            for (name, document) in std::mem::take(&mut carried.documents) {
+                let collection = object.collection();
+                let re_created = crate::rich_text_copy::re_create(
+                    &mut inner,
+                    new.0,
+                    collection,
+                    object.id().0,
+                    &name,
+                    &document,
+                );
+                let re_created = match re_created {
+                    Ok(re_created) => re_created,
+                    Err(error) => {
+                        crate::rich_text_copy::release(&mut inner, &leased, false)?;
+                        return Err(error);
+                    }
+                };
+                carried.values.push((name, re_created.value.clone()));
+                leased.push(re_created);
+            }
             let values = carried
                 .values
                 .iter()
@@ -127,7 +151,10 @@ impl Space {
             .record_pending_moves(old.0, new.0, &pending)
             .map_err(storage)?;
         let by = writer(&inner);
-        write_change(&mut inner, new.0, create, by, |_| Ok(()))?;
+        let written = write_change(&mut inner, new.0, create, by, |_| Ok(()));
+        #[cfg(ncdb_rich_text)]
+        crate::rich_text_copy::release(&mut inner, &leased, written.is_ok())?;
+        written?;
         if finish_now {
             finish(&mut inner, old.0, new.0, &pending)?;
         }
@@ -266,10 +293,15 @@ fn sources(inner: &Inner, space: CoreSpaceId, objects: &[Object]) -> Result<Vec<
 struct Carried {
     values: Vec<(String, Value)>,
     cleared_links: usize,
+    /// Each written rich-text field and its document, which the move
+    /// re-creates in the new space (RFC 0016, "Its rich-text fields").
+    #[cfg(ncdb_rich_text)]
+    documents: Vec<(String, Vec<u8>)>,
 }
 
 /// The values of `object` in the new space: each set field; a link to an
-/// object of `moved`, or none.
+/// object of `moved`, or none; and the documents of its written rich-text
+/// fields.
 fn carried(
     inner: &Inner,
     object: &Object,
@@ -283,33 +315,53 @@ fn carried(
     let mut carried = Carried {
         values: Vec::new(),
         cleared_links: 0,
+        #[cfg(ncdb_rich_text)]
+        documents: Vec::new(),
     };
     for (name, value) in object.fields() {
+        // A plugin field whose type no plugin implements is in no model and
+        // reads unset: nothing to carry.
+        let Some(field) = fields.get(name) else {
+            continue;
+        };
+        // A rich-text field reads no value: its document is re-created.
+        #[cfg(ncdb_rich_text)]
+        if matches!(field, Field::RichText(_)) {
+            let document = object.rich_text_document(inner, name)?;
+            if !document.is_empty() {
+                carried.documents.push((name.clone(), document));
+            }
+        }
         let Some(value) = value else { continue };
         let elements = match &value.0 {
             Repr::List(elements) => elements.as_slice(),
             _ => &[],
         };
-        let written = match fields.get(name) {
-            Some(Field::Basic(_) | Field::Ref(_)) => Some(value.clone()),
-            Some(Field::Set(_)) if !elements.is_empty() => Some(Value::add(elements.to_vec())),
-            Some(Field::Link(_)) => {
+        let written = match field {
+            Field::Basic(_) | Field::Ref(_) => Some(value.clone()),
+            Field::Set(_) => (!elements.is_empty()).then(|| Value::add(elements.to_vec())),
+            Field::Link(_) => {
                 let target = kept(value);
                 carried.cleared_links += usize::from(target.is_none());
                 target
             }
-            Some(Field::Links(_)) => {
+            Field::Links(_) => {
                 let targets: Vec<Value> = elements.iter().filter_map(kept).collect();
                 carried.cleared_links += elements.len() - targets.len();
                 (!targets.is_empty()).then(|| Value::add(targets))
             }
-            Some(Field::Plugin(_)) => {
+            Field::Plugin(_) => {
                 return Err(Error::new(
                     ErrorCode::NotAllowed,
                     crate::texts::error::move_plugin_later(object.id(), name),
                 ));
             }
-            _ => None,
+            // `$person` is no field an object reads.
+            Field::Person(_) => None,
+            // A rich-text field reads no value; its document is taken
+            // above.
+            #[cfg(ncdb_rich_text)]
+            Field::RichText(_) => None,
         };
         if let Some(written) = written {
             carried.values.push((name.clone(), written));
@@ -345,7 +397,14 @@ fn conflicted(
                 Some(Field::Basic(t)) => t.read(state),
                 Some(Field::Link(t)) => t.read(state),
                 Some(Field::Ref(t)) => t.read(state),
-                _ => return false,
+                // Only basic values, links and references hold a conflict
+                // the move writes the winner of.
+                Some(Field::Set(_) | Field::Links(_) | Field::Person(_) | Field::Plugin(_))
+                | None => {
+                    return false;
+                }
+                #[cfg(ncdb_rich_text)]
+                Some(Field::RichText(_)) => return false,
             };
             !read.conflicts.is_empty()
         })

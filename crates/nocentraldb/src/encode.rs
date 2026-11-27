@@ -133,7 +133,7 @@ impl Site<'_> {
             (Field::Plugin(plugin), FieldState::Plugin(state), Intent::Set(value)) => {
                 self.plugin(plugin, state, value)
             }
-            #[cfg(all(ncdb_rich_text, any(test, feature = "bridge")))]
+            #[cfg(ncdb_rich_text)]
             (
                 Field::RichText(rich_text),
                 FieldState::RichText(state),
@@ -196,7 +196,7 @@ impl Site<'_> {
     /// id, one Yrs refuses and one that gives an id the state holds other
     /// content are `InvalidValue`, so the log never holds a write of this
     /// member that parks.
-    #[cfg(all(ncdb_rich_text, any(test, feature = "bridge")))]
+    #[cfg(ncdb_rich_text)]
     fn rich_text(
         &self,
         field: &ncdb_core::rich_text::RichText,

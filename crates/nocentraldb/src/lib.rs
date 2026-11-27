@@ -63,9 +63,15 @@ mod personal;
 mod query;
 mod relay;
 // What the TypeScript SDK's rich-text editor binding asks through the
-// bridge (NOC-461), built only with the compiler cfg `ncdb_rich_text`.
-#[cfg(all(ncdb_rich_text, any(test, feature = "bridge")))]
+// bridge (NOC-461), and the rich-text update a move or an ad-hoc copy
+// writes (NOC-539), built only with the compiler cfg `ncdb_rich_text`.
+#[cfg(ncdb_rich_text)]
+#[cfg_attr(not(any(test, feature = "bridge")), allow(dead_code))]
 mod rich_text;
+// Re-creating a rich-text document in another space, for a move and an
+// ad-hoc copy (NOC-539).
+#[cfg(ncdb_rich_text)]
+mod rich_text_copy;
 mod space;
 mod split;
 mod status;
