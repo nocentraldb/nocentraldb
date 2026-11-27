@@ -169,6 +169,14 @@ pub(crate) fn refusal_type_changed(collection: impl std::fmt::Display, field: im
     format!("{collection}.{field}: type changes from {from} to {to}.\u{a}Clients would merge and read existing values differently.\u{a}Add a new field instead, and deprecate {collection}.{field}.")
 }
 
+/// `refusalNodeRemoved`: Under the lock's name, when `ncdb model build` or
+/// `ncdb model check` refuses the change against the previous lock, and in the
+/// error of opening with a lock the database refuses against the one it was
+/// last opened with: a node is removed from a rich-text field's vocabulary.
+pub(crate) fn refusal_node_removed(collection: impl std::fmt::Display, field: impl std::fmt::Display, node: impl std::fmt::Display) -> String {
+    format!("{collection}.{field}: node {node} removed from the vocabulary.\u{a}Content written with {node} would hold a node the app no longer declares, and the editor binding would refuse an editor that still has it.\u{a}Keep {node} in the vocabulary.")
+}
+
 /// `nameKindIndex`: In core.refusalBadName and core.refusalNameClash, as `kind`
 /// or `other_kind`, for the name of an index.
 pub(crate) const NAME_KIND_INDEX: &str =
@@ -274,6 +282,14 @@ pub(crate) const LOCK_MISSING: &str =
 /// cannot be read: a set's element is not a basic value.
 pub(crate) fn lock_set_element_not_basic(type_id: impl std::fmt::Display) -> String {
     format!("a set's element is a basic value, not {type_id}")
+}
+
+/// `refusalMarkRemoved`: Under the lock's name, when `ncdb model build` or
+/// `ncdb model check` refuses the change against the previous lock, and in the
+/// error of opening with a lock the database refuses against the one it was
+/// last opened with: a mark is removed from a rich-text field's vocabulary.
+pub(crate) fn refusal_mark_removed(collection: impl std::fmt::Display, field: impl std::fmt::Display, mark: impl std::fmt::Display) -> String {
+    format!("{collection}.{field}: mark {mark} removed from the vocabulary.\u{a}Content written with {mark} would hold a mark the app no longer declares, and the editor binding would refuse an editor that still has it.\u{a}Keep {mark} in the vocabulary.")
 }
 
 /// `refusalRuleChanged`: Under the lock's name, when `ncdb model build` or
