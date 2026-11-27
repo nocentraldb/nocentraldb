@@ -2,7 +2,7 @@
 
 REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-411
 
-This RFC designs `nc.richText`, the field type that [RFC 0005](0005-schema-and-model-lock.md#field-types) reserves and [RFC 0001](0001-nocentraldb.md#field-types-we-ship) promises: a shared document built on Yjs, with Yrs in the core, that people edit in TipTap and agents change with focused edits. It says how a rich-text field's operations travel in a change and fold, how Yjs updates map to those operations, how the TypeScript SDK binds an editor, and what the Rust SDK reads. nexflow.it waits for it: every note body there is rich text.
+This RFC designs `nc.richText`, the field type that [RFC 0005](0005-schema-and-model-lock.md#field-types) reserves and [RFC 0001](0001-nocentraldb.md#field-types-we-ship) promises: a shared document built on Yjs, with Yrs in the core, that people edit in TipTap and agents change with focused edits. It says how a rich-text field's operations travel in a change and fold, how Yjs updates map to those operations, how the TypeScript SDK binds an editor, and what the Rust SDK reads. An app whose note bodies are rich text waits for it.
 
 It checks Yjs's behaviour against the design with four spikes on Yjs 13.6.33, Yrs 0.28.2 and TipTap 3.35 ([What the spikes found](#what-the-spikes-found)), and its findings are the reasons for the choices below. [Follow-up tickets](#follow-up-tickets) lists the work it leads to, in order.
 
