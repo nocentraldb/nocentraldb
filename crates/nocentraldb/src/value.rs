@@ -52,6 +52,10 @@ pub(crate) enum Repr {
     /// editor binding writes (RFC 0013, "An editor: the binding").
     #[cfg(all(ncdb_rich_text, any(test, feature = "bridge")))]
     RichText(crate::rich_text::RichTextUpdate),
+    /// A rich-text field's document, as a read gives it (RFC 0013, "The
+    /// Rust SDK").
+    #[cfg(ncdb_rich_text)]
+    RichTextRead(Box<crate::rich_text_field::RichText>),
 }
 
 impl Value {
@@ -166,7 +170,7 @@ impl From<ObjectId> for Value {
 }
 
 /// The error of a read that asks for another kind than the field holds.
-fn other_kind(asked: &str) -> Error {
+pub(crate) fn other_kind(asked: &str) -> Error {
     Error::new(
         ErrorCode::InvalidValue,
         crate::texts::error::field_does_not_hold(asked),
@@ -236,6 +240,9 @@ impl Value {
             // Operation 5's arguments, which `crate::encode` makes.
             #[cfg(all(ncdb_rich_text, any(test, feature = "bridge")))]
             Repr::RichText(_) => return None,
+            // A document is no single value of a change.
+            #[cfg(ncdb_rich_text)]
+            Repr::RichTextRead(_) => return None,
         })
     }
 

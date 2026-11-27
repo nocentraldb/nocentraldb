@@ -108,7 +108,9 @@ fn read(space: &Space, task: ObjectId) -> RichText {
 #[test]
 fn a_rich_text_field_reads_as_markdown_plain_text_tree_and_mentions() {
     let (db, space) = space();
-    let task = now(space.create("tasks", [("title", Value::from("a"))])).unwrap().ids[0];
+    let task = now(space.create("tasks", [("title", Value::from("a"))]))
+        .unwrap()
+        .ids[0];
     write_document(&db, &space, task);
 
     let body = read(&space, task);
@@ -183,7 +185,9 @@ fn a_rich_text_field_reads_as_markdown_plain_text_tree_and_mentions() {
 #[test]
 fn a_rich_text_field_nothing_was_written_to_reads_unset() {
     let (_db, space) = space();
-    let task = now(space.create("tasks", [("title", Value::from("a"))])).unwrap().ids[0];
+    let task = now(space.create("tasks", [("title", Value::from("a"))]))
+        .unwrap()
+        .ids[0];
     let read = now(space.get("tasks", task)).unwrap().expect("the task");
     assert_eq!(read.get::<RichText>("body").unwrap(), None);
 }
@@ -191,7 +195,9 @@ fn a_rich_text_field_nothing_was_written_to_reads_unset() {
 #[test]
 fn a_rich_text_field_read_as_another_kind_and_another_field_read_as_rich_text_are_refused() {
     let (db, space) = space();
-    let task = now(space.create("tasks", [("title", Value::from("a"))])).unwrap().ids[0];
+    let task = now(space.create("tasks", [("title", Value::from("a"))]))
+        .unwrap()
+        .ids[0];
     write_document(&db, &space, task);
     let read = now(space.get("tasks", task)).unwrap().expect("the task");
     assert_eq!(
@@ -207,8 +213,13 @@ fn a_rich_text_field_read_as_another_kind_and_another_field_read_as_rich_text_ar
 #[test]
 fn a_rich_text_reads_redacted_in_debug_output() {
     let (db, space) = space();
-    let task = now(space.create("tasks", [("title", Value::from("a"))])).unwrap().ids[0];
+    let task = now(space.create("tasks", [("title", Value::from("a"))]))
+        .unwrap()
+        .ids[0];
     write_document(&db, &space, task);
     let shown = format!("{:?}", read(&space, task));
-    assert!(!shown.contains("Plan") && !shown.contains(OBJECT), "{shown}");
+    assert!(
+        !shown.contains("Plan") && !shown.contains(OBJECT),
+        "{shown}"
+    );
 }

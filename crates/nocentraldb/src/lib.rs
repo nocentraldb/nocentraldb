@@ -66,6 +66,10 @@ mod relay;
 // bridge (NOC-461), built only with the compiler cfg `ncdb_rich_text`.
 #[cfg(all(ncdb_rich_text, any(test, feature = "bridge")))]
 mod rich_text;
+// A rich-text field as the Rust SDK reads and writes it (RFC 0013, "The
+// Rust SDK"; NOC-463), built only with the compiler cfg `ncdb_rich_text`.
+#[cfg(ncdb_rich_text)]
+mod rich_text_field;
 mod space;
 mod split;
 mod status;
@@ -157,6 +161,8 @@ pub use ncdb_plugin::Data;
 pub use object::Object;
 pub use pairing::{Account, PairKind, Paired, PairingAnswer, RecoveryCode};
 pub use query::{Cursor, Page, Query};
+#[cfg(ncdb_rich_text)]
+pub use rich_text_field::RichText;
 pub use space::{Space, Spaces, Written};
 pub use status::{
     ParkReason, ProvisionalErasure, Refused, RejectReason, SpaceStatus, SpaceStatusReport,

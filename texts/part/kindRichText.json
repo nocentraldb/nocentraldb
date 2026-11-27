@@ -1,0 +1,6 @@
+{
+  "id": "part.kindRichText",
+  "kind": "part",
+  "text": "rich text",
+  "when": "What the read asked for, in fieldDoesNotHold: a rich-text field's document, read with get::<RichText>."
+}
