@@ -24,6 +24,7 @@
 import { type Cbor, decode, encode } from "./cbor.ts";
 import type { Core } from "./connect.ts";
 import { NcError } from "./error.ts";
+import { heldEvents } from "./heldEvents.ts";
 import * as texts from "./texts.ts";
 
 /** What a tab reaches the others with; the browser's, or a test's fakes. */
@@ -122,8 +123,10 @@ export const tabCore = async (
     if (!channelClosed) channel.postMessage(message);
   };
 
-  let listener: ((event: Uint8Array) => void) | undefined;
-  const emit = (bytes: Uint8Array) => listener?.(bytes);
+  // Events before `connect` listens, such as the first `relay` ask while
+  // the database opens, are held for it (NOC-571).
+  const events = heldEvents();
+  const emit = events.emit;
 
   // This tab while it owns the database.
   let worker: Core | undefined;
@@ -516,8 +519,6 @@ export const tabCore = async (
       return send(bytes, request.call);
     },
     terminate: shutDown,
-    listen: (given) => {
-      listener = given;
-    },
+    listen: events.listen,
   };
 };

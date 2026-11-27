@@ -6,6 +6,7 @@
 
 import type { Core } from "./connect.ts";
 import { NcError } from "./error.ts";
+import { heldEvents } from "./heldEvents.ts";
 import * as texts from "./texts.ts";
 
 /** What the page sends the worker, besides bridge requests, to end it (worker.ts). */
@@ -20,7 +21,9 @@ export const startWorker = (): Core => {
   const waiting: ((answer: Uint8Array) => void)[] = [];
   let failed: Error | undefined;
   const failing: ((error: Error) => void)[] = [];
-  let listener: ((event: Uint8Array) => void) | undefined;
+  // Events before `connect` listens, such as the first `relay` ask while
+  // the database opens, are held for it (NOC-571).
+  const events = heldEvents();
   // The worker sends `{answer}` for each request, in order, and `{event}`
   // for what the core reports unasked.
   worker.onmessage = (
@@ -28,7 +31,7 @@ export const startWorker = (): Core => {
   ) => {
     const { answer, event } = message.data;
     if (event !== undefined) {
-      listener?.(event);
+      events.emit(event);
       return;
     }
     failing.shift();
@@ -52,8 +55,6 @@ export const startWorker = (): Core => {
     // even late: the browser would free its storage after the lock passes
     // on, and the next tab's open would fail.
     terminate: () => worker.postMessage(STOP),
-    listen: (given) => {
-      listener = given;
-    },
+    listen: events.listen,
   };
 };
