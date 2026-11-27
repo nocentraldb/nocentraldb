@@ -158,6 +158,7 @@ fn space_status_answers_rfc_0009s_values_for_a_new_space() {
             ("exposed", Value::Bool(false)),
             ("waitingForKey", Value::Bool(false)),
             ("badPersonKeyRecords", empty.clone()),
+            ("missingPersonKeys", Value::Unsigned(0)),
             ("provisionalErasures", empty),
             ("onlyMember", Value::Bool(true)),
         ])

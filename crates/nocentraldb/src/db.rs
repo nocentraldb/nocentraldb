@@ -92,8 +92,8 @@ pub(crate) struct SpaceState {
     pub(crate) clock: Clock,
     /// The person keys of the space the member holds, by person-key id,
     /// each from a record whose signature, wrap and commitment held
-    /// (`crate::sync::person_keys`). In memory only: a reopened database
-    /// fetches them again from the relay.
+    /// (`crate::sync::person_keys`). The device keeps their records, so a
+    /// reopened database holds them again (NOC-547).
     pub(crate) person_keys: BTreeMap<[u8; 16], PersonKey>,
     /// Whether the relay's records of the space were fetched in the
     /// current connection. Read by the session.
@@ -114,10 +114,35 @@ impl SpaceState {
     /// (RFC 0008, "A shred is final when accepted"). A provisional shred
     /// alone keeps the key. A destroyed key is never held again, since its
     /// records are not accepted (`crate::sync::person_keys`).
-    pub(crate) fn drop_shredded(&mut self) {
+    ///
+    /// Gives the ids of the keys it dropped, whose kept records go with
+    /// them ([`SpaceState::forget_shredded`]).
+    pub(crate) fn drop_shredded(&mut self) -> Vec<[u8; 16]> {
         let resolved = self.checks.resolved();
-        self.person_keys
-            .retain(|id, _| resolved.person_key(*id).is_none_or(|key| !key.destroyed()));
+        let destroyed: Vec<[u8; 16]> = self
+            .person_keys
+            .keys()
+            .filter(|id| resolved.person_key(**id).is_some_and(|key| key.destroyed()))
+            .copied()
+            .collect();
+        for id in &destroyed {
+            self.person_keys.remove(id);
+        }
+        destroyed
+    }
+
+    /// Drops every person key the space's state names as destroyed, as
+    /// [`SpaceState::drop_shredded`] does, and forgets the records of
+    /// `space` the device kept of them (NOC-547).
+    pub(crate) fn forget_shredded(
+        &mut self,
+        view: &mut View,
+        space: CoreSpaceId,
+    ) -> Result<(), ncdb_core::view::Error> {
+        for id in self.drop_shredded() {
+            view.forget_person_key_records(space, id)?;
+        }
+        Ok(())
     }
 
     /// A space the database holds no change of yet.
@@ -381,15 +406,17 @@ impl Db {
             (None, _) => None,
         };
         let model = Arc::new(crate::account::app_model(view.model()));
-        let spaces: BTreeMap<_, _> = view
+        let mut spaces: BTreeMap<_, _> = view
             .spaces()
             .map(|space| (space, SpaceState::from_log(&view, space, keys.member.key())))
             .collect();
         // A shred held before this device kept when (NOC-218) starts its
         // age now.
-        for (space, state) in &spaces {
+        for (space, state) in &mut spaces {
             crate::status::note_shreds(&mut view, *space, state.checks.resolved())
                 .map_err(view_error)?;
+            // The device holds the person keys it kept again (NOC-547).
+            crate::sync::restore_person_keys(&mut view, *space, state).map_err(view_error)?;
         }
         let inner = Inner {
             view,
