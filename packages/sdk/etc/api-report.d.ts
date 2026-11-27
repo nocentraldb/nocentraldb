@@ -390,7 +390,12 @@ export declare const set: <T>(element: Field<T>) => Field<T[]>;
 export declare const link: (target: string | readonly string[]) => Field<ObjectId>;
 export declare const links: (target: string | readonly string[]) => Field<ObjectId[]>;
 export declare const ref: (target: string | readonly string[]) => Ref;
-export declare const richText: () => RichText;
+export declare const richText: (options?: {
+    vocabulary?: {
+        nodes?: readonly string[];
+        marks?: readonly string[];
+    };
+}) => RichText;
 export declare const stream: () => Field<never>;
 export declare const reach: (..._args: unknown[]) => Named;
 export declare const view: (..._args: unknown[]) => Named;

@@ -95,6 +95,18 @@ pub enum Refusal {
         field: String,
         target: String,
     },
+    /// A node removed from a rich-text field's vocabulary (RFC 0013).
+    NodeRemoved {
+        collection: String,
+        field: String,
+        node: String,
+    },
+    /// A mark removed from a rich-text field's vocabulary (RFC 0013).
+    MarkRemoved {
+        collection: String,
+        field: String,
+        mark: String,
+    },
     /// An existing field marked personal.
     MarkedPersonal { collection: String, field: String },
     /// A personal field that is no longer personal.
@@ -244,6 +256,16 @@ impl Refusal {
                 field,
                 target,
             } => texts::refusal_target_removed(collection, field, target),
+            NodeRemoved {
+                collection,
+                field,
+                node,
+            } => texts::refusal_node_removed(collection, field, node),
+            MarkRemoved {
+                collection,
+                field,
+                mark,
+            } => texts::refusal_mark_removed(collection, field, mark),
             MarkedPersonal { collection, field } => {
                 texts::refusal_marked_personal(collection, field)
             }

@@ -170,8 +170,11 @@ type Spec =
       type: "ncdb/link" | "ncdb/links" | "ncdb/ref";
       targets: string[];
     }
-  | { kind: "richText" }
+  | { kind: "richText"; vocabulary?: Vocabulary }
   | { kind: "reserved"; name: string };
+
+/** A rich-text field's vocabulary: the names of the nodes and the marks its editor uses (RFC 0013, "The field in the schema and the lock"). */
+type Vocabulary = { nodes: string[]; marks: string[] };
 
 /** A field's type with its modifiers. */
 type FieldState = {
@@ -323,9 +326,24 @@ export const ref = (target: string | readonly string[]): Ref =>
   unpersonal({
     spec: { kind: "link", type: "ncdb/ref", targets: targets(target) },
   });
-/** Rich text: a shared document, which reads as its Markdown and takes no options (RFC 0013, "The field in the schema and the lock"). */
-export const richText = (): RichText =>
-  unpersonal({ spec: { kind: "richText" } });
+/** Rich text: a shared document, which reads as its Markdown. `vocabulary` names the nodes and marks its editor uses; a later model may add names, never remove one (RFC 0013, "The field in the schema and the lock"). */
+export const richText = (options?: {
+  vocabulary?: { nodes?: readonly string[]; marks?: readonly string[] };
+}): RichText => {
+  const vocabulary = options?.vocabulary;
+  return unpersonal({
+    spec:
+      vocabulary === undefined
+        ? { kind: "richText" }
+        : {
+            kind: "richText",
+            vocabulary: {
+              nodes: [...(vocabulary.nodes ?? [])],
+              marks: [...(vocabulary.marks ?? [])],
+            },
+          },
+  });
+};
 /** A stream: reserved, its field type belongs to a later RFC. */
 export const stream = (): Field<never> =>
   field({ spec: { kind: "reserved", name: "nc.stream" } });
@@ -445,7 +463,9 @@ const describeType = (path: string, spec: Spec): Record<string, unknown> => {
     case "link":
       return { type: spec.type, targets: spec.targets };
     case "richText":
-      return { type: "ncdb/richText" };
+      return spec.vocabulary === undefined
+        ? { type: "ncdb/richText" }
+        : { type: "ncdb/richText", vocabulary: spec.vocabulary };
     case "reserved":
       throw new Error(texts.reservedFieldType(path, spec.name));
     case "set": {
