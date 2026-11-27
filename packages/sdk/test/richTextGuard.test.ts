@@ -151,3 +151,13 @@ test("a write the core refuses is reloaded, so the editor shows only what the co
   expect(root(body.doc).toString()).toBe(root(core).toString());
   expect(body.status).toEqual({ status: "readOnly" });
 });
+
+test("names the editor declares with known(), its placeholders, pass the guard on top of the vocabulary", async () => {
+  const { core, writes, port } = fakeCore();
+  const body = open(core, port);
+  body.known({ nodes: ["callout"], marks: [], attributes: {} });
+  root(body.doc).delete(1, 1);
+  await pause();
+  expect(writes).toHaveLength(1);
+  expect(body.status).toEqual({ status: "shown" });
+});
