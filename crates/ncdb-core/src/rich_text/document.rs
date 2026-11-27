@@ -1,14 +1,16 @@
 //! The field's document in Yrs (RFC 0013, "Folding", step 2): loaded from
 //! the state's bytes, the update applied, and its whole state encoded
-//! again, v1 with garbage collection. The root `default` is opened before
-//! any transaction, and documents count offsets in UTF-16, as Yjs does
-//! (NOC-456).
+//! again, v1 with garbage collection, every map in key order. The root
+//! `default` is opened before any transaction, and documents count
+//! offsets in UTF-16, as Yjs does (NOC-456).
 
 use yrs::updates::decoder::Decode;
 use yrs::{
     ClientID, Doc, GetString, OffsetKind, Options, ReadTxn, StateVector, Transact, Update,
     XmlFragmentRef,
 };
+
+use super::update;
 
 /// The root fragment TipTap's collaboration binds (RFC 0013, "The field in
 /// the schema and the lock").
@@ -43,9 +45,10 @@ pub(super) fn apply(state: &[u8], update: &[u8]) -> Result<Vec<u8>, Refused> {
     apply_to(&doc, update)?;
     let encoded = encode(&doc);
     // Loaded again in one transaction, the document's items merge as far
-    // as they can, whatever order they arrived in.
+    // as they can, whatever order they arrived in; written with every map
+    // in key order, the bytes no longer depend on Yrs's hash maps.
     let (again, _) = load(&encoded)?;
-    Ok(encode(&again))
+    update::canonical(&encode(&again)).map_err(|_| Refused)
 }
 
 fn encode(doc: &Doc) -> Vec<u8> {

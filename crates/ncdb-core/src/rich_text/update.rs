@@ -24,6 +24,11 @@
 //! however its items are cut into pieces, so that two updates can be told
 //! apart when they give one id different content (RFC 0013, "The same id
 //! twice").
+//!
+//! [`canonical`] writes an update Yrs encoded with every map in key order,
+//! since Yrs keeps a value's maps in hash maps.
+
+mod canonical;
 
 use std::collections::BTreeSet;
 
@@ -89,9 +94,24 @@ pub(super) fn structs(bytes: &[u8]) -> Result<&[u8], Malformed> {
     read_with_structs(bytes).map(|(_, end)| &bytes[..end])
 }
 
+pub(super) use canonical::canonical;
+
 /// [`read`], and where the update's delete set starts.
 fn read_with_structs(bytes: &[u8]) -> Result<(Shape, usize), Malformed> {
-    let mut cursor = Cursor { bytes, at: 0 };
+    read_all(bytes).map(|(shape, end, _)| (shape, end))
+}
+
+/// Where a value that may hold a map sits in an update's bytes: a value
+/// in lib0's encoding, or a counted string that holds JSON.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Value {
+    Any(usize, usize),
+    Json(usize, usize),
+}
+
+/// [`read_with_structs`], and where each value of the structs sits.
+fn read_all(bytes: &[u8]) -> Result<(Shape, usize, Vec<Value>), Malformed> {
+    let mut cursor = Cursor::new(bytes);
     let mut shape = Shape::default();
     let mut clients = BTreeSet::new();
     for _ in 0..cursor.count()? {
@@ -109,7 +129,7 @@ fn read_with_structs(bytes: &[u8]) -> Result<(Shape, usize), Malformed> {
     let end = cursor.at;
     shape.deletes = read_deletes(&mut cursor)?;
     match cursor.at == bytes.len() {
-        true => Ok((shape, end)),
+        true => Ok((shape, end, cursor.values)),
         false => Err(Malformed),
     }
 }
@@ -236,8 +256,8 @@ fn read_struct(cursor: &mut Cursor<'_>, writer: &mut Writer) -> Result<(), Malfo
             start = cursor.at - text.len();
             text.encode_utf16().count() as u64
         }
-        EMBED => cursor.string().map(|_| 1)?,
-        FORMAT => cursor.string().and_then(|_| cursor.string()).map(|_| 1)?,
+        EMBED => cursor.json().map(|_| 1)?,
+        FORMAT => cursor.string().and_then(|_| cursor.json()).map(|_| 1)?,
         TYPE => match cursor.uint32()? {
             3 | 5 => cursor.string().map(|_| 1)?,
             0..=6 => 1,
@@ -247,11 +267,11 @@ fn read_struct(cursor: &mut Cursor<'_>, writer: &mut Writer) -> Result<(), Malfo
             let n = cursor.count()?;
             start = cursor.at;
             for _ in 0..n {
-                cursor.any(0)?;
+                cursor.value()?;
             }
             n
         }
-        _ => cursor.string().and_then(|_| cursor.any(0)).map(|_| 1)?,
+        _ => cursor.string().and_then(|_| cursor.value()).map(|_| 1)?,
     };
     if len == 0 || writer.clock + len >= CLOCK_LIMIT {
         return Err(Malformed);
@@ -425,9 +445,35 @@ const BYTES: u8 = 116;
 struct Cursor<'a> {
     bytes: &'a [u8],
     at: usize,
+    /// Where each value the structs hold sits, in order.
+    values: Vec<Value>,
 }
 
 impl<'a> Cursor<'a> {
+    fn new(bytes: &'a [u8]) -> Cursor<'a> {
+        Cursor {
+            bytes,
+            at: 0,
+            values: Vec::new(),
+        }
+    }
+
+    /// A value of an item's content, noted in [`Cursor::values`].
+    fn value(&mut self) -> Result<(), Malformed> {
+        let start = self.at;
+        self.any(0)?;
+        self.values.push(Value::Any(start, self.at));
+        Ok(())
+    }
+
+    /// A string that holds JSON, noted in [`Cursor::values`].
+    fn json(&mut self) -> Result<(), Malformed> {
+        let start = self.at;
+        self.string()?;
+        self.values.push(Value::Json(start, self.at));
+        Ok(())
+    }
+
     fn left(&self) -> usize {
         self.bytes.len() - self.at
     }
