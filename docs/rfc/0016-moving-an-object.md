@@ -12,7 +12,7 @@ It builds on the object model of [RFC 0002](0002-change-and-log-format.md) and [
 
 **At 0.1.** Not built. Release 0.1 has no call that moves an object; an app copies and deletes.
 
-**Out of scope.** Moving a whole space to another relay. Deleting a space, which the draft RFC 0014 designs. Moving an object between two databases that share no space. Rich text and streams, which carry their state as their RFCs define it; this RFC says only that a move carries a field's current value, whatever its type. A plugin field that holds a value is refused for now ([The SDK call and its notice](#the-sdk-call-and-its-notice)).
+**Out of scope.** Moving a whole space to another relay. Deleting a space, which the draft RFC 0014 designs. Moving an object between two databases that share no space. Streams, which carry their state as their RFC will define it; this RFC says only that a move carries a field's current value, whatever its type. A plugin field that holds a value is refused for now ([The SDK call and its notice](#the-sdk-call-and-its-notice)).
 
 ## Summary
 
@@ -23,6 +23,7 @@ It builds on the object model of [RFC 0002](0002-change-and-log-format.md) and [
 | What happens to its history? | It stays in the old space's log, signed as it was. The new space's history starts at the move. Edits to the object that the old space receives after the move, from members that had not seen it, are **later edits**: every member of the old space identifies them the same way, and the app can carry them over. |
 | Its links and references? | Links between objects moved together stay. A link to an object left behind is cleared in the new space and counted. A link in the old space to the moved object reads `moved`, with the new space. A reference to the object follows the trace when the member holds the old space. |
 | Its personal fields? | Sealed again under a person key of the new space, for the same person id, so one erasure still finds every copy. The person's own object must move along or already be in the new space. They are built after the rest. |
+| Its rich-text fields? | Re-created in the new space: the mover writes the document its copy reads as one new rich-text update, under a client id of its own. The text, its marks and its nodes arrive; who wrote which part stays in the old space's log. |
 | Erasure? | An erasure that reaches both spaces shreds the person's key in each. A move erases nothing in the old space: the values it held stay sealed there under the old person key. |
 | What do the members of the old space keep? | Everything they received up to the move: the history and the state at the move, in their log. Their view shows the trace without fields. They receive no change made after the move. The move returns a notice that says so. |
 | Who may move? | A member that may write sealed changes in both spaces: a writer or an admin. |
@@ -115,7 +116,7 @@ Bob's laptop is offline and edits the note while Ana's phone moves it. The lapto
 
 A later edit is an operation on the moved object, in the old space, that is not in the causal past of the move that wins ([Two moves at once](#two-moves-at-once)). Each member computes this from the old space's changes alone, as it computes a concurrent loser ([RFC 0002, "A late change stays identifiable"](0002-change-and-log-format.md#a-late-change-stays-identifiable)), so every member of the old space finds the same set in any order of arrival. A later edit stays in the old space's log, and the SDK computes the later edits from the log when the app asks, so a database reopened from disk lists the same ones; they are not stored on the trace, and they never reach the new space by themselves.
 
-The SDK reports later edits, and the app carries them over: `space.moves.laterEdits()` lists them per moved object, with the space it moved to, and `space.moves.carryOver(edits)` writes the chosen ones into the new space as one `write`. Each later edit is a set, an add, a remove, a delete or a restore, or one the SDK cannot write again, such as a personal value, a plugin's operation or a create. `carryOver` takes the edits only as names: it finds each among the space's later edits and writes it as the old space holds it. It refuses, writing nothing, an edit that is not a later edit of this space and edits of objects moved to different spaces (`invalidValue`), and an edit it cannot write again (`notAllowed`). The app, or a person, decides whether an edit made before Ben's changes still applies, and every write is one the app asked for. The app needs a screen or a rule for it, and a member of both spaces must run it. Nothing is lost silently: the edits stay in the old space, identifiable on every member, and the SDK names them. An automatic carry-over can come later, as an option, once apps show how they use it.
+The SDK reports later edits, and the app carries them over: `space.moves.laterEdits()` lists them per moved object, with the space it moved to, and `space.moves.carryOver(edits)` writes the chosen ones into the new space as one `write`. Each later edit is a set, an add, a remove, a delete or a restore, or one the SDK cannot write again, such as a personal value, a plugin's operation, a rich-text update or a create. `carryOver` takes the edits only as names: it finds each among the space's later edits and writes it as the old space holds it. It refuses, writing nothing, an edit that is not a later edit of this space and edits of objects moved to different spaces (`invalidValue`), and an edit it cannot write again (`notAllowed`). The app, or a person, decides whether an edit made before Ben's changes still applies, and every write is one the app asked for. The app needs a screen or a rule for it, and a member of both spaces must run it. Nothing is lost silently: the edits stay in the old space, identifiable on every member, and the SDK names them. An automatic carry-over can come later, as an option, once apps show how they use it.
 
 **Options not taken.**
 
@@ -168,6 +169,23 @@ So the move seals personal values again under a person key of the new space, for
 
 - **Personal fields stay behind, and the move counts them.** Nothing about the person would reach the new space, but the note would arrive without fields the user expects, and the app would have to write them again, by hand, under the right person.
 - **An object with personal values cannot be moved.** Nothing to design, but a customer record or a note about a person could never be shared alone. The SDK refuses such a move only until personal fields in a move are built.
+
+## Its rich-text fields
+
+A rich-text field holds a Yjs document whose items each name their writer by a client id, and RFC 0013 binds every client id to its member: a member that folds an update parks it when an item's client id does not derive from the change's author ([RFC 0013, "Client ids name their author"](0013-rich-text.md#client-ids-name-their-author)). The mover cannot write Ana's and Ben's items into the new space under their client ids, so the document cannot be carried as it is.
+
+So the move re-creates it. The mover reads the field's document as its copy holds it, as a tree, and writes it into the new space's create as one rich-text update, operation 5, under a client id it leases for that field in the new space ([RFC 0013, "Client ids name their author"](0013-rich-text.md#client-ids-name-their-author)). The update is an ordinary one: every member of the new space folds it as any other, with no change to the format or the fold. It is built from the document's tree, not from its Markdown, so nodes, marks and attributes that Markdown does not show arrive as they are ([RFC 0013, "Reading"](0013-rich-text.md#reading)). What the document holds but does not show stays behind: deleted text, content whose dependencies the mover's copy has not received, and what the operations whose outcome is `lost` wrote. The move resolves those as it resolves every field's conflicts: they stay readable in the old space's log, and the move's result lists the field among the fields that held a conflict ([Its history](#its-history)).
+
+- **Authorship starts at the move.** Every item in the new space names the mover, and `space.inspect` there shows the move's change as the author of the whole document. Who wrote which part, and every earlier version, stay in the old space's log, as the history of every other field does ([Its history](#its-history)).
+- **A later edit of the document is not carried over.** A rich-text update that reaches the old space after the move names items of the old document, which the new space does not hold. The SDK lists it among the later edits as one it cannot write again, and `carryOver` refuses it with `notAllowed` ([Later edits](#later-edits)). Its text has to be carried over by hand.
+- **A field nobody wrote** holds no document and moves as an unset field.
+- **An ad-hoc copy works the same way** ([RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space)): the parent re-creates the document in the copy, a new object, under a client id it leases there, and the sub-agent reads the document, not who wrote it.
+
+**Options not taken.**
+
+- **Carrying the document as it is,** with its item ids, client ids and nonces. Each item would keep its author, and a later edit from the old space would still find the items it names. But the new space's members would have to accept items under other members' client ids, which needs a change to the format and the fold and weakens the rule that a client id names its author. It comes later as an option an app chooses per move (NOC-559).
+- **Re-creating the document from its Markdown.** Simpler, but Markdown does not show every node and attribute, so the move would drop what it cannot show, against principle 3.
+- **Refusing to move an object whose rich-text field was written.** Nothing to design, but a note could never be shared alone, which is what this RFC is for.
 
 ## Erasure
 
@@ -241,14 +259,15 @@ Stated plainly (principle 4):
 - **It erases nothing.** Personal values stay sealed in the old space under the old person key until the person is erased.
 - **The new space starts at the move.** Its members cannot see or verify who changed what before it, unless they also hold the old space.
 - **Two moves at once leave two live objects**, in two spaces, and only members of the old space can tell.
-- **Later edits do not follow by themselves.** They stay in the old space until the app carries them over.
+- **Later edits do not follow by themselves.** They stay in the old space until the app carries them over; a later rich-text edit cannot be carried over by the SDK at all.
+- **A rich-text field starts again at the move.** Its document arrives, but every item in the new space names the mover; who wrote which part stays in the old space.
 - **Old clients see the object as live** in the old space until they upgrade, and their edits there become later edits.
 
 ## Agreement with GENESIS.md
 
 - **Principle 1, the relay never reads content.** Serves it: the move, the destination and `$movedFrom` are sealed; the relay sees two writes, as for any copy.
 - **Principle 2, every copy converges.** Serves it: the move is a basic value with RFC 0004's rule, later edits and the `moved` link status are functions of the old space's changes, and reference resolution, which follows traces, stays local information as it already is.
-- **Principle 3, nothing is lost silently.** Touches it in three places, and the design keeps each identifiable: the history stays in the old space instead of following the object; conflicts are resolved by the move, as by every `write`, and listed in its result; later edits stay in the old space, on every member, until the app carries them over. Two concurrent moves are identifiable only to members of the old space.
+- **Principle 3, nothing is lost silently.** Touches it in three places, and the design keeps each identifiable: the history stays in the old space instead of following the object; conflicts are resolved by the move, as by every `write`, and listed in its result; later edits stay in the old space, on every member, until the app carries them over; a rich-text document arrives whole, but who wrote which part stays in the old space. Two concurrent moves are identifiable only to members of the old space.
 - **Principle 4, say plainly what it does not do.** Serves it: [What this does not do](#what-this-does-not-do) and the notice `objectMoved`.
 - **Principle 5, developers do not handle keys.** Serves it: the SDK seals personal values again under the new space's person key; the app passes objects and a space.
 - **Principle 6, apps read only computed results.** Serves it: a trace leaves the old space's indexes; a moved link target is never followed by a computed field.
@@ -263,6 +282,7 @@ These tickets build the design:
 - **The move in the core and the Rust SDK**, without personal fields: both changes, the pending record, the trace, later edits, two moves at once, links and references; convergence tests in the harness for the move and later edits in any order of arrival.
 - **The move in the TypeScript SDK**, after the Rust SDK.
 - **Personal fields in a move**, with the person-key entry in the new space and the test that one erasure reaches both spaces.
+- **Rich-text fields in a move and in an ad-hoc copy**, re-created under the mover's client id (NOC-539); carrying the document as it is, as an option per move, later (NOC-559).
 - **RFC 0015's user journey** says how to share a single note with a move.
 
 ## How this RFC relates to the others
@@ -273,9 +293,11 @@ It adds an operation to [RFC 0002](0002-change-and-log-format.md)'s format and [
 
 - **2026-11-23 · The move is operation 6: numbers 0, 4 and 6 belong to the object, and 5 is the rich-text update of RFC 0013.** (NOC-474)
 - **2026-11-23 · Later edits are computed from the old space's log when the app asks, not stored on the trace.** (NOC-475)
+- **2026-11-27 · A move re-creates a rich-text field's document from its tree under a client id of the mover; carrying it as it is comes later, as an option per move.** ([decision](../../factory/decisions/2026-11-27-NOC-543-a-move-or-ad-hoc-copy-re-creates-a-rich-text-document-under-a-client-id-of-the-mover.md))
 
 ## History
 
 - 2026-11-22 · First published (NOC-447)
 - 2026-11-23 · Its status line names nobody who decided; the decision log records it (NOC-454, #449)
 - 2026-11-23 · The move is operation 6, later edits are computed from the log, a set plugin field is refused for now, and the decided RFCs describe the move (NOC-474, #474)
+- 2026-11-27 · A move and an ad-hoc copy re-create a rich-text field's document under the mover's client id (NOC-539, NOC-543)
