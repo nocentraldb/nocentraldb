@@ -22,4 +22,4 @@ NoCentralDB is designed in RFCs. Each RFC says its status at the top. Feedback i
 - [RFC 0015: Who may create spaces on a relay, without a redeploy](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0015-relay-admission.md)
 - [RFC 0016: Moving an object to another space](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0016-moving-an-object.md)
 - [RFC 0017: The ncdb MCP server, serving the tools an app declares](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0017-mcp-server.md)
-- [RFC 0018: The model API for an app that decides placement (draft)](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0018-model-api-for-placement.md)
+- [RFC 0018: The model API for an app that decides placement](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0018-model-api-for-placement.md)
