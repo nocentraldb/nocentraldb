@@ -283,7 +283,7 @@ test("fromMarkdown into a field that holds content is refused with richTextNotEm
     async ({ lock, MODEL }) => {
       const { nc } = window;
       const model = new Function("nc", `return ${MODEL}`)(nc);
-      const db = await nc.open({ model, lock, name: "notEmpty" });
+      const db = await nc.open({ model, lock, name: "not-empty" });
       const space = await db.spaces.create();
       const { ids } = await space.create(model.tasks, { title: "Note" });
       await space.update(model.tasks, ids[0], {
