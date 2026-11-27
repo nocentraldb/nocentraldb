@@ -18,4 +18,4 @@ Folding a change into the local view prepared each of its SQL statements again f
 
 ## Fix
 
-A fold now prepares each of its statements once per change, and remembers each object's state while it folds that change. Nothing changes on disk or on the wire. In Chromium, a write of 1,000 objects into a new space now takes about 455 ms, and a write of 100 objects about 73 ms: 12 to 24 % less than with beta.2.
+A fold now prepares each of its statements once per change, and remembers whether each object has moved while it folds that change. Nothing changes on disk or on the wire. In Chromium, a write of 1,000 objects into a new space now takes about 455 ms, and a write of 100 objects about 73 ms: 12 to 24 % less than with beta.2.

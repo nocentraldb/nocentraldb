@@ -1,7 +1,8 @@
 //! An object that becomes a trace, or stops being one, within the fold of
-//! one change (NOC-542; RFC 0016): the fold remembers each object's state
-//! instead of reading it again for every operation, so every way the
-//! `objects` table changes inside one fold must reach what it remembers.
+//! one change (NOC-542; RFC 0016): the fold remembers whether each object
+//! is a trace instead of reading its state again for every operation, so
+//! every way the `objects` table changes inside one fold must reach what it
+//! remembers.
 //! A move or a take-back in the same change as the object's fields, and a
 //! revocation that un-folds a move and folds the object's fields again,
 //! each end where a view that never remembered anything ends: the copies'
