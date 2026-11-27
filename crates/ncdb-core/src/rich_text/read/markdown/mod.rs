@@ -29,6 +29,13 @@ pub(crate) fn render(nodes: &[Node]) -> String {
     blocks(nodes)
 }
 
+/// The Markdown of each top-level block of a document, in order, which
+/// [`render`] joins with a blank line: an anchored edit finds which blocks
+/// a quote touches by them.
+pub(crate) fn parts(nodes: &[Node]) -> Vec<String> {
+    parts_of(nodes)
+}
+
 /// Which kind of list a block is, for two lists in a row.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum List {
@@ -50,6 +57,11 @@ fn list_kind(node: &Node) -> Option<List> {
 /// Blocks, separated by a blank line. Text that stands among blocks reads
 /// as a paragraph.
 fn blocks(nodes: &[Node]) -> String {
+    parts_of(nodes).join("\n\n")
+}
+
+/// The Markdown of each block of `nodes`; a run of text among them is one.
+fn parts_of(nodes: &[Node]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut previous: Option<(List, bool)> = None;
     let mut i = 0;
@@ -74,7 +86,7 @@ fn blocks(nodes: &[Node]) -> String {
         previous = kind.map(|kind| (kind, other));
         i += 1;
     }
-    out.join("\n\n")
+    out
 }
 
 /// Whether `node` holds inline content: a paragraph, heading or code

@@ -28,10 +28,20 @@
 //! once, the number of matches; never the quote or any other text of the
 //! document (RFC 0003, "Keys never reach logs, errors or telemetry").
 
+mod apply;
+mod diff;
+mod lookup;
+mod parse;
+mod view;
+
 use std::collections::BTreeMap;
 use std::fmt;
 
+use yrs::updates::decoder::Decode;
+use yrs::{ClientID, Doc, OffsetKind, Options, ReadTxn, Transact, Update};
+
 use super::State;
+use super::document::ROOT;
 use crate::ids::{ObjectId, SpaceId};
 use crate::redact::Size;
 use crate::view::Lease;
@@ -224,8 +234,54 @@ impl Versions {
         edits: &[Anchored],
         now: u64,
     ) -> Result<Written, Error> {
-        let _ = (version, lease, edits, now);
-        Err(Error::Unsupported { edit: 0 })
+        self.expire(now);
+        let entry = self.entries.get(version).ok_or(Error::VersionUnknown)?;
+        if (entry.field.space, entry.field.object) != (lease.space, lease.object) {
+            return Err(Error::LeaseMismatch);
+        }
+        let field = entry.field.clone();
+        // The agent's copy writes under the lease's client id: the version,
+        // and every update this lease wrote to the field since the cache
+        // holds it, which Yjs applies once however often it arrives.
+        let doc = Doc::with_options(Options {
+            client_id: ClientID::new(lease.client),
+            offset_kind: OffsetKind::Utf16,
+            ..Options::default()
+        });
+        let root = doc.get_or_insert_xml_fragment(ROOT);
+        let own = self.written.get(&(field.clone(), lease.client));
+        for update in std::iter::once(&entry.document).chain(own.into_iter().flatten()) {
+            if update.is_empty() {
+                continue;
+            }
+            let update = Update::decode_v1(update).map_err(|_| Error::VersionUnknown)?;
+            doc.transact_mut()
+                .apply_update(update)
+                .map_err(|_| Error::VersionUnknown)?;
+        }
+        if clock(&doc, lease.client) < lease.clock {
+            return Err(Error::LeaseBehind);
+        }
+        let mut updates = Vec::with_capacity(edits.len());
+        for (k, edit) in edits.iter().enumerate() {
+            updates.push(apply::one(&doc, &root, k, edit)?);
+        }
+        let update = yrs::merge_updates_v1(&updates).map_err(|_| Error::Unsupported { edit: 0 })?;
+        let adds = super::update::read(&update)
+            .map_err(|_| Error::Unsupported { edit: 0 })?
+            .runs
+            .iter()
+            .any(|run| run.range.client == lease.client);
+        let clients = match adds {
+            true => BTreeMap::from([(lease.client, lease.nonce)]),
+            false => BTreeMap::new(),
+        };
+        lease.clock = lease.clock.max(clock(&doc, lease.client));
+        self.written
+            .entry((field, lease.client))
+            .or_default()
+            .push(update.clone());
+        Ok(Written { update, clients })
     }
 
     /// Drops the versions whose time has passed, and the updates of fields
@@ -238,4 +294,9 @@ impl Versions {
             self.entries.values().map(|entry| &entry.field).collect();
         self.written.retain(|(field, _), _| fields.contains(field));
     }
+}
+
+/// The next clock `client` writes at in `doc`.
+fn clock(doc: &Doc, client: u64) -> u64 {
+    u64::from(doc.transact().state_vector().get(&ClientID::new(client)))
 }
