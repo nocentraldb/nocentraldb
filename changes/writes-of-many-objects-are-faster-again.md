@@ -6,7 +6,7 @@ components: [core, sdk-rust, sdk-ts]
 ---
 ## Symptom
 
-Writes of 100 or 1,000 objects took longer than in 0.1.0-beta.2. In Chromium, a write of 1,000 objects into a new space took about 630 ms, against 585 ms with beta.2. A write of 100 objects took 105 ms, against 87 ms.
+Writes of 100 or 1,000 objects took longer than in 0.1.0-beta.2. In Chromium, a write of 1,000 objects into a new space took about 610 ms, against 555 ms with beta.2. A write of 100 objects took 89 ms, against 80 ms.
 
 ## When
 
@@ -18,4 +18,4 @@ Folding a change into the local view prepared each of its SQL statements again f
 
 ## Fix
 
-A fold now prepares each of its statements once per change, and remembers whether each object has moved while it folds that change. Nothing changes on disk or on the wire. In Chromium, a write of 1,000 objects into a new space now takes about 455 ms, and a write of 100 objects about 73 ms: 12 to 24 % less than with beta.2.
+A fold now prepares each of its statements once per change, and remembers whether each object has moved while it folds that change. Nothing changes on disk or on the wire. In Chromium, a write of 1,000 objects into a new space now takes about 415 ms, and a write of 100 objects about 66 ms: 17 to 25 % less than with beta.2.
