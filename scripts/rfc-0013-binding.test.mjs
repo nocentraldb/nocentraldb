@@ -6,7 +6,9 @@
 //    TipTap's default throws before any `editor.on("contentError")` listener;
 // 2. the pause holds a write until `compositionend`, for at most 2 s;
 // 3. a rebuild during a composition waits for `compositionend`, then
-//    restores the focus and the selection;
+//    restores the focus and the selection; the owner's answer on NOC-556
+//    (2026-11-27) replaced the wait by a pull deferred while composing
+//    (rfc-0013-composition-pull.test.mjs), so its entry names NOC-556;
 // 4. one UndoManager is kept across editors, so a rebuild keeps the undo
 //    history;
 // 5. the guard reloads once, then the field is read-only with a status; the
@@ -26,7 +28,7 @@ test("History and Decisions record the change after publication", () => {
   const rfc = read(RFC);
   assertRecord(rfc, PUBLISHED);
   const entries = decisionEntries(rfc).filter((e) => e.includes("NOC-467"));
-  assert.equal(entries.length, 4, entries.join("\n"));
+  assert.equal(entries.length, 3, entries.join("\n"));
   for (const entry of entries) {
     assert.match(entry, /^- \*\*2026-11-22 · /);
     assert.doesNotMatch(

@@ -16,7 +16,7 @@
 //   While an IME composition is open, it is applied at its end, and after
 //   at most MAX_HOLD_MS: TipTap ends a composition itself when it meets a
 //   node its schema lacks, before any rebuild can wait for compositionend
-//   (NOC-555; whether this replaces NOC-467's wording is NOC-556).
+//   (NOC-555; Carsten, 2026-11-27, NOC-556).
 // - One UndoManager for the document, which every editor of the binding
 //   uses (Carsten, 2026-11-22, NOC-467).
 import * as Y from "yjs";
