@@ -25,7 +25,7 @@ use crate::field_op::Origin;
 use crate::ids::SpaceId;
 use crate::log::{Log, OperationParkReason, ParkedOperation, State};
 use crate::receive::{Checks, Fold, fold_one, understand};
-use crate::unfold::{fold_revived, refold_displaced};
+use crate::unfold::{fold_revived, leaves_placeholders, refold_displaced, refold_placed};
 
 /// What a model adds to the model the view's tables were folded by.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -93,6 +93,20 @@ impl Additions {
     fn folds(&self) -> bool {
         !self.collections.is_empty() || !self.fields.is_empty()
     }
+
+    /// Whether the model adds a field whose type keeps a rejected change's
+    /// operations as placeholders: only rich text does.
+    fn keeps_placeholders(&self) -> bool {
+        #[cfg(ncdb_rich_text)]
+        return self
+            .collections
+            .values()
+            .flat_map(|fields| fields.values())
+            .chain(self.fields.iter().map(|(_, _, field)| field))
+            .any(|field| matches!(field, Field::RichText(_)));
+        #[cfg(not(ncdb_rich_text))]
+        false
+    }
 }
 
 /// Migrates the view's tables to `model` and folds the operations parked as
@@ -122,12 +136,15 @@ pub(super) fn run<C: Checks>(
     if !additions.folds() {
         return Ok(());
     }
-    fold_parked(conn, model, &mut logs, checks, unknown)
+    let place = additions.keeps_placeholders();
+    fold_parked(conn, model, &mut logs, checks, unknown, place)
 }
 
 /// Folds the operations parked for a reason `retry` names, in every change
 /// of `logs` that holds any, with the checks `checks` gives for each such
-/// space; without them, that is [`Error::Model`]. An operation that still
+/// space; without them, that is [`Error::Model`]. With `place`, a field
+/// the model adds that keeps placeholders, also takes those of the
+/// changes rejected as not a member, which the fold never opened. An operation that still
 /// does not fold stays parked, for the reason it gives now. A take-back
 /// among them folds its object's fields again (RFC 0016; `super::trace`).
 pub(super) fn fold_parked<C: Checks>(
@@ -136,6 +153,7 @@ pub(super) fn fold_parked<C: Checks>(
     logs: &mut BTreeMap<SpaceId, Log>,
     checks: Option<impl FnMut(SpaceId) -> C>,
     retry: fn(OperationParkReason) -> bool,
+    place: bool,
 ) -> Result<(), Error> {
     let mut checks = checks;
     for (space, log) in logs.iter_mut() {
@@ -144,7 +162,18 @@ pub(super) fn fold_parked<C: Checks>(
             .into_iter()
             .filter(|(_, parked)| parked.iter().any(|operation| retry(operation.reason)))
             .collect();
-        if waiting.is_empty() {
+        // A change rejected as not a member was never folded, so a field
+        // the model now knows has none of its placeholders yet (RFC 0013,
+        // "Un-folding a rejected change").
+        let placed: Vec<_> = match place {
+            true => log
+                .rejected()
+                .into_iter()
+                .filter(|id| leaves_placeholders(log.state(*id)))
+                .collect(),
+            false => Vec::new(),
+        };
+        if waiting.is_empty() && placed.is_empty() {
             continue;
         }
         let factory = checks.as_mut().ok_or(Error::Model)?;
@@ -195,6 +224,7 @@ pub(super) fn fold_parked<C: Checks>(
         // every change now folded (RFC 0016; `super::trace`).
         let mut fold = SqlFold::new(conn, model, *space).for_space(space_checks.space_model_id());
         fold.revived = revived;
+        refold_placed(log, &space_checks, &mut fold, &placed);
         fold_revived(log, &space_checks, &mut fold);
         refold_displaced(log, &space_checks, &mut fold);
         fold.finish()?;

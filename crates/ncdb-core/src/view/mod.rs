@@ -40,6 +40,8 @@ mod rebuild;
 mod refold;
 mod relay;
 #[cfg(ncdb_rich_text)]
+mod rich_text_fold;
+#[cfg(ncdb_rich_text)]
 mod rich_text_lease;
 mod schema;
 mod shreds_held;

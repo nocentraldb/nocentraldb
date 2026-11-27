@@ -80,6 +80,17 @@ pub struct Malformed;
 
 /// Reads `bytes`, a Yjs update in encoding v1.
 pub fn read(bytes: &[u8]) -> Result<Shape, Malformed> {
+    read_with_structs(bytes).map(|(shape, _)| shape)
+}
+
+/// The structs of `bytes`, a well-formed update, without its delete set:
+/// the bytes before the delete set.
+pub(super) fn structs(bytes: &[u8]) -> Result<&[u8], Malformed> {
+    read_with_structs(bytes).map(|(_, end)| &bytes[..end])
+}
+
+/// [`read`], and where the update's delete set starts.
+fn read_with_structs(bytes: &[u8]) -> Result<(Shape, usize), Malformed> {
     let mut cursor = Cursor { bytes, at: 0 };
     let mut shape = Shape::default();
     let mut clients = BTreeSet::new();
@@ -95,9 +106,10 @@ pub fn read(bytes: &[u8]) -> Result<Shape, Malformed> {
         }
         shape.runs.extend(writer.finish());
     }
+    let end = cursor.at;
     shape.deletes = read_deletes(&mut cursor)?;
     match cursor.at == bytes.len() {
-        true => Ok(shape),
+        true => Ok((shape, end)),
         false => Err(Malformed),
     }
 }
