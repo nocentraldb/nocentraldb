@@ -73,7 +73,7 @@ const follow = (db: Db, status: "open" | "done", id: string, step: number) => {
   let stop = () => {};
   const start = () => {
     stop();
-    const query = model.tasks.indexes.byStatus.equal(status).take(limit);
+    const query = model.tasks.indexes.byStatus.where(status).take(limit);
     stop = db.subscribe(query, (page) => {
       list.replaceChildren(...rows(page.items).map((row) => line(db, row)));
       button.hidden = !page.hasMore;

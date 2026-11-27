@@ -13,7 +13,7 @@ export const model = nc.model({
       indexes: {
         // Every task of every space of the device, by status, then by
         // title.
-        byStatus: nc.index(["status", "title"]),
+        byStatus: nc.index({ orderBy: ["status", "title"] }),
       },
     },
   ),
