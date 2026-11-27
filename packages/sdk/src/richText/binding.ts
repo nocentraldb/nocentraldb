@@ -43,9 +43,11 @@ export interface Opened {
 }
 
 /**
- * Whether the editor shows the whole field (NOC-538, Q2): `shown`; or
- * `notFullyShown`, with its reason, which the guard reports; or
- * `readOnly`, when the binding writes nothing more.
+ * Whether the editor shows the whole field and may change it (NOC-538,
+ * Q2): `shown`; or `notFullyShown`, with its reason, which the guard
+ * reports; or `readOnly`, when the member may only read the field or the
+ * binding writes nothing more. A reader's binding whose document the
+ * editor does not fully show also reports `readOnly`.
  */
 export type RichTextStatus =
   | { readonly status: "shown" }
@@ -97,7 +99,9 @@ export const bind = (
   let stopped = !opened.writable;
   // Writes go one at a time, in order.
   let writing: Promise<void> = Promise.resolve();
-  let status: RichTextStatus = { status: "shown" };
+  let status: RichTextStatus = opened.writable
+    ? { status: "shown" }
+    : { status: "readOnly" };
   const listeners = new Set<(status: RichTextStatus) => void>();
   const report = (next: RichTextStatus) => {
     status = next;
