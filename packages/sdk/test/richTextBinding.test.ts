@@ -290,3 +290,22 @@ describe("a pull while a composition is open (NOC-555)", () => {
     expect(text(body.doc)).toBe(text(core));
   });
 });
+
+test("a lease used before keeps its client id, though the state holds its items", async () => {
+  const { core, writes, port } = fakeCore();
+  const before = new Y.Doc();
+  before.clientID = CLIENT;
+  type(before, "Written last time");
+  Y.applyUpdate(core, Y.encodeStateAsUpdate(before));
+  const body = bind(opened(core), port);
+  expect(body.doc.clientID).toBe(CLIENT);
+  type(body.doc, " and now");
+  await body.hidden();
+  expect(writes).toHaveLength(1);
+  const clients = [
+    ...Y.decodeStateVector(
+      Y.encodeStateVectorFromUpdate(writes[0] ?? new Uint8Array()),
+    ).keys(),
+  ];
+  expect(clients).toEqual([CLIENT]);
+});
