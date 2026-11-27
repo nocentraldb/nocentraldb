@@ -356,6 +356,7 @@ So the member that moves or copies the object re-creates the document. It reads 
 - **Every item in the other space names the member that moved or copied it.** Who wrote which part, and the document's history, stay in the old space's log, where `space.inspect` keeps showing them.
 - **An update written in the old space after the move** names items the other space does not hold. RFC 0016 lists it as a later edit the SDK cannot write again; its text has to be carried over by hand.
 - **A field nobody wrote** holds no document, and the create leaves it unset.
+- **A move back is refused for now**, for a written field, since the space moved back into holds the document already and would show its text twice; RFC 0016 says how ([Its rich-text fields](0016-moving-an-object.md#its-rich-text-fields); NOC-560).
 
 Carrying the document as it is, with its client ids and nonces, would keep each item's author, but the other space's members would have to accept items under other members' client ids: that needs a change to the format and the fold and weakens the rule above. It comes later, as an option an app chooses per move (NOC-559). Re-creating the document from its Markdown was not taken, because it drops what Markdown does not show.
 

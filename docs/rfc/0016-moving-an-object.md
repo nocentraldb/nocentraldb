@@ -179,6 +179,7 @@ So the move re-creates it. The mover reads the field's document as its copy hold
 - **Authorship starts at the move.** Every item in the new space names the mover, and `space.inspect` there shows the move's change as the author of the whole document. Who wrote which part, and every earlier version, stay in the old space's log, as the history of every other field does ([Its history](#its-history)).
 - **A later edit of the document is not carried over.** A rich-text update that reaches the old space after the move names items of the old document, which the new space does not hold. The SDK lists it among the later edits as one it cannot write again, and `carryOver` refuses it with `notAllowed` ([Later edits](#later-edits)). Its text has to be carried over by hand.
 - **A field nobody wrote** holds no document and moves as an unset field.
+- **A move back is refused for now.** When the new space's copy already holds the object, as after a move back ([Moving back, and moving again](#what-a-move-is)), that space's log already holds the document, and re-creating it there would show its text twice. Until it is decided how a document moves back (NOC-560), the SDK refuses such a move of an object whose rich-text field was written, with `notAllowed` and the text `error.moveRichTextBackLater`, writing nothing. An object whose rich-text fields nobody wrote moves back.
 - **An ad-hoc copy works the same way** ([RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space)): the parent re-creates the document in the copy, a new object, under a client id it leases there, and the sub-agent reads the document, not who wrote it.
 
 **Options not taken.**
@@ -237,6 +238,7 @@ await personal.moves.carryOver(later[0].edits);
 
 - **`space.move(objects, destination)`** takes objects the SDK read, as `createAdHoc` does, all from this space, and a space handle. It writes the new space first, then the old, and resolves once both are folded on this device. A refused change on either side shows in `space.status` and in `db.sync`, as for any write.
 - **It refuses**, with nothing written: an object of another space or one that is already moved (`invalidValue`); a mover that may not write in either space (`notAllowed`, `notMember`); a destination of another model (`spaceOfAnotherModel`); and, for personal fields, `noPerson` and `personKeyNotHeld`.
+- **A rich-text field that was written is refused for now in a move back**, with `notAllowed` and the text `error.moveRichTextBackLater`, writing nothing, when the new space's copy already holds the object ([Its rich-text fields](#its-rich-text-fields)).
 - **A plugin field that holds a value is refused for now**, with `notAllowed` and the text `error.movePluginLater`, writing nothing, because a plugin field's read is not a value its plugin's write takes, so the move cannot carry it yet. How such a field moves is open (NOC-489). An object whose plugin fields are unset moves.
 - **The notice `objectMoved`** says what the move does not do, as every call that changes who can read does ([RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys)). It is the notice of moving data between spaces that RFC 0003 says comes later.
 - **A write to a moved object** is refused with `moved`, which names the new space.
@@ -260,7 +262,7 @@ Stated plainly (principle 4):
 - **The new space starts at the move.** Its members cannot see or verify who changed what before it, unless they also hold the old space.
 - **Two moves at once leave two live objects**, in two spaces, and only members of the old space can tell.
 - **Later edits do not follow by themselves.** They stay in the old space until the app carries them over; a later rich-text edit cannot be carried over by the SDK at all.
-- **A rich-text field starts again at the move.** Its document arrives, but every item in the new space names the mover; who wrote which part stays in the old space.
+- **A rich-text field starts again at the move.** Its document arrives, but every item in the new space names the mover; who wrote which part stays in the old space. A written rich-text document cannot move back yet.
 - **Old clients see the object as live** in the old space until they upgrade, and their edits there become later edits.
 
 ## Agreement with GENESIS.md
