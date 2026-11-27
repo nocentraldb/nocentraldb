@@ -9,6 +9,13 @@ export interface Vocabulary {
   readonly marks: readonly string[];
 }
 
+/** Names an editor knows besides the field's vocabulary: nodes, marks, and attributes by node. */
+export interface KnownNames {
+  readonly nodes: readonly string[];
+  readonly marks: readonly string[];
+  readonly attributes?: Readonly<Record<string, readonly string[]>>;
+}
+
 /**
  * Whether the editor shows the whole field and may change it (NOC-538,
  * Q2): `shown`; or `notFullyShown`, with its reason, which the guard
@@ -39,6 +46,8 @@ export interface RichTextBinding {
   readonly vocabulary: Vocabulary;
   /** Whether an IME composition is open in the editor: the binding holds its writes and pulls meanwhile, for at most 2 s. */
   composing(open: boolean): void;
+  /** The names the editor knows beyond the vocabulary, its placeholders: the guard lets a deliberate deletion of them through. Each call replaces the names of the call before. */
+  known(names: KnownNames): void;
   /** Writes what is left and gives the client id back. */
   close(): Promise<void>;
 }

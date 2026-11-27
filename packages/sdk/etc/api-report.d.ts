@@ -234,6 +234,11 @@ export interface Vocabulary {
     readonly nodes: readonly string[];
     readonly marks: readonly string[];
 }
+export interface KnownNames {
+    readonly nodes: readonly string[];
+    readonly marks: readonly string[];
+    readonly attributes?: Readonly<Record<string, readonly string[]>>;
+}
 export type RichTextStatus = {
     readonly status: "shown";
 } | {
@@ -251,6 +256,7 @@ export interface RichTextBinding {
     readonly writable: boolean;
     readonly vocabulary: Vocabulary;
     composing(open: boolean): void;
+    known(names: KnownNames): void;
     close(): Promise<void>;
 }
 // file: erase.d.ts
@@ -289,7 +295,7 @@ export declare function name(): string;
 export type { RecoveryCode } from "./account.ts";
 export type { Db, Page, Query, Space, Tx } from "./db.ts";
 export type { Durability } from "./durability.ts";
-export type { RichTextBinding, RichTextStatus, Vocabulary, } from "./editor.ts";
+export type { KnownNames, RichTextBinding, RichTextStatus, Vocabulary, } from "./editor.ts";
 export type { Erased, ErasureRequest, SignOffs } from "./erase.ts";
 export type { Invitation, Notice } from "./members.ts";
 export * as nc from "./nc.ts";

@@ -12,6 +12,7 @@ export type { Db, Page, Query, Space, Tx } from "./db.ts";
 export type { Durability } from "./durability.ts";
 /** A rich-text field's binding, its status and its vocabulary (RFC 0013, "An editor: the binding"; NOC-461; the status as the owner decided on NOC-538, Q2). */
 export type {
+  KnownNames,
   RichTextBinding,
   RichTextStatus,
   Vocabulary,
