@@ -35,7 +35,10 @@ fn key() -> SigningKey {
 
 #[test]
 fn an_admission_for_a_recovery_key_is_the_committed_vector() {
-    assert_eq!(sign(&key(), &grant("recovery key", 20)), RECOVERY_KEY.trim());
+    assert_eq!(
+        sign(&key(), &grant("recovery key", 20)),
+        RECOVERY_KEY.trim()
+    );
 }
 
 #[test]

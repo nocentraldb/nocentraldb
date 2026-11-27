@@ -43,7 +43,10 @@ pub fn sign(key: &SigningKey, grant: &Grant) -> String {
         .finalize()
         .into();
     let signature = key.sign(&digest).to_bytes();
-    format!("{PREFIX}{}", URL_SAFE_NO_PAD.encode(map(grant, Some(&signature))))
+    format!(
+        "{PREFIX}{}",
+        URL_SAFE_NO_PAD.encode(map(grant, Some(&signature)))
+    )
 }
 
 /// The canonical map of `grant`, with the signature as key 5 when given.
@@ -105,7 +108,10 @@ pub fn identity(hex: &str) -> Option<[u8; 32]> {
     let mut out = [0u8; 32];
     for (i, byte) in out.iter_mut().enumerate() {
         let pair = std::str::from_utf8(&digits[2 * i..2 * i + 2]).ok()?;
-        if !pair.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        if !pair
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        {
             return None;
         }
         *byte = u8::from_str_radix(pair, 16).ok()?;

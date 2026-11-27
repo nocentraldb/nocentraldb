@@ -31,7 +31,13 @@ impl Answer {
 
 /// Sends `method path` with `body` to the backend at `address`, with the
 /// user's `session` when given.
-pub fn request(address: &str, method: &str, path: &str, session: Option<&str>, body: &str) -> Answer {
+pub fn request(
+    address: &str,
+    method: &str,
+    path: &str,
+    session: Option<&str>,
+    body: &str,
+) -> Answer {
     let mut stream = TcpStream::connect(address).expect("the backend listens");
     stream.set_read_timeout(Some(WAIT)).unwrap();
     let auth = session.map_or(String::new(), |s| format!("Authorization: Bearer {s}\r\n"));
@@ -44,7 +50,11 @@ pub fn request(address: &str, method: &str, path: &str, session: Option<&str>, b
     let mut answer = String::new();
     stream.read_to_string(&mut answer).unwrap();
     let (head, body) = answer.split_once("\r\n\r\n").expect("a head and a body");
-    let status = head.split(' ').nth(1).and_then(|s| s.parse().ok()).expect("a status");
+    let status = head
+        .split(' ')
+        .nth(1)
+        .and_then(|s| s.parse().ok())
+        .expect("a status");
     Answer {
         status,
         body: body.to_owned(),
@@ -54,7 +64,13 @@ pub fn request(address: &str, method: &str, path: &str, session: Option<&str>, b
 /// Signs up `email` with the backend and gives the session, as the app's
 /// own signup would.
 pub fn sign_up(address: &str, email: &str) -> String {
-    let answer = request(address, "POST", "/signup", None, &serde_json::json!({ "email": email }).to_string());
+    let answer = request(
+        address,
+        "POST",
+        "/signup",
+        None,
+        &serde_json::json!({ "email": email }).to_string(),
+    );
     assert_eq!(answer.status, 200, "{}", answer.body);
     answer.json()["session"].as_str().unwrap().to_owned()
 }
