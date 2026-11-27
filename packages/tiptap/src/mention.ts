@@ -5,7 +5,8 @@
 // and when `label` gives nothing, as after an erasure, it shows a neutral
 // placeholder. The name never reaches the document, the HTML or the JSON.
 //
-// The options' shape is option (a) and waits for the owner (NOC-579).
+// The app resolves the target in `label`; there is no `db` option (Carsten,
+// 2026-11-27, NOC-579).
 import { mergeAttributes, Node } from "@tiptap/core";
 
 /** What a mention refers to: the target object's space id and object id. */

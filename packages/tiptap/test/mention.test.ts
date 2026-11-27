@@ -2,8 +2,8 @@
 // `mention` with the target's `space` and `id`, and no name. The editor
 // shows the name the app's `label` gives for the target, a neutral
 // placeholder until it has one, and the placeholder again when `label`
-// gives nothing, as after an erasure. Its options' shape waits for
-// NOC-579; this is option (a).
+// gives nothing, as after an erasure. The app resolves the target in
+// `label` (Carsten, 2026-11-27, NOC-579).
 import { Editor } from "@tiptap/core";
 import Collaboration from "@tiptap/extension-collaboration";
 import StarterKit from "@tiptap/starter-kit";
