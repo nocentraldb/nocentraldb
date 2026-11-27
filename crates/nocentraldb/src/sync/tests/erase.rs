@@ -135,6 +135,37 @@ async fn a_second_account_signs_off_and_the_person_is_erased_in_both_spaces_for_
     }
 }
 
+/// The person-key records `db` keeps of `space` (NOC-547).
+fn kept_records(db: &Db, space: SpaceId) -> usize {
+    let inner = lock(&db.inner);
+    inner.view.person_key_records(space.0).unwrap().len()
+}
+
+// A device keeps the record of each person key it holds, so a reopen holds
+// the key again (NOC-547); a shred destroys the key, and the record with it
+// (RFC 0008, "A shred is final when accepted").
+#[tokio::test(flavor = "multi_thread")]
+async fn a_shred_removes_the_kept_records_of_its_key() {
+    let relay = LocalRelay::start().await;
+    let (performer, signer, x, _, in_x, _) = two_spaces(&relay).await;
+    assert_eq!(kept_records(&performer, x.id()), 1);
+    eventually("the signer keeps the record it fetched", || {
+        kept_records(&signer, x.id()) == 1
+    })
+    .await;
+
+    let request = performer.erasure_request(&in_x).await.unwrap();
+    let signed = signer.account().sign_off(&request).await.unwrap();
+    performer.erase(&request, &signed.sign_offs).await.unwrap();
+    synced(&performer).await;
+
+    assert_eq!(kept_records(&performer, x.id()), 0);
+    eventually("the signer forgets the destroyed key's record", || {
+        kept_records(&signer, x.id()) == 0
+    })
+    .await;
+}
+
 /// A space whose members all belong to one account: a device of the
 /// account signs off, and the erasure is provisional (RFC 0008, "A
 /// provisional erasure in a space with one account").

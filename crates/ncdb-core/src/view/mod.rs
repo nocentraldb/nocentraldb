@@ -30,6 +30,7 @@ mod migrate;
 pub mod model;
 mod pending_links;
 mod pending_moves;
+mod person_key_records;
 mod person_keys;
 mod plugin;
 mod query;
@@ -68,6 +69,7 @@ pub use model::{
     reserved_name,
 };
 pub use pending_moves::PendingMove;
+pub use person_key_records::PersonKeyRecord;
 pub use query::{Cursor, Page, QueryError};
 pub use read::Row;
 pub use rebuild::RebuildProgress;
