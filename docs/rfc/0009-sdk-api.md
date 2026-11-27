@@ -974,3 +974,4 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - 2026-11-23 · The Rust SDK gains the change event, `db.changes().subscribe()`, with `Change` and `Origin` (NOC-506)
 - 2026-11-23 · Confirming the recovery code takes two of its words back: RecoveryCode gains challenge(), and confirm takes the answers (NOC-502, #484)
 - 2026-11-23 · A write above the relay's change limit is split between objects; one object above it is refused with `tooLarge` (NOC-421, #468)
+- 2026-11-27 · `.where(...)` and `Query::where_eq`, the same call as `.equal(...)`; `null` and `Value::clear()` fix a field to unset (NOC-563, #516)

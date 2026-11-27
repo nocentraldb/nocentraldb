@@ -738,3 +738,4 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 - 2026-11-23 · The hidden field `$movedFrom` of RFC 0016's move (NOC-474, #474)
 - 2026-11-23 · Inline attributions keep the date and the ticket and name nobody who decided; the decision log records it (NOC-481, #475)
 - 2026-11-27 · `nc.richText({ vocabulary })`, its lock key, and a vocabulary that may only grow (NOC-553, NOC-558, NOC-554, #509)
+- 2026-11-27 · The named index form `nc.index({ where, orderBy })` beside `nc.index(fields, { equal })`, which builds the same lock entry (NOC-563, #516)
