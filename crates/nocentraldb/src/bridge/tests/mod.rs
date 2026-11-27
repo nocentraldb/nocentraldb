@@ -26,6 +26,8 @@ mod reports;
 // Rich text is built only with the compiler cfg `ncdb_rich_text` (NOC-468).
 #[cfg(ncdb_rich_text)]
 mod rich_text;
+#[cfg(ncdb_rich_text)]
+mod rich_text_read;
 mod spaces;
 mod split;
 mod sync;
