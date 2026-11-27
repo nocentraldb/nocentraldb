@@ -47,3 +47,13 @@ test("only the project's own tasks set the cfg, never a build of the package", (
     /RUSTFLAGS: "--cfg ncdb_rich_text"/,
   );
 });
+
+// Yjs is the app's, shared with the editor's y-tiptap: two copies break
+// Yjs's own checks, so the SDK takes it as an optional peer, pinned
+// exactly, and needs it only for rich text (provisional, NOC-564).
+test("the SDK takes yjs as an optional, exactly pinned peer, never as its own dependency", () => {
+  const pkg = JSON.parse(read("packages/sdk/package.json"));
+  assert.equal(pkg.dependencies?.yjs, undefined);
+  assert.match(pkg.peerDependencies?.yjs ?? "", /^\d+\.\d+\.\d+$/);
+  assert.equal(pkg.peerDependenciesMeta?.yjs?.optional, true);
+});
