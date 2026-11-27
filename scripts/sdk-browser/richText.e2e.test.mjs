@@ -128,6 +128,14 @@ const open = async (server) => {
   const tab = await (await browser.newContext()).newPage();
   const errors = [];
   tab.on("pageerror", (error) => errors.push(error));
+  // Yjs draws a new client id, and says so, when an update it applies
+  // holds items of its own; the binding's writes would then be under an id
+  // no lease holds.
+  tab.on("console", (message) => {
+    if (message.text().includes("Changed the client-id")) {
+      errors.push(message.text());
+    }
+  });
   await tab.route(`${server.url}/rich-text.html`, (route) =>
     route.fulfill({ body: page, contentType: "text/html; charset=utf-8" }),
   );
@@ -139,21 +147,6 @@ const open = async (server) => {
       contentType: "text/javascript; charset=utf-8",
     });
   });
-  tab.on(
-    "console",
-    (m) => process.env.RT_DEBUG && console.log("console:", m.text()),
-  );
-  tab.on(
-    "requestfailed",
-    (r) => process.env.RT_DEBUG && console.log("failed:", r.url()),
-  );
-  tab.on(
-    "response",
-    (r) =>
-      process.env.RT_DEBUG &&
-      r.status() >= 400 &&
-      console.log("status:", r.status(), r.url()),
-  );
   await tab.goto(`${server.url}/rich-text.html`);
   await tab.waitForFunction(() => window.ready === true);
   return { tab, errors };
