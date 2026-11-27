@@ -17,7 +17,8 @@ use super::{Bridge, as_text, code, field, map, now, ok, text};
 use crate::RichText;
 use crate::id::{ObjectId, SpaceId};
 
-const TABLE: &str = include_str!("../../../../ncdb-core/tests/vectors/rich-text/from-markdown.json");
+const TABLE: &str =
+    include_str!("../../../../ncdb-core/tests/vectors/rich-text/from-markdown.json");
 
 fn table(part: &str) -> Vec<Json> {
     let table: Json = serde_json::from_str(TABLE).expect("the table is JSON");
@@ -171,7 +172,12 @@ fn an_update_writes_a_first_document_and_a_second_is_refused_with_rich_text_not_
     write(
         &mut bridge,
         &space,
-        vec![op("update", "tasks", Some(&id), map(&[("body", markdown("First."))]))],
+        vec![op(
+            "update",
+            "tasks",
+            Some(&id),
+            map(&[("body", markdown("First."))]),
+        )],
     );
     assert_eq!(body(&mut bridge, &space, &id), text("First."));
     let args = map(&[
@@ -216,7 +222,12 @@ fn a_binding_opens_on_the_first_document() {
     write(
         &mut bridge,
         &space,
-        vec![op("update", "tasks", Some(&id), map(&[("body", markdown("Hello"))]))],
+        vec![op(
+            "update",
+            "tasks",
+            Some(&id),
+            map(&[("body", markdown("Hello"))]),
+        )],
     );
     let opened = open(&mut bridge, &space, &id, "body");
     let Some(Value::Bytes(state)) = field(&opened, "state") else {
@@ -233,5 +244,5 @@ fn a_binding_opens_on_the_first_document() {
         yrs::GetString::get_string(&root, &txn),
         "<paragraph>Hello</paragraph>"
     );
-    assert!(txn.state_vector().len() > 0);
+    assert!(!txn.state_vector().is_empty());
 }
