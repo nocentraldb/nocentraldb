@@ -124,7 +124,7 @@ pub(super) fn rich_text(bytes: &[u8]) -> Result<crate::rich_text::State, Error> 
 
 /// The creates and deletes an object received, by operation id. The
 /// object is a function of them, as a field's state is of its operations.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(super) struct ObjectState(BTreeMap<OperationId, ObjectOperation>);
 
 impl ObjectState {

@@ -7,7 +7,7 @@ use rusqlite::params;
 use super::Error;
 use super::fold::SqlFold;
 use super::model::Field;
-use super::schema::{column, objects_in};
+use super::schema::column;
 use super::trace::out_of_indexes;
 use crate::ids::ObjectId;
 
@@ -48,13 +48,7 @@ impl SqlFold<'_> {
         if state.object().moved_to().is_some() {
             self.revived.insert(object);
         }
-        self.statements.execute(
-            &format!(
-                "DELETE FROM {} WHERE space_id = ?1 AND object_id = ?2",
-                objects_in(self.prefix)
-            ),
-            params![self.space.0, object.0],
-        )?;
+        self.keep_object(object, None)?;
         for collection in self.model.collections.keys() {
             if was_out {
                 self.mark_deleted(collection, object, false)?;

@@ -43,6 +43,11 @@ pub(super) struct SqlFold<'a> {
     pub(super) conn: &'a Connection,
     /// Every statement the fold runs on the view's tables.
     pub(super) statements: Statements<'a>,
+    /// The state of each object the fold read or wrote, as the `objects`
+    /// table holds it now: every operation of a field reads whether its
+    /// object is a trace, and the table changes only through
+    /// [`SqlFold::keep_object`] (NOC-542).
+    objects: std::cell::RefCell<BTreeMap<ObjectId, ObjectState>>,
     pub(super) model: &'a Model,
     pub(super) space: SpaceId,
     /// The prefix of the tables it folds into: empty for the view's own,
@@ -82,6 +87,7 @@ impl<'a> SqlFold<'a> {
         SqlFold {
             conn,
             statements: Statements::new(conn),
+            objects: std::cell::RefCell::new(BTreeMap::new()),
             model,
             space,
             prefix: "",
@@ -217,6 +223,9 @@ impl<'a> SqlFold<'a> {
 
     /// The object's creates, deletes and moves, empty when it has none.
     pub(super) fn object(&self, object: ObjectId) -> Result<ObjectState, Error> {
+        if let Some(state) = self.objects.borrow().get(&object) {
+            return Ok(state.clone());
+        }
         self.statements.count_object_read();
         let bytes: Option<Vec<u8>> = self.statements.query_row(
             &format!(
@@ -226,10 +235,44 @@ impl<'a> SqlFold<'a> {
             params![self.space.0, object.0],
             |r| r.get(0),
         )?;
-        match bytes {
-            Some(bytes) => ObjectState::read(&bytes),
-            None => Ok(ObjectState::default()),
-        }
+        let state = match bytes {
+            Some(bytes) => ObjectState::read(&bytes)?,
+            None => ObjectState::default(),
+        };
+        self.objects.borrow_mut().insert(object, state.clone());
+        Ok(state)
+    }
+
+    /// Writes the object's state into `objects`, or removes its row when
+    /// `state` is `None`; [`SqlFold::object`] then gives it. The only way
+    /// the fold changes the table, so that what it remembers stays what
+    /// the table holds.
+    pub(super) fn keep_object(
+        &self,
+        object: ObjectId,
+        state: Option<ObjectState>,
+    ) -> Result<(), Error> {
+        match &state {
+            Some(state) => self.statements.execute(
+                &format!(
+                    "INSERT INTO {} (space_id, object_id, state) VALUES (?1, ?2, ?3)
+                     ON CONFLICT DO UPDATE SET state = excluded.state",
+                    objects_in(self.prefix)
+                ),
+                params![self.space.0, object.0, state.bytes()],
+            )?,
+            None => self.statements.execute(
+                &format!(
+                    "DELETE FROM {} WHERE space_id = ?1 AND object_id = ?2",
+                    objects_in(self.prefix)
+                ),
+                params![self.space.0, object.0],
+            )?,
+        };
+        self.objects
+            .borrow_mut()
+            .insert(object, state.unwrap_or_default());
+        Ok(())
     }
 
     /// Records in the object's row of `c_<collection>`, if it has one,
@@ -344,14 +387,7 @@ impl<'a> SqlFold<'a> {
         let was_out = out_of_indexes(&state);
         let was_moved = state.object().moved_to().is_some();
         state.insert(operation.clone());
-        self.statements.execute(
-            &format!(
-                "INSERT INTO {} (space_id, object_id, state) VALUES (?1, ?2, ?3)
-                 ON CONFLICT DO UPDATE SET state = excluded.state",
-                objects_in(self.prefix)
-            ),
-            params![self.space.0, object.0, state.bytes()],
-        )?;
+        self.keep_object(object, Some(state.clone()))?;
         // A delete, a move, a restore or a take-back takes the object's
         // rows out of the declared indexes or puts them back, in whichever
         // collection's table the object has one.
