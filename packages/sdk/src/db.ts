@@ -310,6 +310,8 @@ export interface Db {
       }[];
       readonly askAdmins: readonly Id[];
     }>;
+    /** On the device that pairs: the fingerprint of `invitation`, twelve blocks of five digits, for a person to compare with the one the new device shows under its own invitation before `pair` (RFC 0010, "Adding a device or an agent to an account", step 2). For a member waiting to be paired it is the member's own; for a certified invitation, its account's. A text the core does not read as an invitation fails with `invalidValue`. */
+    pairingFingerprint(invitation: Invitation): Promise<string>;
     /** On the new database, opened with `pairing: "request"`: takes the answer and makes it a device or an agent of the account; gives the notices of the pairing. */
     completePairing(
       answer: import("./account.ts").PairingAnswer,

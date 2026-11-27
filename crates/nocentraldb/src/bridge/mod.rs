@@ -121,6 +121,11 @@
 //! `{"member": id, "recover": words}` answers `{"removed": [{"space": id,
 //! "notice": notice}], "askAdmins": [id], "notice": notice}`.
 //!
+//! The call of NOC-582, in `account.rs`: `account.pairingFingerprint`
+//! `{"invitation": text}` answers the invitation's fingerprint as text,
+//! the member's own while it waits to be paired (Carsten, 2026-11-27,
+//! NOC-583).
+//!
 //! With the compiler cfg `ncdb_rich_text` only (NOC-468), the calls of the
 //! rich-text editor binding (RFC 0013, "An editor: the binding"; NOC-461),
 //! in `rich_text.rs`: `richText.open` `{"space": id, "collection": text,
@@ -318,6 +323,7 @@ impl Bridge {
             "account.confirmRecoveryCode" => account::confirm_recovery_code(&db, args).await,
             "account.recovered" => account::recovered(&db).await,
             "account.pair" => account::pair(&db, args).await,
+            "account.pairingFingerprint" => account::pairing_fingerprint(args),
             "account.completePairing" => account::complete_pairing(&db, args).await,
             "account.removeMember" => account::remove_member(&db, args).await,
             "admission.answer" => match &self.events {
