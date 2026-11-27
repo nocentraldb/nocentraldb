@@ -21,6 +21,7 @@ const queries = new WeakMap<object, QueryState>();
 const query = (state: QueryState): object => {
   const made = {
     equal: (...values: unknown[]) => query({ ...state, equal: values }),
+    where: (...values: unknown[]) => query({ ...state, equal: values }),
     take: (n: number) => query({ ...state, take: n }),
     after: (cursor: Cursor) => query({ ...state, after: cursor }),
   };

@@ -3,7 +3,7 @@
 // reads the status of each space a handle follows and the durability
 // report, and both read their log by a pass over it. In Chromium, a
 // one-object write cost 6 ms at 2,000 objects and 13 ms at 20,000, and
-// nexflow.it measured about 60 ms at 60,000 on 0.1.0-beta.1. The space
+// A consumer using NoCentralDB measured about 60 ms at 60,000 on 0.1.0-beta.1. The space
 // status and the durability report now keep what they read, and this test
 // keeps the cost flat.
 //

@@ -15,7 +15,7 @@ use tokio::sync::watch;
 use super::time::{self, Instant};
 use super::transport::{self, Transport};
 use super::wire::{self, Answer};
-use super::{Connection, apply, finalize, large, merge};
+use super::{Connection, apply, finalize, large, merge, pages};
 use crate::db::{Inner, lock};
 
 mod admission;
@@ -389,7 +389,8 @@ impl<T: Transport> Session<'_, T> {
     }
 
     /// Pushes every change of `space` the relay has not confirmed, in
-    /// local order, in pushes that each fit one message.
+    /// local order, in pushes that each fit one message, reading them a
+    /// push at a time (`pages`).
     async fn push(&mut self, space: SpaceId) -> Result<(), End> {
         // A space whose finalize the relay found too early waits until its
         // push again is due (`finalize`).
@@ -400,39 +401,44 @@ impl<T: Transport> Session<'_, T> {
         if self.uploads.waiting(space, Instant::now()) {
             return Ok(());
         }
-        let unconfirmed =
-            with(self.db, |inner| apply::unconfirmed(inner, space))?.map_err(|_| lost())?;
-        let (ids, frames): (Vec<_>, Vec<_>) = unconfirmed.into_iter().unzip();
-        let mut ids = ids.into_iter();
-        for batch in wire::batches(frames) {
-            let batch_ids: Vec<_> = ids.by_ref().take(batch.len()).collect();
-            let req = self.req();
-            match &batch[..] {
-                [frame] if !wire::fits_a_push(frame) => {
-                    let id = match self.upload(space, batch_ids[0], frame).await? {
-                        Uploaded::Id(id) => id,
-                        Uploaded::Refused => continue,
-                        Uploaded::Stopped | Uploaded::Failed => return Ok(()),
-                    };
-                    self.send(wire::push_upload(req, space, &id)).await?;
-                }
-                _ => self.send(wire::push(req, space, &batch)).await?,
-            }
-            match self.ask(req).await? {
-                Answer::Pushed { results, .. } => {
-                    let results = self.admitted(space, &batch, results).await?;
-                    let stopped = with(self.db, |inner| {
-                        apply::pushed(inner, space, &batch_ids, results)
-                    })?
-                    .map_err(|_| lost())?;
-                    match stopped {
-                        Some(code) if code == apply::TOO_EARLY => return Ok(()),
-                        Some(_) => return Err(lost()),
-                        None => {}
+        let through = with(self.db, |inner| pages::through(inner, space))?.map_err(|_| lost())?;
+        let mut after = 0;
+        loop {
+            let page = with(self.db, |inner| pages::next(inner, space, after, through))?
+                .map_err(|_| lost())?;
+            for (batch_ids, batch) in page.pushes {
+                let req = self.req();
+                match &batch[..] {
+                    [frame] if !wire::fits_a_push(frame) => {
+                        let id = match self.upload(space, batch_ids[0], frame).await? {
+                            Uploaded::Id(id) => id,
+                            Uploaded::Refused => continue,
+                            Uploaded::Stopped | Uploaded::Failed => return Ok(()),
+                        };
+                        self.send(wire::push_upload(req, space, &id)).await?;
                     }
+                    _ => self.send(wire::push(req, space, &batch)).await?,
                 }
-                answer => return self.answer(space, answer),
+                match self.ask(req).await? {
+                    Answer::Pushed { results, .. } => {
+                        let results = self.admitted(space, &batch, results).await?;
+                        let stopped = with(self.db, |inner| {
+                            apply::pushed(inner, space, &batch_ids, results)
+                        })?
+                        .map_err(|_| lost())?;
+                        match stopped {
+                            Some(code) if code == apply::TOO_EARLY => return Ok(()),
+                            Some(_) => return Err(lost()),
+                            None => {}
+                        }
+                    }
+                    answer => return self.answer(space, answer),
+                }
             }
+            if page.last {
+                break;
+            }
+            after = page.after;
         }
         self.put_person_keys(space).await
     }
@@ -474,9 +480,16 @@ impl<T: Transport> Session<'_, T> {
             Ok(()) => self.ask(req).await,
             Err(end) => Err(end),
         };
+        // Taken, or refused for good: the kept records wait no longer.
+        let done = |records: &[wire::Record]| {
+            with(self.db, |inner| {
+                super::person_keys::put_done(&mut inner.view, space, records)
+            })?
+            .map_err(|_| lost())
+        };
         match answer {
-            Ok(Answer::Other { .. }) => Ok(()),
-            Ok(Answer::Error { code, .. }) if code == "bad_record" => Ok(()),
+            Ok(Answer::Other { .. }) => done(&records),
+            Ok(Answer::Error { code, .. }) if code == "bad_record" => done(&records),
             Ok(answer) => {
                 keep(records)?;
                 self.answer(space, answer)
@@ -507,17 +520,21 @@ impl<T: Transport> Session<'_, T> {
             match self.ask(req).await? {
                 Answer::PersonKeys { records, .. } => {
                     with(self.db, |inner| {
-                        if let Some(state) = inner.spaces.get_mut(&space) {
+                        let crate::db::Inner { view, spaces, .. } = inner;
+                        if let Some(state) = spaces.get_mut(&space) {
                             let mut bad = std::collections::BTreeSet::new();
                             for record in &records {
-                                let outcome = super::person_keys::accept(state, space, record);
+                                let outcome =
+                                    super::person_keys::hold(view, state, space, record, false)?;
                                 if let super::person_keys::Outcome::Bad(account) = outcome {
                                     bad.insert(account);
                                 }
                             }
                             state.bad_person_key_records = bad;
                         }
-                    })?;
+                        Ok(())
+                    })?
+                    .map_err(|_: ncdb_core::view::Error| lost())?;
                 }
                 answer => return self.answer(space, answer),
             }

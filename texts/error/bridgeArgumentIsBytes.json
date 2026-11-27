@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeArgumentIsBytes",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "{key} is bytes",
+  "when": "The bridge, on a request from the TypeScript SDK: a request whose argument, such as update or stateVector of a rich-text binding, is missing or not bytes."
+}

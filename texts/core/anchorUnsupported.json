@@ -1,0 +1,6 @@
+{
+  "id": "core.anchorUnsupported",
+  "kind": "core",
+  "text": "edit {edit}: the core does not make this edit",
+  "when": "When edit {edit} touches or writes a part the core does not edit from Markdown yet. An agent's anchored rich-text edit (RFC 0013, step 5), behind the cfg ncdb_rich_text; not shown to a developer today, the SDK names it (NOC-565)."
+}

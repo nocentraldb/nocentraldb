@@ -29,6 +29,7 @@ const ALONE = {
   exposed: false,
   waitingForKey: false,
   badPersonKeyRecords: [],
+  missingPersonKeys: 0,
   provisionalErasures: [],
   onlyMember: true,
 };

@@ -3,7 +3,7 @@
 //!
 //! A link in the old space to the moved object finds the trace and reads
 //! `moved`, with the new space, whether or not the trace was deleted too.
-//! A reference that names the old space follows the trace, up to 8 in a
+//! A reference from another space that names the old space follows the trace, up to 8 in a
 //! row so that a cycle of moves ends, and resolves where the object is now:
 //! ok, with the space where it found it, not accessible without a copy of
 //! that space, or missing.
@@ -25,6 +25,11 @@ use ncdb_core::object::{Create, Object};
 use ncdb_core::reference::{self, Reference};
 
 const NOTE: ObjectId = ObjectId([7; 16]);
+
+/// The space of the object that holds each reference below: none of the
+/// spaces the note lives in or moves to, so every reference is cross-space
+/// (RFC 0018, "One function, two cases").
+const HOLDER: SpaceId = SpaceId([99; 16]);
 
 fn space(n: u8) -> SpaceId {
     SpaceId([n; 16])
@@ -132,7 +137,7 @@ fn reference_read(copies: &BTreeMap<SpaceId, BTreeMap<ObjectId, Object>>) -> ref
     };
     let set = field.set(&state, op(9), MemberId([1; 32]), Hlc(9), Some(target));
     field.apply(&mut state, &set);
-    field.resolve(&state, copies).value.unwrap()
+    field.resolve(HOLDER, &state, copies).value.unwrap()
 }
 
 #[test]
@@ -219,7 +224,7 @@ fn a_ninth_trace_in_a_row_is_not_followed() {
     };
     let set = field.set(&state, op(9), MemberId([1; 32]), Hlc(9), Some(target));
     field.apply(&mut state, &set);
-    let read = field.resolve(&state, &copies).value.unwrap();
+    let read = field.resolve(HOLDER, &state, &copies).value.unwrap();
     assert_eq!(read.status, reference::Status::Ok);
     assert_eq!(read.found, Some(space(10)));
 }

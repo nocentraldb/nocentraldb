@@ -1,0 +1,6 @@
+{
+  "id": "ts.indexNamesFieldTwice",
+  "kind": "ts",
+  "text": "{collection}.{key}: the index names the field {field} twice; name each field once.",
+  "when": "ncdb model build, on a model whose index in the named form names a field twice in where, or twice in orderBy, whatever its direction (RFC 0018, \"Named equality and order in an index\")."
+}

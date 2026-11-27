@@ -16,7 +16,7 @@ use crate::texts;
 
 use super::{
     Collection, Deprecation, Direction, Element, FORMAT, Field, Index, IndexField, Kind, ModelId,
-    ModelInfo, ModelLock, Named, Person, Plugin, Scope,
+    ModelInfo, ModelLock, Named, Person, Plugin, Scope, Vocabulary,
 };
 
 /// Why a lock (or a schema's description) could not be read: the JSON
@@ -244,8 +244,14 @@ pub(super) fn field_core(map: &Map<String, Value>, path: &str) -> Result<Field, 
             })
         }
     };
+    let kind = kind(map, path)?;
+    let vocabulary = match (&kind, optional(map, "vocabulary")) {
+        (Kind::RichText, Some(value)) => vocabulary(value, &join(path, "vocabulary"))?,
+        _ => Vocabulary::default(),
+    };
     Ok(Field {
-        kind: kind(map, path)?,
+        kind,
+        vocabulary,
         rule: whole(required(map, path, "rule")?, &join(path, "rule"))?,
         since: 0,
         personal,
@@ -289,6 +295,24 @@ fn kind(map: &Map<String, Value>, path: &str) -> Result<Kind, LockError> {
                 return Err(error(&type_path, texts::lock_no_field_type(other)));
             }
         },
+    })
+}
+
+/// A rich-text field's `vocabulary`: `nodes` and `marks`, each a list of
+/// names that may be left out when empty, read into sorted sets.
+fn vocabulary(value: &Value, path: &str) -> Result<Vocabulary, LockError> {
+    let map = object(value, path)?;
+    let names = |key: &str| -> Result<_, LockError> {
+        Ok(optional(map, key)
+            .map(|v| strings(v, &join(path, key)))
+            .transpose()?
+            .unwrap_or_default()
+            .into_iter()
+            .collect())
+    };
+    Ok(Vocabulary {
+        nodes: names("nodes")?,
+        marks: names("marks")?,
     })
 }
 

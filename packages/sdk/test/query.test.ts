@@ -122,6 +122,48 @@ describe("db.find and space.find", () => {
     ]);
   });
 
+  test('where asks the core what equal asks, so both spellings read the same pages (RFC 0018, "Named equality and order in an index")', async () => {
+    const { core, requests } = fake();
+    const db = await connect(core, { model, lock });
+    const index = model.tasks.indexes.byStatusPriority;
+    await db.find(index.where("open").take(20));
+    await db.find(index.equal("open").take(20));
+    await db.find(index.take(20).where("done"));
+    const [where, equal, later] = finds(requests).map((r) => r.args);
+    expect(where).toEqual(equal);
+    expect(later).toEqual({
+      query: {
+        collection: "tasks",
+        index: "byStatusPriority",
+        equal: ["done"],
+        take: 20,
+      },
+    });
+  });
+
+  test('null fixes a where field to unset, in both spellings (RFC 0006, "Declared indexes and ordered pages")', async () => {
+    const { core, requests } = fake();
+    const db = await connect(core, { model, lock });
+    await db.find(model.tasks.indexes.byStatusPriority.where(null));
+    await db.find(model.tasks.indexes.byStatusPriority.equal(null));
+    expect(finds(requests).map((r) => r.args)).toEqual([
+      {
+        query: {
+          collection: "tasks",
+          index: "byStatusPriority",
+          equal: [null],
+        },
+      },
+      {
+        query: {
+          collection: "tasks",
+          index: "byStatusPriority",
+          equal: [null],
+        },
+      },
+    ]);
+  });
+
   test("a page gives its items as objects, its cursor redacted, and hasMore", async () => {
     const { core } = fake((r) =>
       r.call === "find"

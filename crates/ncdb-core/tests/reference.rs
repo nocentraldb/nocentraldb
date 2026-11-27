@@ -1,6 +1,9 @@
-//! Resolving a reference (RFC 0004, "How a reference resolves"): the state
-//! is worked out when the app reads, from the member's own copies of the
-//! spaces it holds, to ok, not accessible or missing.
+//! Resolving a cross-space reference (RFC 0004, "How a reference
+//! resolves"): the state is worked out when the app reads, from the
+//! member's own copies of the spaces it holds, to ok, not accessible or
+//! missing. The references here are held by an object in the orders'
+//! space; one into that space resolves as a link does, which
+//! `reference_in_space.rs` tests (RFC 0018, "One function, two cases").
 //! It is never part of the field's state. Encoding is in
 //! `field_op_reference.rs`, the merge in `reference_contract.rs`.
 
@@ -87,7 +90,7 @@ fn to(space: SpaceId, n: u8) -> State {
 }
 
 fn status(state: &State, copies: &Copies) -> Status {
-    let resolved = customer().resolve(state, copies);
+    let resolved = customer().resolve(ORDERS, state, copies);
     resolved.value.expect("a live write").status
 }
 
@@ -95,7 +98,7 @@ fn status(state: &State, copies: &Copies) -> Status {
 fn a_target_the_member_holds_in_a_listed_collection_is_ok() {
     let copies: Copies = [(CUSTOMERS, [(object(7), created("customers"))].into())].into();
     let state = to(CUSTOMERS, 7);
-    let resolved = customer().resolve(&state, &copies);
+    let resolved = customer().resolve(ORDERS, &state, &copies);
     let winner = resolved.value.expect("a live write");
     assert_eq!(winner.status, Status::Ok);
     assert_eq!(
@@ -170,26 +173,13 @@ fn a_target_in_a_collection_the_schema_does_not_list_is_missing() {
 }
 
 #[test]
-fn a_reference_into_its_own_space_resolves_as_any_other() {
-    // RFC 0004, "The value and its encoding": the member holds its own space, so ok or missing.
-    let mut copies: Copies = [(ORDERS, BTreeMap::new())].into();
-    let state = to(ORDERS, 7);
-    assert_eq!(status(&state, &copies), Status::Missing);
-    copies
-        .get_mut(&ORDERS)
-        .unwrap()
-        .insert(object(7), created("customers"));
-    assert_eq!(status(&state, &copies), Status::Ok);
-}
-
-#[test]
 fn a_value_that_does_not_fit_is_missing_and_read_as_written() {
     // RFC 0004, "The value and its encoding": a bare object id names no object, even where the
     // member holds a space whose copy has an object with those bytes.
     let copies: Copies = [(CUSTOMERS, [(object(7), created("customers"))].into())].into();
     let bare = Value::Bytes(object(7).0.to_vec());
     let state = written(bare.clone());
-    let winner = customer().resolve(&state, &copies).value.unwrap();
+    let winner = customer().resolve(ORDERS, &state, &copies).value.unwrap();
     assert_eq!(winner.status, Status::Missing);
     assert_eq!((winner.entry.value, winner.entry.known), (bare, false));
 }
@@ -198,7 +188,7 @@ fn a_value_that_does_not_fit_is_missing_and_read_as_written() {
 fn a_cleared_reference_resolves_to_no_target() {
     let copies: Copies = BTreeMap::new();
     let state = written(Value::Null);
-    let resolved = customer().resolve(&state, &copies);
+    let resolved = customer().resolve(ORDERS, &state, &copies);
     // The empty value is the winner's value, as for every basic value;
     // it names nothing, so it reads missing, as a cleared link does.
     let winner = resolved.value.unwrap();
@@ -225,7 +215,7 @@ fn each_conflict_resolves_on_its_own() {
         };
         customer().apply(&mut state, &write);
     }
-    let resolved = customer().resolve(&state, &copies);
+    let resolved = customer().resolve(ORDERS, &state, &copies);
     // Member 61's write wins the tie; member 60's stays a conflict.
     assert_eq!(resolved.value.unwrap().status, Status::NotAccessible);
     let conflicts: Vec<Status> = resolved.conflicts.iter().map(|c| c.status).collect();
@@ -239,13 +229,13 @@ fn two_members_with_the_same_copies_compute_the_same_state() {
     let without: Copies = [(ORDERS, BTreeMap::new())].into();
     let state = to(CUSTOMERS, 7);
     assert_eq!(
-        customer().resolve(&state, &one),
-        customer().resolve(&state, &two)
+        customer().resolve(ORDERS, &state, &one),
+        customer().resolve(ORDERS, &state, &two)
     );
     // A member that is not in the customers' space reads the same
     // reference, with another state.
     assert_ne!(
-        customer().resolve(&state, &one),
-        customer().resolve(&state, &without)
+        customer().resolve(ORDERS, &state, &one),
+        customer().resolve(ORDERS, &state, &without)
     );
 }

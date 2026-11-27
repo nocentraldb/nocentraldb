@@ -71,6 +71,43 @@ pub fn bold(doc: &Doc, block: u32, at: u32, len: u32) -> Vec<u8> {
     txn.encode_update_v1()
 }
 
+/// Marks `len` characters at `at` in block `block` with the mark `name`
+/// holding `attrs`, as TipTap writes a mark; returns the update.
+pub fn mark(doc: &Doc, block: u32, at: u32, len: u32, name: &str, attrs: Any) -> Vec<u8> {
+    let body = body(doc);
+    let mut txn = doc.transact_mut();
+    let t = text_of(&body, &txn, block);
+    t.format(
+        &mut txn,
+        at,
+        len,
+        HashMap::from([(Arc::<str>::from(name), attrs)]),
+    );
+    txn.encode_update_v1()
+}
+
+/// A TipTap link's attributes: `href`, `target`, `rel` and `class`.
+pub fn link(href: &str) -> Any {
+    Any::from(HashMap::from([
+        ("href".to_owned(), Any::from(href)),
+        ("target".to_owned(), Any::from("_blank")),
+        ("rel".to_owned(), Any::from("noopener noreferrer nofollow")),
+        ("class".to_owned(), Any::Null),
+    ]))
+}
+
+/// Sets the attribute `name` of block `block` to any value, as TipTap
+/// writes a node's attribute that is no text; returns the update.
+pub fn set_attribute_value(doc: &Doc, block: u32, name: &str, value: Any) -> Vec<u8> {
+    let body = body(doc);
+    let mut txn = doc.transact_mut();
+    let Some(XmlOut::Element(el)) = body.get(&txn, block) else {
+        panic!("block {block} is an element");
+    };
+    el.insert_attribute(&mut txn, name, value);
+    txn.encode_update_v1()
+}
+
 /// Sets the attribute `name` of block `block`; returns the update.
 pub fn set_attribute(doc: &Doc, block: u32, name: &str, value: &str) -> Vec<u8> {
     let body = body(doc);
@@ -171,3 +208,26 @@ pub fn string_item(client: u64, clock: u64, text: &str) -> Vec<u8> {
         .0
 }
 pub mod harness;
+pub mod unfolding;
+
+/// The characters of a document's whole state, without its markup, as
+/// Yrs reads them: what a reader sees, apart from formatting.
+pub fn plain_text(document: &[u8]) -> String {
+    use yrs::GetString;
+    let doc = doc(0);
+    if !document.is_empty() {
+        apply(&doc, document);
+    }
+    let xml = body(&doc).get_string(&doc.transact());
+    let mut out = String::new();
+    let mut in_tag = false;
+    for c in xml.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            c if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    out
+}

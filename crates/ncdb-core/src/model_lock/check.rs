@@ -311,6 +311,22 @@ fn compare_field(
                 });
             }
         }
+        // A rich-text vocabulary may only grow (RFC 0013; RFC 0005, "Refused").
+        let (old, new) = (&before.vocabulary, &after.vocabulary);
+        for node in old.nodes.difference(&new.nodes) {
+            found.push(Refusal::NodeRemoved {
+                collection: c(),
+                field: f(),
+                node: node.clone(),
+            });
+        }
+        for mark in old.marks.difference(&new.marks) {
+            found.push(Refusal::MarkRemoved {
+                collection: c(),
+                field: f(),
+                mark: mark.clone(),
+            });
+        }
     }
     match (&before.personal, &after.personal) {
         (None, Some(_)) => found.push(Refusal::MarkedPersonal {

@@ -20,7 +20,14 @@ type Id = string;
 interface Elements<E> {
     readonly "nc.elements": E;
 }
-type Write<T> = [T] extends [readonly (infer E)[] | undefined] ? Elements<E> : Exclude<T, undefined> | null;
+type ReferenceForms = {
+    readonly $space: Id;
+    readonly $id: Id;
+} | Id;
+type Write<T> = [T] extends [readonly (infer E)[] | undefined] ? Elements<E> : [T] extends [{
+    space: Id;
+    id: Id;
+} | undefined] ? Exclude<T, undefined> | ReferenceForms | null : Exclude<T, undefined> | null;
 type Values<C> = C extends AnyCollection ? {
     [K in keyof Infer<C>]?: Write<Infer<C>[K]> | undefined;
 } : never;
@@ -33,6 +40,7 @@ interface Cursor {
     toString(): string;
 }
 export interface Query<T, E extends readonly unknown[] = readonly []> {
+    where(...values: E): Query<T>;
     equal(...values: E): Query<T>;
     take(n: number): Query<T, E>;
     after(cursor: Cursor): Query<T, E>;
@@ -340,7 +348,7 @@ type EqualValues<F extends Fields, K extends readonly string[], N extends number
     ...infer R extends readonly string[]
 ] ? EqualValues<F, R, N, [
     ...Taken,
-    Exclude<F[H & keyof F]["nc.reads"], undefined>
+    Exclude<F[H & keyof F]["nc.reads"], undefined> | null
 ]> : Taken;
 type EqualOf<F extends Fields, X> = X extends Index<infer K, infer N> ? EqualValues<F, K, N> : readonly [];
 type Visible<C> = {
@@ -390,17 +398,31 @@ export declare const set: <T>(element: Field<T>) => Field<T[]>;
 export declare const link: (target: string | readonly string[]) => Field<ObjectId>;
 export declare const links: (target: string | readonly string[]) => Field<ObjectId[]>;
 export declare const ref: (target: string | readonly string[]) => Ref;
-export declare const richText: () => RichText;
+export declare const richText: (options?: {
+    vocabulary?: {
+        nodes?: readonly string[];
+        marks?: readonly string[];
+    };
+}) => RichText;
 export declare const stream: () => Field<never>;
 export declare const reach: (..._args: unknown[]) => Named;
 export declare const view: (..._args: unknown[]) => Named;
-export declare const index: <const K extends readonly (string | {
+type NamedIndex<W extends readonly string[] = readonly string[], O extends readonly string[] = readonly string[]> = {
+    where?: W;
+    orderBy?: O;
+    scope?: "space";
+};
+type Unsigned<O extends readonly string[]> = {
+    [P in keyof O]: O[P] extends `-${infer N}` ? N : O[P];
+};
+export declare function index<const W extends readonly string[] = readonly [], const O extends readonly string[] = readonly []>(spec: NamedIndex<W, O>): Index<[...W, ...Unsigned<O>], W["length"]>;
+export declare function index<const K extends readonly (string | {
     field: string;
     direction: "asc" | "desc";
 })[], const N extends number = 0>(fields: K, options?: {
     equal?: N;
     scope?: "space";
-}) => Index<Names<K>, N>;
+}): Index<Names<K>, N>;
 export { pairingAnswer } from "./account.ts";
 export { add, open, remove } from "./db.ts";
 export { erasureRequest, signOffs } from "./erase.ts";
@@ -424,6 +446,7 @@ export interface SpaceStatus {
     readonly exposed: boolean;
     readonly waitingForKey: boolean;
     readonly badPersonKeyRecords: readonly string[];
+    readonly missingPersonKeys: number;
     readonly provisionalErasures: readonly ProvisionalErasure[];
     readonly onlyMember: boolean;
 }

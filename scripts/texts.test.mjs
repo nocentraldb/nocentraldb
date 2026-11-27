@@ -62,7 +62,11 @@ test("the committed module is the one the texts generate, file by file", () => {
   const generated = generate(texts);
   assert.deepEqual(Object.keys(generated).sort(), [
     "bridge.rs",
-    "error.rs",
+    "error/mod.rs",
+    "error/shard_0.rs",
+    "error/shard_1.rs",
+    "error/shard_2.rs",
+    "error/shard_3.rs",
     "mod.rs",
     "notice.rs",
     "part.rs",
@@ -285,7 +289,11 @@ test("a text with placeholders becomes a function that fills them", () => {
     { ...ERROR, text: "the lock is refused: {why:?} at {space}" },
     PART,
   ]);
-  const module = files["error.rs"];
+  // The error texts stand in error/ and its shards (NOC-541).
+  const module = Object.keys(files)
+    .filter((name) => name.startsWith("error/"))
+    .map((name) => files[name])
+    .join("\n");
   assert.ok(
     module.includes(
       "pub(crate) fn no_such_space(why: impl std::fmt::Debug, space: impl std::fmt::Display) -> String {",

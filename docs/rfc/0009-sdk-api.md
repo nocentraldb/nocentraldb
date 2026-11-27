@@ -47,8 +47,8 @@ const { ids } = await project.write((tx) => {
   tx.update(model.tasks, task, { tags: nc.add("docs") });
 });
 
-const page = await db.find(model.tasks.indexes.byStatusPriority.equal("open").take(50));
-const stop = db.subscribe(model.tasks.indexes.byStatusPriority.equal("open").take(50), (fresh) => render(fresh));
+const page = await db.find(model.tasks.indexes.byStatusPriority.where("open").take(50));
+const stop = db.subscribe(model.tasks.indexes.byStatusPriority.where("open").take(50), (fresh) => render(fresh));
 
 await project.members.add(invitation, { role: "writer" });
 db.sync.current(); // { connection: "connected", unconfirmed: 0, ... }
@@ -165,15 +165,15 @@ The forms not taken:
 | --- | --- | --- |
 | `nc.string`, `nc.int`, `nc.float`, `nc.boolean`, `nc.oneOf` | The value, such as `{ priority: 3 }`. `null` clears the field. | set (1). `replaces` names the winner and every conflict the copy holds ([RFC 0004, "Basic values"](0004-merge-rules-basic-types.md#basic-values)). |
 | `nc.date`, `nc.timestamp` | A day as its `"YYYY-MM-DD"` string, such as `{ doneOn: "2026-11-21" }`, and a point in time as a `Date`, such as `{ occurredAt: new Date() }`. `null` clears the field. In Rust a `Date` or a `Timestamp`. | set (1), as a basic value ([RFC 0004, "Days and points in time"](0004-merge-rules-basic-types.md#days-and-points-in-time)). |
-| `nc.link` | The target's object id, or `null`. | set (1), as a basic value. |
-| `nc.ref` | The `{ space, id }` a read gives, the target's space id and object id, or `null` to clear it: a write takes what a read gives. | set (1), as a basic value ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references)). |
+| `nc.link` | The target's object id, or `null`. In Rust an `ObjectId`, or a `Reference` into the object's own space; one into another space is `InvalidValue`, naming the field. | set (1), as a basic value. |
+| `nc.ref` | `{ space, id }`, the target's space id and object id, as a read gives it; an object the SDK read, of which it takes `$space` and `$id`; or a bare object id, which names the written object's own space ([RFC 0018, "One function, two cases"](0018-model-api-for-placement.md#one-function-two-cases)). `null` clears it. In Rust a `Reference` or an `ObjectId`. A field written `nc.ref` that the lock keeps as `ncdb/link` takes the same forms, and a target in another space is `invalidValue`, naming the field ([RFC 0005, "References into another space"](0005-schema-and-model-lock.md#references-into-another-space)). | set (1), as a basic value ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references)). |
 | `nc.set`, `nc.links` | `nc.add(...elements)` or `nc.remove(...elements)`. | add (2) per element, or remove (3) per element with `observed`, the tags of its additions the copy holds ([RFC 0004, "Sets"](0004-merge-rules-basic-types.md#sets)). |
 | A plugin's type | A `Data` value, which the plugin's write function turns into operations ([RFC 0011, "The field type a plugin implements"](0011-plugin-field-types.md#the-field-type-a-plugin-implements)). | The plugin's operations, 64 and up. |
 
 - **Every write resolves the conflicts the copy holds.** A set replaces the winner and every conflict on this device, as RFC 0004 defines it. An app that shows conflicts to a person before writing gets what RFC 0004 intends: the person decides with the conflict in front of them. An app that writes without looking resolves them too; [Read and query](#read-and-query) says how to find them first.
 - **A deliberate re-add.** `nc.add(e)` names the lost removals of `e` the copy holds in `replaces`, so they stop counting as lost ([RFC 0004, "Sets"](0004-merge-rules-basic-types.md#sets)).
 - **A set is never written whole.** There is no "set the tags to exactly these", and no whole array that the SDK turns into additions and removals: it would remove what a concurrent member added without its author having seen it, so the intent "exactly these" cannot converge under RFC 0004's add wins.
-- **A reference is written as it reads.** A read object of the target, from which the SDK would take `$space` and `$id`, was not taken: shorter for an app that holds the target, but a write would depend on a read of another space.
+- **A reference takes what a read gives, and the shorter forms.** `{ space, id }` is how a reference reads. An object the SDK read is shorter for an app that holds the target, and the SDK takes only its `$space` and `$id`, so the write depends on nothing else of the read. A bare object id names the written object's own space, as a link's value does, so an app writes a reference into its own space as it writes a link ([RFC 0018, "One function, two cases"](0018-model-api-for-placement.md#one-function-two-cases)). The value stored is `[space id, object id]` in every case. Rust has no form for a read object yet; it takes a `Reference` or an `ObjectId`.
 - **`undefined` writes nothing.** A key with the value `undefined` is ignored, so an app can pass a partial object. Every field may be unset ([RFC 0005, "No required fields and no defaults"](0005-schema-and-model-lock.md#no-required-fields-and-no-defaults)).
 - **Strings are NFC-normalised** before they are written ([RFC 0005, "Field types"](0005-schema-and-model-lock.md#field-types)).
 
@@ -268,7 +268,7 @@ detail.deleted;          // { value: false, conflicts: [] }
 - **Basic values and single links:** `value` and `conflicts`, each conflict with its value, author member id and stamp. Conflicts whose value equals the winner's are left out, as RFC 0004 says.
 - **Sets and many links:** `elements`, and per element its `lostRemovals`, each with author and stamp.
 - **Links:** per target its `status`: `"ok"`, `"deleted"`, `"missing"`, `"wrongCollection"` or `"moved"`, the last with the `space` the target moved to ([RFC 0004, "Resolution"](0004-merge-rules-basic-types.md#resolution)).
-- **References:** `value`, `conflicts`, and the state of the winning reference as `status`: `"ok"`, `"notAccessible"` or `"missing"` ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references); [RFC 0005, "References into another space"](0005-schema-and-model-lock.md#references-into-another-space)). The state comes from the member's own copies, so it can differ from member to member and change without any change to the reference.
+- **References:** `value`, `conflicts`, and the state of the winning reference as `status`. A reference into the object's own space has a link's statuses, `"ok"`, `"deleted"`, `"missing"`, `"wrongCollection"` or `"moved"` with the `space`, the same on every member of the space. A reference into another space reads `"ok"`, `"notAccessible"` or `"missing"` ([RFC 0004, "How a reference resolves"](0004-merge-rules-basic-types.md#how-a-reference-resolves); [RFC 0005, "References into another space"](0005-schema-and-model-lock.md#references-into-another-space)); that state comes from the member's own copies, so it can differ from member to member and change without any change to the reference.
 - **The object:** its collection and whether it is deleted, each a basic value with conflicts ([RFC 0004, "Two creates of one object id"](0004-merge-rules-basic-types.md#two-creates-of-one-object-id)).
 - **A field outside the kind:** `{ raw: value }`.
 
@@ -279,7 +279,7 @@ detail.deleted;          // { value: false, conflicts: [] }
 A query names a declared index, fixes its equality prefix and asks for a page ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)). The model gives every declared index a handle:
 
 ```ts
-const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
+const query = model.tasks.indexes.byStatusPriority.where("open").take(50);
 const page = await db.find(query);       // { items: Task[], cursor, hasMore }
 const more = await db.find(query.after(page.cursor));
 const firstFive = await db.find(model.tasks.indexes.byPriorityDesc.take(5));
@@ -287,20 +287,20 @@ const firstFive = await db.find(model.tasks.indexes.byPriorityDesc.take(5));
 
 A query is written from handles of the model and passed to `db.find`: it is the chain RFC 0001 shows for views, TypeScript checks the equality values against the index, and a view will be queried the same way. An options object, `db.find(model.tasks, { index: "byStatusPriority", equal: ["open"], limit: 50 })`, was not taken.
 
-- `.equal(...values)` fixes the index's leading fields, as many as its `equal` declares, no more and no fewer; TypeScript checks the count and the types ([RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes)).
+- `.where(...values)` fixes the index's `where` fields, one value each, in their order, no more and no fewer, with `null` for an unset field, since the equality prefix is written `k IS ?` ([RFC 0006, "Declared indexes and ordered pages"](0006-local-view.md#declared-indexes-and-ordered-pages)); TypeScript checks the count and the types ([RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes)). `.equal(...values)` is the same call, for an index declared as `nc.index(fields, { equal })` ([RFC 0018, "Named equality and order in an index"](0018-model-api-for-placement.md#r3-named-equality-and-order-in-an-index)).
 - `.take(n)` sets the page size, 50 by default and at most 1000; a larger `n` fails with `invalidValue`, in both SDKs (2026-11-12, NOC-274).
 - `.after(cursor)` starts after a page's cursor. A cursor from another model, or another index, fails with `cursorOfAnotherModel`, and the app starts from the first page ([RFC 0006, "Ordered pages"](0006-local-view.md#ordered-pages)).
 - `db.find(query)` returns `items` in index order, the `cursor` after the last item, and `hasMore`. Every item carries `$space`, because an index spans every space of the member ([RFC 0006, "Where the view lives"](0006-local-view.md#where-the-view-lives)).
 - Queries skip deleted objects, and the index does not hold them; `space.get` returns a deleted object with `$deleted: true`. An app almost never lists deleted objects, and filtering in the app reads rows it throws away. A deletion can be undone ([RFC 0004, "Creating and deleting an object"](0004-merge-rules-basic-types.md#creating-and-deleting-an-object)), so `get` still finds the object to restore it. Returning deleted objects from queries, flagged, with the app filtering, was not taken.
 - A view, once the computed-fields RFC designs it, is queried the same way: `model.tasks.views.ready.take(50)`, as RFC 0001 shows.
 
-There is nothing else: no `where` on a field outside the index, no sort of the app's choosing, no raw SQL. An app that needs another filter declares another index, or a computed field and a view ([GENESIS.md, principle 6](../../factory/GENESIS.md#principles-in-priority-order)). A `where` clause on any field needs a scan, which principle 6 rules out. Raw SQL against the view could scan, and read the merge state and the log ([RFC 0006, "Declared indexes and ordered pages"](0006-local-view.md#declared-indexes-and-ordered-pages)).
+There is nothing else: no filter on a field outside the index's `where` fields, no sort of the app's choosing, no raw SQL. An app that needs another filter declares another index, or a computed field and a view ([GENESIS.md, principle 6](../../factory/GENESIS.md#principles-in-priority-order)). A filter on any field needs a scan, which principle 6 rules out. Raw SQL against the view could scan, and read the merge state and the log ([RFC 0006, "Declared indexes and ordered pages"](0006-local-view.md#declared-indexes-and-ordered-pages)).
 
 **A query in one space.** An index ends with the space id and the object id ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)), so it cannot fix the space: "the open tasks of Project A" is no query such an index allows, and an app needs it on its first screen. So an index option, `scope: "space"`, puts the space id first, and `space.find(query)` fixes it:
 
 ```ts
-// in the schema: indexes: { openByPriority: nc.index(["status", "priority"], { equal: 1, scope: "space" }) }
-const mine = await project.find(model.tasks.indexes.openByPriority.equal("open").take(50));
+// in the schema: indexes: { openByPriority: nc.index({ where: ["status"], orderBy: ["priority"], scope: "space" }) }
+const mine = await project.find(model.tasks.indexes.openByPriority.where("open").take(50));
 ```
 
 RFC 0005 states the option and its key in the lock ([RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes)), and RFC 0006 the index's columns ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)). Two options were not taken. No query per space, with the app filtering the cross-space page in memory, reads rows it throws away, which principle 6 rules out. Every index per space, with `db.find` querying each space and merging, loses the page across spaces in one range lookup, which is why RFC 0006 keeps one database per member.
@@ -316,7 +316,7 @@ What the copy holds but does not show is reported per space, in `space.status` (
 Subscriptions re-run what an app reads when a fold touches it. They react to what arrived and never cause a network request ([RFC 0006, "Folding"](0006-local-view.md#folding), step 6).
 
 ```ts
-const stop = db.subscribe(model.tasks.indexes.byStatusPriority.equal("open").take(50), (page) => {
+const stop = db.subscribe(model.tasks.indexes.byStatusPriority.where("open").take(50), (page) => {
   render(page.items);
 });
 
@@ -644,17 +644,18 @@ let result = project.write(|tx| {
     Ok(())
 }).await?;
 
-let page = db.find(db.index("tasks", "byStatusPriority")?.equal(["open"]).take(50)).await?;
+let page = db.find(db.index("tasks", "byStatusPriority")?.where_eq(["open"]).take(50)).await?;
 for task in &page.items {
     let title: Option<&str> = task.get("title")?;
 }
-let mut live = db.subscribe(db.index("tasks", "byStatusPriority")?.equal(["open"]).take(50));
+let mut live = db.subscribe(db.index("tasks", "byStatusPriority")?.where_eq(["open"]).take(50));
 while let Some(page) = live.next().await { /* ... */ }
 ```
 
 - `Db::open(options)` takes the lock's text; there is no TypeScript model, so the `lockOutOfDate` check does not apply.
+- **A query's `where` fields.** `Query::where_eq(values)` fixes them, as `.where(...)` does in TypeScript, since `where` is a keyword in Rust, with `Value::clear()` for an unset field; `Query::equal(values)` is the same call ([RFC 0018, "Named equality and order in an index"](0018-model-api-for-placement.md#r3-named-equality-and-order-in-an-index)).
 - **Clearing a field.** `Value::clear()`, a constructor beside `Value::add` and `Value::remove`, clears a field as `null` does in TypeScript: `tx.update("tasks", id, [("due", Value::clear())])` becomes a set (1) with no value ([Field operations per field type](#field-operations-per-field-type)). It clears a basic value, a link or a reference; a set or a list of links has nothing to clear in one value, so a clear of one fails with `invalidValue` (2026-11-12, NOC-277). `Option<Value>` in every write was not taken: it would make every value an `Option` to clear the few fields an app ever clears.
-- **A reference.** `Reference { space, id }`, the target's `SpaceId` and `ObjectId`, is the value of an `nc.ref` field, as `{ space, id }` is in TypeScript: `Value::from(Reference::new(space, id))` writes it, `object.get::<Reference>("customer")` reads it, and `Value::clear()` clears it ([Field operations per field type](#field-operations-per-field-type)). The struct is `#[non_exhaustive]`, so a field added later breaks no app, and `Reference::new` makes one. An object id in a reference field, or a reference in a link, is `InvalidValue`. It follows `Data`: one type to write and to read (2026-11-16, NOC-354). Not taken: a pair, `Value::from((SpaceId, ObjectId))` and `get::<(SpaceId, ObjectId)>`, which needs no new name but reads less clearly; and the name `Ref`, which abbreviates what the field type spells out.
+- **A reference.** `Reference { space, id }`, the target's `SpaceId` and `ObjectId`, is the value of an `nc.ref` field, as `{ space, id }` is in TypeScript: `Value::from(Reference::new(space, id))` writes it, `object.get::<Reference>("customer")` reads it, and `Value::clear()` clears it ([Field operations per field type](#field-operations-per-field-type)). The struct is `#[non_exhaustive]`, so a field added later breaks no app, and `Reference::new` makes one. An `ObjectId` in a reference field names the written object's own space, and a `Reference` in a link field must name the object's own space; a link refuses one into another space with `InvalidValue`, naming the field ([RFC 0018, "One function, two cases"](0018-model-api-for-placement.md#one-function-two-cases)). It follows `Data`: one type to write and to read (2026-11-16, NOC-354). Not taken: a pair, `Value::from((SpaceId, ObjectId))` and `get::<(SpaceId, ObjectId)>`, which needs no new name but reads less clearly; and the name `Ref`, which abbreviates what the field type spells out.
 - **A day and a point in time.** `Date` is the value of an `nc.date` field and `Timestamp` of an `nc.timestamp` field, the SDK's own types, as `Reference` is: `Value::from(Date::new(2026, 11, 21)?)` and `Value::from(Timestamp::from_millis(ms)?)` write them, `object.get::<Date>("doneOn")` and `object.get::<Timestamp>("dueAt")` read them, and `Value::clear()` clears them. `Date` prints and parses as `"YYYY-MM-DD"` and gives `year()`, `month()` and `day()`; `Timestamp` prints as RFC 3339 in UTC, `"2026-11-21T19:08:44.636Z"`, gives `as_millis()`, and converts from and to `std::time::SystemTime` with `TryFrom`, a `SystemTime` rounding down to the millisecond. A value outside the years 1 to 9999, a day that does not exist, an integer in a day or point-in-time field, or a `Date` or `Timestamp` in a field of another type, is `InvalidValue` (2026-11-21, NOC-434). Not taken: the types of `chrono`, `time` or `jiff`, which would tie the SDK's API to another crate's major versions.
 - **Where the database lives.** `path(dir)` names a directory the SDK owns: the SDK creates it, and it holds one SQLite file, `nocentraldb.sqlite`, which leaves room for more files later; a `path` that names the SQLite file itself was not taken. The SDK keeps the member key in the platform keystore ([RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key)), in one entry per database: the service `nocentraldb`, whose user is the canonical absolute path of the database directory. It holds the key record RFC 0003 defines. One entry per database leaves nothing to keep in step; a directory that is moved or renamed loses the link to its entry, and opening it then fails rather than draw a new member key silently. A random id stored in the database as the user would survive a move, but a copied database then shares the keystore entry with its original. `key_file(path)` keeps the keys in that file instead, for a headless agent that has no keystore; only the file's permissions protect it. `in_memory()` keeps the database and its keys in memory, for tests: they are gone when the `Db` is dropped. This works the same for a desktop app, a server and an agent in a container, and only an app that asks for a key file gets one. The platform's app data directory, found from an app id, was not taken: it suits apps but rarely servers and agents, and can come later on top; nor was keeping native data in memory only. `Db::open` with neither `path(dir)` nor `in_memory()` is refused with `invalidValue`; with no platform keystore reachable and no `key_file` given, it fails with `keyStoreUnavailable`, whose message names `key_file`, and creates nothing on disk ([Open and close](#open-and-close)). An existing database whose key file or keystore entry is gone, or does not read as a key record, fails with `storageFailed` and draws no new keys: new keys would hold none of the space keys of its spaces, and every space would turn `notFound`. Drawing new keys was not taken, because the database would open but none of its spaces can be read; nor was `keyStoreUnavailable`, whose message names a key file, which does not help a database whose keys were in the keystore.
 - **The account key and the member's kind.** A database that is neither paired nor recovered creates an account of its own once and keeps the account key next to the member key ([Accounts and devices](#accounts-and-devices); [RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key)). `agent()` marks the member as an agent in its certificate; without it, the member is a device.
@@ -716,7 +717,8 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 | `db.find` | Runs a query across the member's spaces | Named in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page) |
 | `space.find` | Runs a query of an index scoped to one space | [RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes) |
 | `model.<collection>.indexes.<index>` | The handle of a declared index | [RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes) |
-| `.equal(` | Fixes the index's equality prefix | [RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes) |
+| `.where(` | Fixes the index's `where` fields, its equality prefix | [RFC 0018, "Named equality and order in an index"](0018-model-api-for-placement.md#r3-named-equality-and-order-in-an-index) |
+| `.equal(` | The same call as `.where(` | [RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes) |
 | `.take(` | The page size | Named in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page) |
 | `.after(` | Starts after a cursor | Named in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page) |
 | `items`, `cursor`, `hasMore` | The parts of a page | [RFC 0006, "Ordered pages"](0006-local-view.md#ordered-pages) |
@@ -911,6 +913,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - **2026-11-23 · A write above the relay's change limit is split between objects into several changes, not atomic on other devices; one operation or object above the limit is refused with `tooLarge`.** ([decision](../../factory/decisions/2026-11-23-NOC-421-a-write-above-the-relay-change-limit-is-split-between-objects.md))
 
 - **2026-11-23 · A space's status says `onlyMember` when this member is the space's only member.** ([decision](../../factory/decisions/2026-11-23-NOC-494-a-spaces-status-says-onlymember-when-this-member-is-its-only-member.md))
+- **2026-11-27 · `nc.ref` is the one function for a reference, and a reference into its own space resolves as a link does.** ([decision](../../factory/decisions/2026-11-27-NOC-552-nc-ref-is-the-one-function-for-a-reference-and-a-reference-into-its-own-space-resolves-as-a-link-does.md))
 
 ## History
 
@@ -972,3 +975,5 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - 2026-11-23 · The Rust SDK gains the change event, `db.changes().subscribe()`, with `Change` and `Origin` (NOC-506)
 - 2026-11-23 · Confirming the recovery code takes two of its words back: RecoveryCode gains challenge(), and confirm takes the answers (NOC-502, #484)
 - 2026-11-23 · A write above the relay's change limit is split between objects; one object above it is refused with `tooLarge` (NOC-421, #468)
+- 2026-11-27 · `.where(...)` and `Query::where_eq`, the same call as `.equal(...)`; `null` and `Value::clear()` fix a field to unset (NOC-563, #516)
+- 2026-11-27 · A reference field takes `{ space, id }`, a read object or a bare object id; an in-space reference has a link's statuses; a field written `nc.ref` over `ncdb/link` takes and reads `{ space, id }` in its own space (NOC-568)

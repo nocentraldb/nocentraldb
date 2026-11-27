@@ -12,5 +12,19 @@ tasks:
     deps: ["repo:wasm-runner"]
     env:
       CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "$workspaceRoot/target/tools/bin/wasm-bindgen-test-runner"
+  # With the compiler cfg `ncdb_rich_text`, which only these tasks set
+  # (NOC-468): the core with the rich-text bridge builds for wasm32 and
+  # lints, in the target directory the other crates' rich-text tasks use.
+  # The package's build refuses this core (packages/sdk/richText.mjs).
+  build-wasm-rich-text:
+    command: "cargo build --locked -p $project --target wasm32-unknown-unknown"
+    env:
+      RUSTFLAGS: "--cfg ncdb_rich_text"
+      CARGO_TARGET_DIR: "$workspaceRoot/target/rich-text"
+  lint-rich-text:
+    command: "cargo clippy --locked -p $project --target wasm32-unknown-unknown --all-targets -- -D warnings"
+    env:
+      RUSTFLAGS: "--cfg ncdb_rich_text"
+      CARGO_TARGET_DIR: "$workspaceRoot/target/rich-text"
   gates:
-    deps: ["~:build-wasm", "~:test-wasm"]
+    deps: ["~:build-wasm", "~:test-wasm", "~:build-wasm-rich-text", "~:lint-rich-text"]

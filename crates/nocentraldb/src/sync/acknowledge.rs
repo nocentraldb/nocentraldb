@@ -68,7 +68,9 @@ pub(crate) fn acknowledge(inner: &mut Inner, space: SpaceId) -> Result<(), Error
     if next.generation.is_none() {
         return Ok(());
     }
-    state.drop_shredded();
+    state
+        .forget_shredded(view, space)
+        .map_err(crate::error::storage)?;
     let key = secrets.key();
     let mut batch = Batch::new(view, state, &key, space);
     for (shred, see, delete) in owed {

@@ -48,6 +48,10 @@ pub(crate) enum Repr {
     /// The clear of a basic field, a link or a reference: a set (1) with
     /// no value.
     Clear,
+    /// A rich-text update under a leased client id, which only the bridge's
+    /// editor binding writes (RFC 0013, "An editor: the binding").
+    #[cfg(ncdb_rich_text)]
+    RichText(crate::rich_text::RichTextUpdate),
 }
 
 impl Value {
@@ -117,7 +121,10 @@ impl From<bool> for Value {
 /// space id and object id (RFC 0004, "References"; Carsten, 2026-11-16,
 /// NOC-354). Written with `Value::from`, read with `get::<Reference>`. It
 /// names the target and holds nothing of it: an app that wants the target
-/// reads it in its space.
+/// reads it in its space. A reference field also takes an [`ObjectId`],
+/// which names the written object's own space, and a link field takes a
+/// `Reference` into the object's own space and refuses one into another
+/// with `InvalidValue` (RFC 0018, "One function, two cases").
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct Reference {
@@ -204,6 +211,11 @@ impl Value {
     /// The value as a change carries it (RFC 0004, "Value rules per
     /// kind"): an object id as its 16 bytes. A list, an addition or a
     /// removal is no single value, nor is a clear.
+    /// Whether this is [`Value::clear`]: in a query, a field fixed to unset.
+    pub(crate) fn is_clear(&self) -> bool {
+        matches!(self.0, Repr::Clear)
+    }
+
     pub(crate) fn to_cbor(&self) -> Option<cbor::Value> {
         Some(match &self.0 {
             Repr::Text(text) => cbor::Value::Text(text.clone()),
@@ -221,6 +233,9 @@ impl Value {
             Repr::List(_) | Repr::Add(_) | Repr::Remove(_) | Repr::Data(_) | Repr::Clear => {
                 return None;
             }
+            // Operation 5's arguments, which `crate::encode` makes.
+            #[cfg(ncdb_rich_text)]
+            Repr::RichText(_) => return None,
         })
     }
 
