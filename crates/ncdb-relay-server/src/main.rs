@@ -3,6 +3,7 @@
 //! ```text
 //! ncdb-relay --database <path> [--listen <address>] [--public-url <url>]
 //!            [--allow-account <hex>]... [--allow-invitation <ncdb-invite-1:…>]...
+//!            [--admission-key <hex>]...
 //! ```
 //!
 //! It serves plain WebSocket (`ws://`) on `--listen`, by default
@@ -14,7 +15,11 @@
 //! `--allow-invitation` names that account by a member's invitation text
 //! instead, which an app gets from the SDK without ever seeing a key
 //! (NOC-239 A), and lists its identity; a text that is not an invitation
-//! stops the relay at start. Both may be given more than once. `--public-url` is where members reach the server's
+//! stops the relay at start. `--admission-key` names, as 64 hex digits, the
+//! public half of an app's admission key: the relay takes the admissions
+//! that verify under it, as the relay on AWS does with
+//! `NCDB_ADMISSION_KEYS` (RFC 0015, "Admission tokens"; Carsten,
+//! 2026-11-27, NOC-516). All three may be given more than once. `--public-url` is where members reach the server's
 //! upload and download URLs for large changes, such as
 //! `https://relay.example.com` behind a TLS proxy; by default `http://` and
 //! the address it listens on.
@@ -33,7 +38,8 @@ use ncdb_relay_server::{Server, config};
 mod invitation;
 
 const USAGE: &str = "usage: ncdb-relay --database <path> [--listen <address>] [--public-url <url>] \
-     [--allow-account <hex>]... [--allow-invitation <ncdb-invite-1:...>]...";
+     [--allow-account <hex>]... [--allow-invitation <ncdb-invite-1:...>]... \
+     [--admission-key <hex>]...";
 
 /// Why the command line is refused.
 #[derive(Debug, PartialEq, Eq)]
@@ -50,11 +56,12 @@ struct Args {
     listen: String,
     public_url: Option<String>,
     allowed: BTreeSet<[u8; 32]>,
+    admission_keys: BTreeSet<[u8; 32]>,
 }
 
 fn parse(mut args: impl Iterator<Item = String>) -> Result<Args, Refused> {
     let (mut database, mut listen, mut allowed) = (None, None, BTreeSet::new());
-    let mut public_url = None;
+    let (mut public_url, mut admission_keys) = (None, BTreeSet::new());
     while let Some(arg) = args.next() {
         let value = args.next().ok_or(Refused::Usage)?;
         match arg.as_str() {
@@ -62,10 +69,13 @@ fn parse(mut args: impl Iterator<Item = String>) -> Result<Args, Refused> {
             "--listen" => listen = Some(value),
             "--public-url" => public_url = Some(value),
             "--allow-account" => {
-                allowed.insert(account(&value).ok_or(Refused::Usage)?);
+                allowed.insert(hex_key(&value).ok_or(Refused::Usage)?);
             }
             "--allow-invitation" => {
                 allowed.insert(invitation::identity(&value).map_err(Refused::Invitation)?);
+            }
+            "--admission-key" => {
+                admission_keys.insert(hex_key(&value).ok_or(Refused::Usage)?);
             }
             _ => return Err(Refused::Usage),
         }
@@ -75,11 +85,13 @@ fn parse(mut args: impl Iterator<Item = String>) -> Result<Args, Refused> {
         listen: listen.unwrap_or_else(|| "127.0.0.1:7700".to_owned()),
         public_url,
         allowed,
+        admission_keys,
     })
 }
 
-/// An account key written as 64 hex digits.
-fn account(hex: &str) -> Option<[u8; 32]> {
+/// A key of 32 bytes written as 64 hex digits: an account's identity or
+/// an admission key's public half.
+fn hex_key(hex: &str) -> Option<[u8; 32]> {
     if hex.len() != 64 || !hex.is_ascii() {
         return None;
     }
@@ -134,7 +146,9 @@ async fn main() -> ExitCode {
 async fn run(args: Args) -> Result<(), String> {
     let relay_id = relay_id(&args.database)?;
     let store = SqliteStore::open(&args.database).map_err(|e| e.to_string())?;
-    let relay = Relay::new(store, config(args.allowed));
+    let mut config = config(args.allowed);
+    config.admission_keys = args.admission_keys;
+    let relay = Relay::new(store, config);
     let mut server = Server::bind(&args.listen, relay, relay_id)
         .await
         .map_err(|e| format!("{}: {e}", args.listen))?;

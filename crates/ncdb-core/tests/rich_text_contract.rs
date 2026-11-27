@@ -76,7 +76,7 @@ fn c3_the_same_cases_end_in_the_same_state_bytes_on_every_target() {
     );
     assert_eq!(
         digest,
-        "661b36930ba1b1625c11322d17e3c5356848e9f9b3c8a5354f4d9d2f192680f1"
+        "9db184d19bd648c47690f542b422cf2f8ff0178803b0d123916af00daf3cc94b"
     );
 }
 

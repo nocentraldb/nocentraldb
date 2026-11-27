@@ -1,0 +1,46 @@
+{
+  "collections": {
+    "notes": {
+      "fields": {
+        "title": { "rule": 1, "since": 1, "type": "ncdb/string" }
+      },
+      "indexes": {
+        "byTitle": {
+          "equal": 0,
+          "fields": [{ "direction": "asc", "field": "title" }],
+          "since": 1
+        }
+      },
+      "since": 1
+    },
+    "spaceInfo": {
+      "fields": {
+        "kind": {
+          "options": ["personal", "project", "note"],
+          "rule": 1,
+          "since": 1,
+          "type": "ncdb/choice"
+        },
+        "name": { "rule": 1, "since": 1, "type": "ncdb/string" }
+      },
+      "indexes": {
+        "byKind": {
+          "equal": 1,
+          "fields": [
+            { "direction": "asc", "field": "kind" },
+            { "direction": "asc", "field": "name" }
+          ],
+          "since": 1
+        }
+      },
+      "since": 1
+    }
+  },
+  "format": 1,
+  "model": {
+    "hash": "sha256:847e9c5c40ada810cd0e2143a5449f83d0457a90703ad69384614a2ad759846b",
+    "id": "4152b97aa050871be21cfb9dfe6742f7",
+    "version": 1
+  },
+  "plugins": {}
+}

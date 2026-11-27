@@ -44,6 +44,12 @@ test("the bulk import guide is rendered among the guides (NOC-414)", () => {
   assert.equal(doc.slug, "docs/guides/bulk-import");
 });
 
+test("the guide on spaces and invitations is rendered among the guides (NOC-473)", () => {
+  const doc = REPO_DOCS.find((d) => d.file === "spaces-and-invitations.md");
+  assert.ok(doc, "docs/spaces-and-invitations.md is not rendered");
+  assert.equal(doc.slug, "docs/guides/spaces-and-invitations");
+});
+
 test("contributor and operator docs stay in the repository", () => {
   const files = REPO_DOCS.map((doc) => doc.file);
   for (const file of [

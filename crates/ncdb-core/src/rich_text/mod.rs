@@ -54,8 +54,7 @@ pub struct RichText;
 
 /// What the app reads from a rich-text field (RFC 0013, "Reading"): the
 /// document as Markdown, as plain text, as a tree and as the references
-/// its mentions hold ([`read`]), the document as Yrs writes it as XML, and
-/// the operations that lost.
+/// its mentions hold ([`read`]), and the operations that lost.
 #[derive(Clone, PartialEq)]
 pub struct Read {
     /// The document as Markdown, as [`read::markdown`].
@@ -66,8 +65,6 @@ pub struct Read {
     pub tree: ncdb_plugin::Data,
     /// The references its mentions hold, as [`read::mentions`].
     pub mentions: Vec<read::Mention>,
-    /// The document's root fragment as XML.
-    pub xml: String,
     /// The operations whose outcome is lost: `$conflicts` names the field
     /// while there is one.
     pub lost: BTreeSet<OperationId>,
@@ -80,7 +77,6 @@ impl fmt::Debug for Read {
             .field("text", &Size(self.text.len(), "bytes <redacted>"))
             .field("tree", &self.tree)
             .field("mentions", &Size(self.mentions.len(), "<redacted>"))
-            .field("xml", &Size(self.xml.len(), "bytes <redacted>"))
             .field("lost", &self.lost)
             .finish()
     }
@@ -239,7 +235,6 @@ impl FieldType for RichText {
             text,
             tree,
             mentions,
-            xml: document::xml(&state.document),
             lost: outcome::lost(state),
         }
     }

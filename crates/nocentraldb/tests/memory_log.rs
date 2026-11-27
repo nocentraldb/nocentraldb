@@ -102,3 +102,43 @@ fn a_reopened_database_keeps_no_change_bytes() {
     );
     drop(db);
 }
+
+/// What an open space keeps for each change it holds, whatever the
+/// change's size, measured after a reopen with changes of one record
+/// each, where it is most of what the space keeps (NOC-518).
+const BOOKKEEPING_PER_CHANGE: usize = 600;
+
+/// A space that holds many small changes keeps a few hundred bytes for
+/// each of them once it is opened again: its id, header, state, position,
+/// sequence and dependencies (NOC-518).
+#[test]
+fn a_reopened_space_keeps_little_per_change() {
+    let dir = TempDir::new("memory-log-small");
+    let options = || {
+        OpenOptions::new(LOCK)
+            .path(dir.join("data"))
+            .key_file(dir.join("member.key"))
+    };
+    let changes = 2_000;
+    let space = {
+        let db = now(Db::open(options())).unwrap();
+        let space = now(db.spaces().create()).unwrap();
+        for i in 0..changes {
+            now(space.write(|tx| tx.create("tasks", fields(i)).map(drop))).unwrap();
+        }
+        space.id()
+    };
+    let (db, held) = peak::peak(|| {
+        let db = now(Db::open(options())).unwrap();
+        let space = now(db.spaces().get(space)).unwrap();
+        now(space.write(|tx| tx.create("tasks", fields(changes)).map(drop))).unwrap();
+        db
+    });
+    let per_change = held.kept / changes as usize;
+    assert!(
+        per_change <= BOOKKEEPING_PER_CHANGE,
+        "a space of {changes} changes of one record kept {per_change} bytes per change \
+         on the heap after a reopen, more than {BOOKKEEPING_PER_CHANGE}"
+    );
+    drop(db);
+}
