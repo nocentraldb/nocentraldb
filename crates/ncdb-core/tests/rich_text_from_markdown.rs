@@ -54,7 +54,11 @@ fn every_case_of_the_table_reads_as_its_document() {
             .unwrap_or_else(|| panic!("{name}: refused"));
         let state = doc::fold(&[written]);
         assert_eq!(tree(&state), data(&case["tree"]), "{name}");
-        assert_eq!(markdown(&state), case["reads"].as_str().expect("reads"), "{name}");
+        assert_eq!(
+            markdown(&state),
+            case["reads"].as_str().expect("reads"),
+            "{name}"
+        );
     }
 }
 
