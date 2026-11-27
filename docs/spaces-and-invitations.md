@@ -180,7 +180,7 @@ try {
 }
 ```
 
-**The first add of an account needs its fingerprint.** Ben's account is new to Ana's device, so `members.add` fails with `unknownAccount`, which carries the account's fingerprint, until the app passes it. A person can compare it on both screens, as messaging apps compare safety numbers. An app with a directory may instead pass the fingerprint of the invitation its directory gave, as its own choice. Then your backend decides who Ben is: a backend that swapped Ben's invitation for one of its own would add a reader nobody chose. Give your users a screen where they compare fingerprints later. The SDK does not yet return a notice that says an add relied on the directory. After the first add, the device knows Ben's account, and a later add of any of his devices needs no fingerprint.
+**The first add of an account needs its fingerprint.** Ben's account is new to Ana's device, so `members.add` fails with `unknownAccount`, which carries the account's fingerprint, until the app passes it. A person can compare it on both screens, as messaging apps compare safety numbers. An app with a directory may instead pass the fingerprint of the invitation its directory gave, as its own choice. Then your backend decides who Ben is: a backend that swapped Ben's invitation for one of its own would add a reader nobody chose. Give your users a screen where they compare fingerprints later. The SDK does not yet return a notice that says an add relied on the directory (NOC-472). After the first add, the device knows Ben's account, and a later add of any of his devices needs no fingerprint.
 
 Ben's device learns of the project at once if it is connected, and otherwise at its next connection: `db.spaces.subscribe` calls its listener with the new list. Your backend can also send Ben an e-mail or a push notification; it learns no content.
 
@@ -201,7 +201,7 @@ The pending invite tells your backend who was invited to which project. The rela
 
 ## Share a single note
 
-A note lives in exactly one space, and membership is per space, so Ben cannot be given one note of a project, or of Ana's personal space, alone. Share it through a space of its own: create a shared-note space, add Ben, and move the note into it. A move keeps the note's id; the members of the old space keep its history up to the move, and Ben reads it from the move on ([RFC 0016, "The SDK call and its notice"](rfc/0016-moving-an-object.md#the-sdk-call-and-its-notice)). The Rust SDK has the move; the TypeScript SDK's `space.move` comes later:
+A note lives in exactly one space, and membership is per space, so Ben cannot be given one note of a project, or of Ana's personal space, alone. Share it through a space of its own: create a shared-note space, add Ben, and move the note into it. A move keeps the note's id; the members of the old space keep its history up to the move, and Ben reads it from the move on ([RFC 0016, "The SDK call and its notice"](rfc/0016-moving-an-object.md#the-sdk-call-and-its-notice)). The Rust SDK has the move; the TypeScript SDK's `space.move` comes later (NOC-476):
 
 ```rust no_run
 use nocentraldb::{AddMember, Db, Error, Invitation, ObjectId, Role, Space, Value};
@@ -235,4 +235,4 @@ An app that expects notes to be shared on their own can create each such note in
 cargo test -p notes-backend
 ```
 
-The example keeps its directory in memory and stands in for your signup with a bare e-mail address; your backend keeps the directory in its own database, behind its own login and TLS. The local relay `ncdb-relay` takes no admission keys yet, so it admits accounts only by `--allow-invitation`; the test relay and the relay on AWS take admissions.
+The example keeps its directory in memory and stands in for your signup with a bare e-mail address; your backend keeps the directory in its own database, behind its own login and TLS. The local relay `ncdb-relay` takes no admission keys yet (NOC-500, NOC-516), so it admits accounts only by `--allow-invitation`; the test relay and the relay on AWS take admissions.
