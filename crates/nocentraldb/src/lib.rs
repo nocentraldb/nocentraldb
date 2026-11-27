@@ -126,8 +126,6 @@ mod page_limit_tests;
 mod personal_write_tests;
 #[cfg(test)]
 mod restore_tests;
-#[cfg(all(test, ncdb_rich_text))]
-mod rich_text_move_tests;
 #[cfg(test)]
 mod shorthand_tests;
 #[cfg(test)]
