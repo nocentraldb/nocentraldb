@@ -13,6 +13,10 @@
 //   2026-11-22, NOC-467).
 // - What the core folded is applied under the binding's own origin, which
 //   the binding never writes back and its UndoManager never takes back.
+//   While an IME composition is open, it is applied at its end, and after
+//   at most MAX_HOLD_MS: TipTap ends a composition itself when it meets a
+//   node its schema lacks, before any rebuild can wait for compositionend
+//   (NOC-555; whether this replaces NOC-467's wording is NOC-556).
 // - One UndoManager for the document, which every editor of the binding
 //   uses (Carsten, 2026-11-22, NOC-467).
 import * as Y from "yjs";
@@ -62,7 +66,7 @@ export interface Binding {
   onStatus(listener: (status: RichTextStatus) => void): () => void;
   readonly undoManager: Y.UndoManager;
   readonly writable: boolean;
-  /** Pulls what the core folded since; call it after a fold of the field's collection. */
+  /** Pulls what the core folded since; call it after a fold of the field's collection. While a composition is open, the pull waits for its end, for at most 2 s. */
   folded(): Promise<void>;
   /** Whether an IME composition is open in the editor. */
   composing(open: boolean): void;
@@ -114,6 +118,29 @@ export const bind = (
     }
   };
 
+  // Pulls asked for while a composition is open, run as one at its end.
+  let waiting: { resolve: () => void; reject: (e: unknown) => void }[] = [];
+  let pullCap: ReturnType<typeof setTimeout> | undefined;
+  const pull = async () => {
+    const missing = await port.pull(Y.encodeStateVector(doc));
+    Y.applyUpdate(doc, missing, FROM_CORE);
+  };
+  const pullWaiting = () => {
+    clearTimeout(pullCap);
+    pullCap = undefined;
+    const now = waiting;
+    waiting = [];
+    if (now.length === 0) return;
+    pull().then(
+      () => {
+        for (const w of now) w.resolve();
+      },
+      (error) => {
+        for (const w of now) w.reject(error);
+      },
+    );
+  };
+
   const clearTimers = () => {
     clearTimeout(pause);
     clearTimeout(hold);
@@ -160,12 +187,16 @@ export const bind = (
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    folded: async () => {
-      const missing = await port.pull(Y.encodeStateVector(doc));
-      Y.applyUpdate(doc, missing, FROM_CORE);
+    folded: () => {
+      if (!composing) return pull();
+      return new Promise<void>((resolve, reject) => {
+        waiting.push({ resolve, reject });
+        pullCap ??= setTimeout(pullWaiting, MAX_HOLD_MS);
+      });
     },
     composing: (open) => {
       composing = open;
+      if (!open) pullWaiting();
       if (!open && unwritten.length > 0 && pause === undefined) void write();
     },
     hidden: () => write(),
