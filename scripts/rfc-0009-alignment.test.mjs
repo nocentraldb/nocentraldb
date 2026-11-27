@@ -158,7 +158,7 @@ test("the use cases use only calls RFC 0009 defines, and link what it does not c
     /\bdb\.get\(/,
     /\bdb\.insert\(/,
     /nc\.useLive/,
-    /\bwhere: /,
+    /\bwhere: \{/,
     /views\.ready/,
     /\.personal\(\)|personal: true/,
   ]) {

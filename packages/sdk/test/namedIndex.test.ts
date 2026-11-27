@@ -1,4 +1,4 @@
-// The named index form (RFC 0018, R3; NOC-563): `nc.index({ where,
+// The named index form (RFC 0018, "Named equality and order in an index"; NOC-563): `nc.index({ where,
 // orderBy })` names the fields a query fixes with equality and the fields
 // that order the result, with "-" for a descending order. It is a second
 // spelling of today's `nc.index(fields, { equal })`: both describe the

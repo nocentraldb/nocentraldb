@@ -57,7 +57,7 @@ interface Cursor {
  * `model.<collection>.indexes.<index>`, with `.where` fixing its `where`
  * fields (`E`, their values in index order), `.take` the page size (50 by
  * default, at most 1000) and `.after` where the page starts (RFC 0009,
- * "Queries and indexes"; RFC 0018, R3). Each returns a new query.
+ * "Queries and indexes"; RFC 0018, "Named equality and order in an index"). Each returns a new query.
  */
 export interface Query<T, E extends readonly unknown[] = readonly []> {
   /** Fixes the index's `where` fields, one value each, in their order. */

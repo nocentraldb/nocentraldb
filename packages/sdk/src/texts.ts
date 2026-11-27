@@ -9,7 +9,7 @@
 export const lockHasNoIndex = (collection: unknown, index: unknown): string =>
   `model.lock.json is out of date: it has no index ${collection}.${index}. Run ncdb model build.`;
 
-/** `indexFieldInWhereAndOrderBy`: ncdb model build, on a model whose index in the named form names one field in both where and orderBy (RFC 0018, R3). */
+/** `indexFieldInWhereAndOrderBy`: ncdb model build, on a model whose index in the named form names one field in both where and orderBy (RFC 0018, "Named equality and order in an index"). */
 export const indexFieldInWhereAndOrderBy = (collection: unknown, key: unknown, field: unknown): string =>
   `${collection}.${key}: the field ${field} is in both where and orderBy; a query fixes a where field, so it cannot order the result.`;
 
@@ -48,7 +48,7 @@ export const notADay = (collection: unknown, field: unknown): string =>
 /** `notAnInvitation` (invalidValue): nc.invitation, given a text that does not start with ncdb-invite-1: or is not unpadded base64url. */
 export const NOT_AN_INVITATION = "the text is not an invitation, which is ncdb-invite-1: followed by unpadded base64url";
 
-/** `indexNamesFieldTwice`: ncdb model build, on a model whose index in the named form names a field twice in where, or twice in orderBy, whatever its direction (RFC 0018, R3). */
+/** `indexNamesFieldTwice`: ncdb model build, on a model whose index in the named form names a field twice in where, or twice in orderBy, whatever its direction (RFC 0018, "Named equality and order in an index"). */
 export const indexNamesFieldTwice = (collection: unknown, key: unknown, field: unknown): string =>
   `${collection}.${key}: the index names the field ${field} twice; name each field once.`;
 
@@ -64,7 +64,7 @@ export const notATimestamp = (collection: unknown, field: unknown): string =>
 export const notASafeInteger = (collection: unknown, field: unknown): string =>
   `${collection}.${field} takes a safe integer, between -(2^53 - 1) and 2^53 - 1`;
 
-/** `indexNamesNoField`: ncdb model build, on a model whose index in the named form has neither a where nor an orderBy field (RFC 0018, R3). */
+/** `indexNamesNoField`: ncdb model build, on a model whose index in the named form has neither a where nor an orderBy field (RFC 0018, "Named equality and order in an index"). */
 export const indexNamesNoField = (collection: unknown, key: unknown): string =>
   `${collection}.${key}: the index names no field; give where, orderBy or both.`;
 

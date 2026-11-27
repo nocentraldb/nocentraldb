@@ -48,7 +48,7 @@ export const model = nc.model({
 });
 `);
 
-/** V1 with its index in the named form of RFC 0018, R3: the same model. */
+/** V1 with its index in the named form of RFC 0018, "Named equality and order in an index": the same model. */
 const V1_NAMED = V1.replace(
   'nc.index(["status", "priority"], { equal: 1 })',
   'nc.index({ where: ["status"], orderBy: ["priority"] })',
@@ -170,7 +170,7 @@ describe("npx ncdb model build writes what the native ncdb writes", () => {
     expect(run.code).toBe(0);
   });
 
-  test("for V1 with its index in the named form, the same lock byte for byte (RFC 0018, R3)", () => {
+  test("for V1 with its index in the named form, the same lock byte for byte (RFC 0018, "Named equality and order in an index")", () => {
     const run = same({ "model.ts": V1_NAMED, "model.lock.json": lockV1 }, [
       "model",
       "build",

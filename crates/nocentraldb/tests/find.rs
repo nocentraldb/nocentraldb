@@ -69,7 +69,7 @@ fn db_find_reads_pages_of_an_index_across_every_space_in_index_order() {
 
 #[test]
 fn where_eq_reads_the_pages_equal_reads() {
-    // RFC 0018, R3: `where_eq` is the Rust spelling of TypeScript's
+    // RFC 0018, "Named equality and order in an index": `where_eq` is the Rust spelling of TypeScript's
     // `.where(...)`, and `equal` stays as the same call.
     let db = open();
     two_spaces(&db);

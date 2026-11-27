@@ -367,7 +367,7 @@ export const reach = (..._args: unknown[]): Named => name();
 /** A view: named now, its arguments belong to the computed-fields RFC. */
 export const view = (..._args: unknown[]): Named => name();
 
-/** An index in the named form (RFC 0018, R3): the fields a query fixes with equality, `where`, and the fields that order the result, `orderBy`, each ascending unless its name starts with `-`. */
+/** An index in the named form (RFC 0018, "Named equality and order in an index"): the fields a query fixes with equality, `where`, and the fields that order the result, `orderBy`, each ascending unless its name starts with `-`. */
 type NamedIndex<
   W extends readonly string[] = readonly string[],
   O extends readonly string[] = readonly string[],
@@ -384,7 +384,7 @@ type Unsigned<O extends readonly string[]> = {
  * order the result, each ascending unless its name starts with `-`; with
  * `scope: "space"` it runs in one space at a time instead of across every
  * space of the member. It builds the same lock entry as today's form with
- * the `where` fields first and `equal` their count (RFC 0018, R3).
+ * the `where` fields first and `equal` their count (RFC 0018, "Named equality and order in an index").
  */
 export function index<
   const W extends readonly string[] = readonly [],
