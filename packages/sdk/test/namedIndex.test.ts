@@ -54,10 +54,7 @@ describe("the named form describes the index today's form describes", () => {
       described({ latest: nc.index({ orderBy: ["-occurredOn", "title"] }) }),
     ).toEqual(
       described({
-        latest: nc.index([
-          { field: "occurredOn", direction: "desc" },
-          "title",
-        ]),
+        latest: nc.index([{ field: "occurredOn", direction: "desc" }, "title"]),
       }),
     );
   });
@@ -88,10 +85,10 @@ describe("the named form describes the index today's form describes", () => {
       }),
     ).toEqual(
       described({
-        open: nc.index(
-          ["status", { field: "priority", direction: "desc" }],
-          { equal: 1, scope: "space" },
-        ),
+        open: nc.index(["status", { field: "priority", direction: "desc" }], {
+          equal: 1,
+          scope: "space",
+        }),
         sorted: nc.index(["title"]),
       }),
     );

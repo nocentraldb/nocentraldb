@@ -184,7 +184,12 @@ describe("npx ncdb model build writes what the native ncdb writes", () => {
 
   test("for a named index on an unknown field, which it refuses", () => {
     const run = same(
-      { "model.ts": V1_NAMED.replace('orderBy: ["priority"]', 'orderBy: ["rank"]') },
+      {
+        "model.ts": V1_NAMED.replace(
+          'orderBy: ["priority"]',
+          'orderBy: ["rank"]',
+        ),
+      },
       ["model", "build"],
     );
     expect(run).toMatchObject({ code: 1, lock: null });
