@@ -79,3 +79,23 @@ test("a person's edit still reaches the document", async () => {
   editor?.commands.insertContentAt(1, "Oh, ");
   expect(body.doc.getXmlFragment("default").toString()).toContain("Oh, Hello");
 });
+
+test("an edit the app makes right after the editor opens, in the same task, is written", () => {
+  const body = fakeBinding(vocabulary, (root) =>
+    root.insert(0, [paragraph("Hello")]),
+  );
+  const element = document.createElement("div");
+  document.body.append(element);
+  let editor: import("@tiptap/core").Editor | undefined;
+  mounted.push(
+    ncEditor(body, {
+      element,
+      extensions: kit,
+      onEditor: (e) => {
+        editor = e;
+      },
+    }),
+  );
+  editor?.commands.insertContentAt(1, "Oh, ");
+  expect(body.doc.getXmlFragment("default").toString()).toContain("Oh, Hello");
+});
