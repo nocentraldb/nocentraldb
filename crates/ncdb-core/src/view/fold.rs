@@ -9,11 +9,12 @@
 //! object's first (`super::clear`).
 
 use rusqlite::types::Value as Sql;
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, params};
 
 use super::Error;
 pub(super) use super::columns::open_personal;
 use super::columns::{column_value, personal_column, reference_column};
+use super::fold_statements::{FoldWork, Statements};
 use super::model::{Field, FieldState, Model, RESERVED, reserved_name};
 use super::plugin;
 use super::schema::{STAGING, column, objects_in, rows_in, states_in};
@@ -40,6 +41,8 @@ pub(super) static NO_KEYS: PersonKeys = BTreeMap::new();
 /// collections, on the connection of the transaction that appends it.
 pub(super) struct SqlFold<'a> {
     pub(super) conn: &'a Connection,
+    /// Every statement the fold runs on the view's tables.
+    pub(super) statements: Statements<'a>,
     pub(super) model: &'a Model,
     pub(super) space: SpaceId,
     /// The prefix of the tables it folds into: empty for the view's own,
@@ -78,6 +81,7 @@ impl<'a> SqlFold<'a> {
     pub(super) fn new(conn: &'a Connection, model: &'a Model, space: SpaceId) -> SqlFold<'a> {
         SqlFold {
             conn,
+            statements: Statements::new(conn),
             model,
             space,
             prefix: "",
@@ -140,6 +144,11 @@ impl<'a> SqlFold<'a> {
         self.error.map_or(Ok(self.touched), Err)
     }
 
+    /// What the fold did to the view's tables.
+    pub(super) fn work(&self) -> FoldWork {
+        self.statements.work()
+    }
+
     /// The view's name of the collection `object` is created in, when the
     /// fold holds a create of it.
     fn collection_of(&self, object: ObjectId) -> Option<String> {
@@ -168,7 +177,7 @@ impl<'a> SqlFold<'a> {
         bytes: Vec<u8>,
         read: Option<Sql>,
     ) -> Result<(), Error> {
-        self.conn.execute(
+        self.statements.execute(
             &format!(
                 "INSERT INTO {} (space_id, object_id, field, state) VALUES (?1, ?2, ?3, ?4)
                  ON CONFLICT DO UPDATE SET state = excluded.state",
@@ -178,7 +187,7 @@ impl<'a> SqlFold<'a> {
         )?;
         self.row(collection, object)?;
         if let Some(read) = read {
-            self.conn.execute(
+            self.statements.execute(
                 &format!(
                     "UPDATE {} SET {} = ?3 WHERE space_id = ?1 AND object_id = ?2",
                     self.rows(collection),
@@ -193,7 +202,7 @@ impl<'a> SqlFold<'a> {
     /// Makes sure `c_<collection>` has a row for the object; a new row
     /// takes whether the object is out of the indexes.
     fn row(&self, collection: &str, object: ObjectId) -> Result<(), Error> {
-        let inserted = self.conn.execute(
+        let inserted = self.statements.execute(
             &format!(
                 "INSERT INTO {} (space_id, object_id) VALUES (?1, ?2) ON CONFLICT DO NOTHING",
                 self.rows(collection)
@@ -208,17 +217,15 @@ impl<'a> SqlFold<'a> {
 
     /// The object's creates, deletes and moves, empty when it has none.
     pub(super) fn object(&self, object: ObjectId) -> Result<ObjectState, Error> {
-        let bytes: Option<Vec<u8>> = self
-            .conn
-            .query_row(
-                &format!(
-                    "SELECT state FROM {} WHERE space_id = ?1 AND object_id = ?2",
-                    objects_in(self.prefix)
-                ),
-                params![self.space.0, object.0],
-                |r| r.get(0),
-            )
-            .optional()?;
+        self.statements.count_object_read();
+        let bytes: Option<Vec<u8>> = self.statements.query_row(
+            &format!(
+                "SELECT state FROM {} WHERE space_id = ?1 AND object_id = ?2",
+                objects_in(self.prefix)
+            ),
+            params![self.space.0, object.0],
+            |r| r.get(0),
+        )?;
         match bytes {
             Some(bytes) => ObjectState::read(&bytes),
             None => Ok(ObjectState::default()),
@@ -237,7 +244,7 @@ impl<'a> SqlFold<'a> {
         object: ObjectId,
         deleted: bool,
     ) -> Result<(), Error> {
-        self.conn.execute(
+        self.statements.execute(
             &format!(
                 "UPDATE {} SET deleted = ?3 WHERE space_id = ?1 AND object_id = ?2",
                 self.rows(collection)
@@ -257,7 +264,7 @@ impl<'a> SqlFold<'a> {
         let name = operation.field.as_deref().expect("a field operation");
         let field = self.model.field(collection, name).expect("a known field");
         let state = load(
-            self.conn,
+            &self.statements,
             self.prefix,
             self.space,
             collection,
@@ -337,7 +344,7 @@ impl<'a> SqlFold<'a> {
         let was_out = out_of_indexes(&state);
         let was_moved = state.object().moved_to().is_some();
         state.insert(operation.clone());
-        self.conn.execute(
+        self.statements.execute(
             &format!(
                 "INSERT INTO {} (space_id, object_id, state) VALUES (?1, ?2, ?3)
                  ON CONFLICT DO UPDATE SET state = excluded.state",
@@ -376,7 +383,7 @@ impl<'a> SqlFold<'a> {
 
 /// The merge state of a field, empty when nobody wrote it.
 pub(super) fn load(
-    conn: &Connection,
+    statements: &Statements<'_>,
     prefix: &str,
     space: SpaceId,
     collection: &str,
@@ -384,16 +391,14 @@ pub(super) fn load(
     object: ObjectId,
     field: &Field,
 ) -> Result<FieldState, Error> {
-    let bytes: Option<Vec<u8>> = conn
-        .query_row(
-            &format!(
-                "SELECT state FROM {} WHERE space_id = ?1 AND object_id = ?2 AND field = ?3",
-                states_in(prefix, collection)
-            ),
-            params![space.0, object.0, field_name],
-            |r| r.get(0),
-        )
-        .optional()?;
+    let bytes: Option<Vec<u8>> = statements.query_row(
+        &format!(
+            "SELECT state FROM {} WHERE space_id = ?1 AND object_id = ?2 AND field = ?3",
+            states_in(prefix, collection)
+        ),
+        params![space.0, object.0, field_name],
+        |r| r.get(0),
+    )?;
     Ok(match (bytes, field.empty()) {
         (None, empty) => empty,
         (Some(bytes), FieldState::Basic(_)) => FieldState::Basic(state::basic(&bytes)?),

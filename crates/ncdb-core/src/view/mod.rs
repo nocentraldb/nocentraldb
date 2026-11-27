@@ -21,6 +21,7 @@ pub mod browser;
 mod clear;
 mod columns;
 mod fold;
+mod fold_statements;
 mod from_lock;
 mod joined;
 mod log_table;
@@ -63,6 +64,8 @@ use crate::model_lock::{ModelLock, Refusal};
 use crate::receive::{Checks, ReceiveError};
 
 pub use ad_hoc::AdHocCopy;
+#[doc(hidden)]
+pub use fold_statements::FoldWork;
 pub use model::{
     Direction, Field, FieldState, Index, Invalid, Model, PluginField, RESERVED, Reserved, Scope,
     reserved_name,
@@ -91,6 +94,8 @@ pub struct View {
     /// handed it out, per space: `(collection, object)` (RFC 0006,
     /// "Folding", step 6).
     touched: BTreeMap<SpaceId, BTreeSet<(String, ObjectId)>>,
+    /// What the folds of the last call that received changes did.
+    fold_work: FoldWork,
 }
 
 impl fmt::Debug for View {
@@ -306,6 +311,7 @@ impl View {
             rebuild,
             person_keys: BTreeMap::new(),
             touched: BTreeMap::new(),
+            fold_work: FoldWork::default(),
         })
     }
 
@@ -467,6 +473,7 @@ impl View {
         written_at: Option<u64>,
     ) -> Result<Appended, Error> {
         let space = change.header().space;
+        self.fold_work = FoldWork::default();
         let tx = self.conn.transaction()?;
         let (appended, touched) = append(
             Target {
@@ -478,6 +485,7 @@ impl View {
             change,
             checks,
             written_at,
+            &mut self.fold_work,
         )?;
         tx.commit()?;
         // Only a committed fold counts (RFC 0006, "Folding", step 6).
@@ -490,6 +498,13 @@ impl View {
         if !touched.is_empty() {
             self.touched.entry(space).or_default().extend(touched);
         }
+    }
+
+    /// What the folds of the last call that received changes did to the
+    /// view's tables, for the cost tests (NOC-542).
+    #[doc(hidden)]
+    pub fn fold_work(&self) -> FoldWork {
+        self.fold_work
     }
 
     /// What the committed folds of `space` touched since the last call:
@@ -573,6 +588,7 @@ impl View {
         checks: &mut impl Checks,
         written_at: Option<u64>,
     ) -> Result<Vec<Appended>, Error> {
+        self.fold_work = FoldWork::default();
         let tx = self.conn.transaction()?;
         let mut appended = Vec::with_capacity(changes.len());
         let mut touched = Vec::with_capacity(changes.len());
@@ -588,6 +604,7 @@ impl View {
                 change,
                 checks,
                 written_at,
+                &mut self.fold_work,
             )?;
             appended.push(one);
             touched.push((space, its));
@@ -618,6 +635,7 @@ fn append(
     change: Change,
     checks: &mut impl Checks,
     written_at: Option<u64>,
+    work: &mut FoldWork,
 ) -> Result<(Appended, BTreeSet<(String, ObjectId)>), Error> {
     let space = change.header().space;
     let id = change.id();
@@ -633,6 +651,7 @@ fn append(
         .with_keys(keys)
         .for_space(checks.space_model_id());
     let appended = log.receive_change(change, checks, &mut fold);
+    work.add(fold.work());
     let touched = fold.finish()?;
     let appended = appended.map_err(Error::Receive)?;
     if let Appended::New(_) = appended {

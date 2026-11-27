@@ -19,7 +19,7 @@ impl SqlFold<'_> {
         field: &str,
         object: ObjectId,
     ) -> Result<(), Error> {
-        self.conn.execute(
+        self.statements.execute(
             &format!(
                 "DELETE FROM {} WHERE space_id = ?1 AND object_id = ?2 AND field = ?3",
                 self.states(collection)
@@ -27,7 +27,7 @@ impl SqlFold<'_> {
             params![self.space.0, object.0, field],
         )?;
         if let Some(Field::Basic(_) | Field::Link(_)) = self.model.field(collection, field) {
-            self.conn.execute(
+            self.statements.execute(
                 &format!(
                     "UPDATE {} SET {} = NULL WHERE space_id = ?1 AND object_id = ?2",
                     self.rows(collection),
@@ -48,7 +48,7 @@ impl SqlFold<'_> {
         if state.object().moved_to().is_some() {
             self.revived.insert(object);
         }
-        self.conn.execute(
+        self.statements.execute(
             &format!(
                 "DELETE FROM {} WHERE space_id = ?1 AND object_id = ?2",
                 objects_in(self.prefix)
@@ -68,16 +68,20 @@ impl SqlFold<'_> {
     /// state of the collection nor a create into it holds it: [`Self::row`]
     /// makes a row only for those.
     pub(super) fn drop_empty_row(&self, collection: &str, object: ObjectId) -> Result<(), Error> {
-        let has_state: bool = self.conn.query_row(
-            &format!(
-                "SELECT EXISTS (SELECT 1 FROM {} WHERE space_id = ?1 AND object_id = ?2)",
-                self.states(collection)
-            ),
-            params![self.space.0, object.0],
-            |r| r.get(0),
-        )?;
+        let has_state: bool = self
+            .statements
+            .query_row(
+                &format!(
+                    "SELECT EXISTS (SELECT 1 FROM {} WHERE space_id = ?1 AND object_id = ?2)",
+                    self.states(collection)
+                ),
+                params![self.space.0, object.0],
+                |r| r.get(0),
+            )?
+            // EXISTS gives one row.
+            .unwrap_or(false);
         if !has_state && !self.object(object)?.creates_in(collection) {
-            self.conn.execute(
+            self.statements.execute(
                 &format!(
                     "DELETE FROM {} WHERE space_id = ?1 AND object_id = ?2",
                     self.rows(collection)
