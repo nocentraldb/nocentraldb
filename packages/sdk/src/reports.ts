@@ -64,6 +64,7 @@ export const spaceStatusOf = (raw: unknown): SpaceStatus => {
     exposed: given.exposed === true,
     waitingForKey: given.waitingForKey === true,
     badPersonKeyRecords: list<string>(given.badPersonKeyRecords),
+    missingPersonKeys: Number(given.missingPersonKeys ?? 0),
     provisionalErasures: list<SpaceStatus["provisionalErasures"][number]>(
       given.provisionalErasures,
     ).map((erasure) => ({ ...erasure, age: Number(erasure.age) })),

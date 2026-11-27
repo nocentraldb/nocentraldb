@@ -259,7 +259,8 @@ pub(super) fn sync_status(status: &SyncStatus) -> Value {
 /// {reason: u64}, "newestModel": u64 | null, "rejected": {reason: u64},
 /// "refused": [{"change": id, "code": text}], "lostGrants": [id],
 /// "equivocations": [id], "exposed": bool, "waitingForKey": bool,
-/// "badPersonKeyRecords": [fingerprint], "provisionalErasures":
+/// "badPersonKeyRecords": [fingerprint], "missingPersonKeys": u64,
+/// "provisionalErasures":
 /// [{"change": id, "age": milliseconds, "canUndo": bool, "performer":
 /// member, "notice": {"code": text, "text": text}}], "onlyMember": bool}`.
 /// A reason is its Rust name in lower camel case.
@@ -337,6 +338,10 @@ pub(super) fn space_status(status: &SpaceStatus) -> Value {
                     .map(|fingerprint| Value::Text(fingerprint.to_string()))
                     .collect(),
             ),
+        ),
+        (
+            "missingPersonKeys",
+            Value::Unsigned(status.missing_person_keys.into()),
         ),
         (
             "provisionalErasures",
