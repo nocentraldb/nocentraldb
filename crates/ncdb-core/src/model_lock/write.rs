@@ -170,6 +170,15 @@ fn field(field: &Field, descriptions: bool) -> Value {
         }
         _ => {}
     }
+    if !field.vocabulary.is_empty() {
+        let names = |set: &std::collections::BTreeSet<String>| {
+            Value::Array(set.iter().cloned().map(Value::from).collect())
+        };
+        let mut vocabulary = Map::new();
+        vocabulary.insert("marks".into(), names(&field.vocabulary.marks));
+        vocabulary.insert("nodes".into(), names(&field.vocabulary.nodes));
+        entry.insert("vocabulary".into(), Value::Object(vocabulary));
+    }
     if let Some(person) = &field.personal {
         let mut personal = Map::new();
         personal.insert("person".into(), person.as_str().into());

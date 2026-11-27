@@ -255,6 +255,21 @@ tasks:
     inputs:
       - "/moon.yml"
       - "/rust-toolchain.toml"
+  advisories:
+    # NOC-544: `cargo deny check advisories` against the RustSec database,
+    # with the root deny.toml (unmaintained = "all", dated exceptions that
+    # name their tickets). cargo-deny is installed into target/tools at an
+    # exact version, as wasm-bindgen-cli above, so CI's cached target/ reuses
+    # it. Never cached: the database changes without any input changing, and
+    # the check fetches it, so it needs the network.
+    script: "cargo install cargo-deny --version =0.22.1 --locked --root target/tools && target/tools/bin/cargo-deny check advisories"
+    deps: ["~:rust-toolchain"]
+    inputs:
+      - "/deny.toml"
+      - "/Cargo.lock"
+      - "/moon.yml"
+    options:
+      cache: false
   site:
     # NOC-213: the site (site/, its own pnpm project, outside the workspace)
     # installs from its lockfile, builds, and passes the checks of its built
@@ -408,4 +423,5 @@ tasks:
       - "~:texts"
       - "~:version"
       - "~:api-report"
+      - "~:advisories"
       - "~:site"
