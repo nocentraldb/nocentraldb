@@ -92,7 +92,10 @@ async fn admitted_by(addr: SocketAddr, key: &SigningKey) -> (Value, Value) {
     );
     let admitted = client.ask(&admit).await;
     let space = Space::new(0);
-    let pushed = client.push(2, space.space, &[&space.genesis]).await.remove(0);
+    let pushed = client
+        .push(2, space.space, &[&space.genesis])
+        .await
+        .remove(0);
     (admitted, pushed)
 }
 
