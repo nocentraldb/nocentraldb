@@ -10,7 +10,7 @@ After a database was closed and opened again, every personal field read as unset
 
 ## When
 
-On a device that wrote personal fields without a relay, in the browser and natively. With a relay, the values came back only once the device had connected and fetched the person keys again.
+On a device that wrote personal fields without a relay, in the browser and natively. With a relay, the values came back only once the device had connected and fetched the person keys again; a record written while the relay was out of reach and not put before the close never reached the relay, so other members could not read those values either.
 
 ## Cause
 
@@ -18,6 +18,6 @@ A device held the person keys it drew or fetched in memory only. The relay store
 
 ## Fix
 
-A device now keeps each person-key record it holds, wrapped as the relay stores it, in its own database, and a reopened database holds those keys again with no relay. No person key is stored in the clear. An erasure removes the records of the key it destroys. `SpaceStatus::missing_person_keys` (`missingPersonKeys` in TypeScript) counts the person keys of a space that the device does not hold though no erasure destroyed them: when it is above `0`, some personal values read as unset because their key is missing, not because they were cleared.
+A device now keeps each person-key record it holds, wrapped as the relay stores it, in its own database, and a reopened database holds those keys again with no relay. No person key is stored in the clear. A record that no relay has taken yet waits on the device, across a reopen, and is put once the device connects. An erasure removes the records of the key it destroys. `SpaceStatus::missing_person_keys` (`missingPersonKeys` in TypeScript) counts the person keys of a space that the device does not hold though no erasure destroyed them: when it is above `0`, some personal values read as unset because their key is missing, not because they were cleared.
 
 A device that wrote personal fields without a relay on an earlier version and closed its database since then cannot hold those keys again: they were never kept anywhere. Its status now counts them as missing. A device whose relay received the records gets them back on its next connection and keeps them from then on.

@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS person_key_records (
     writer BLOB NOT NULL,
     wrapped BLOB NOT NULL,
     signature BLOB NOT NULL,
+    waiting INTEGER NOT NULL,
     PRIMARY KEY (space_id, person_key_id, generation, writer)
 ) STRICT;
 CREATE TABLE IF NOT EXISTS objects (

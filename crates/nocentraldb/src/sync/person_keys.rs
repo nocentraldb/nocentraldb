@@ -49,7 +49,7 @@ pub(crate) fn put(inner: &mut Inner, space: SpaceId, records: Vec<Record>) {
         for record in &records {
             // A record that cannot be kept is held for this session all the
             // same; the status names its key as missing after a reopen.
-            let _ = hold(view, state, space, record);
+            let _ = hold(view, state, space, record, true);
         }
     }
     if let Some(sync) = sync.as_mut() {
@@ -58,18 +58,45 @@ pub(crate) fn put(inner: &mut Inner, space: SpaceId, records: Vec<Record>) {
 }
 
 /// [`accept`]s `record` of `space`, and keeps it in the device's database
-/// when the member holds its key (NOC-547). Says what `accept` did.
+/// when the member holds its key (NOC-547): waiting to be put to a relay
+/// when `waiting`, as a record this member wrote does until a relay took
+/// it ([`waiting`], [`put_done`]). Says what `accept` did.
 pub(crate) fn hold(
     view: &mut View,
     state: &mut SpaceState,
     space: SpaceId,
     record: &Record,
+    waiting: bool,
 ) -> Result<Outcome, ncdb_core::view::Error> {
     let outcome = accept(state, space, record);
     if outcome == Outcome::Held {
-        view.keep_person_key_record(space, &stored(record))?;
+        view.keep_person_key_record(space, &stored(record), waiting)?;
     }
     Ok(outcome)
+}
+
+/// The kept records that wait to be put, by space: those this member
+/// wrote that no relay took yet, also before a reopen (NOC-547). Syncing
+/// starts with them.
+pub(crate) fn waiting(
+    view: &View,
+) -> Result<std::collections::BTreeMap<SpaceId, Vec<Record>>, ncdb_core::view::Error> {
+    let mut puts: std::collections::BTreeMap<SpaceId, Vec<Record>> = Default::default();
+    for (space, record) in view.waiting_person_key_records()? {
+        puts.entry(space).or_default().push(from_stored(record));
+    }
+    Ok(puts)
+}
+
+/// Notes that the relay took `records` of `space`, or refused them for
+/// good: they wait no longer.
+pub(crate) fn put_done(
+    view: &mut View,
+    space: SpaceId,
+    records: &[Record],
+) -> Result<(), ncdb_core::view::Error> {
+    let stored: Vec<PersonKeyRecord> = records.iter().map(stored).collect();
+    view.person_key_records_put(space, &stored)
 }
 
 /// Holds again each person key of `space` whose record the device kept,
