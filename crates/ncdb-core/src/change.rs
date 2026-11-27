@@ -111,6 +111,41 @@ pub struct Header {
     extensions: Extensions,
 }
 
+/// The fields of a change's header besides its payload and its unknown
+/// keys: what a [`Log`](crate::log::Log) keeps of every change it holds
+/// (NOC-518), and what the membership verdict and un-folding read. It is
+/// not a header: a pass that needs the payload or the unknown keys reads
+/// the change.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HeaderFields {
+    /// Key 1: the space the change belongs to.
+    pub space: SpaceId,
+    /// Key 2: the member whose key signed the change.
+    pub author: MemberId,
+    /// Key 3: 1, 2, 3, ... per author and space.
+    pub sequence: u64,
+    /// Key 4: the space key generation that sealed the payload.
+    pub key_generation: u64,
+    /// Key 5: sealed or control.
+    pub kind: Kind,
+    /// Key 7: the header format.
+    pub format: u64,
+    /// Key 8: the suite id (RFC 0003).
+    pub suite: u64,
+}
+
+impl From<&Header> for HeaderFields {
+    fn from(header: &Header) -> HeaderFields {
+        header.fields()
+    }
+}
+
+impl From<&HeaderFields> for HeaderFields {
+    fn from(fields: &HeaderFields) -> HeaderFields {
+        *fields
+    }
+}
+
 /// The payload of a change, after decryption: only members read it. Its
 /// `Debug` output shows the ordering metadata and how many operations it
 /// holds, not the operations.
@@ -273,6 +308,19 @@ impl Header {
     /// The current header format.
     pub const FORMAT: u64 = 1;
 
+    /// The header's fields besides its payload and its unknown keys.
+    pub fn fields(&self) -> HeaderFields {
+        HeaderFields {
+            space: self.space,
+            author: self.author,
+            sequence: self.sequence,
+            key_generation: self.key_generation,
+            kind: self.kind,
+            format: self.format,
+            suite: self.suite,
+        }
+    }
+
     /// A header of the current format, without unknown keys.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -294,22 +342,6 @@ impl Header {
             format: Header::FORMAT,
             suite,
             extensions: Extensions::new(),
-        }
-    }
-
-    /// This header without its payload: what a log keeps in memory of a
-    /// sealed change whose frame its store keeps (NOC-452).
-    pub(crate) fn without_payload(&self) -> Header {
-        Header {
-            space: self.space,
-            author: self.author,
-            sequence: self.sequence,
-            key_generation: self.key_generation,
-            kind: self.kind,
-            payload: Vec::new(),
-            format: self.format,
-            suite: self.suite,
-            extensions: self.extensions.clone(),
         }
     }
 

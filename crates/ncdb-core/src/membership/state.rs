@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::cbor::Value;
-use crate::change::Header;
+use crate::change::HeaderFields;
 use crate::ids::{ChangeId, MemberId};
 use crate::keys::MemberPublicKey;
 
@@ -94,7 +94,8 @@ pub struct MemberState {
 
 impl MemberState {
     /// RFC 0008's membership verdict for a sealed change of this member
-    /// ("Sealed changes"), from its header alone: whether the member holds
+    /// ("Sealed changes"), from its header's fields alone, a [`Header`](crate::change::Header)
+    /// or the [`HeaderFields`] a log keeps: whether the member holds
     /// an accepted grant of a role that writes, whose from generation is
     /// the change's key generation or one it descends from in the
     /// generation graph, such that its author sequence is at most the
@@ -102,14 +103,15 @@ impl MemberState {
     /// grant did not see. `seen` holds, for each accepted grant, the
     /// accepted revocations it saw ([`super::Resolved::seen`]);
     /// `descends(generation, from)` is the space's generation graph
-    /// ([`super::Resolved::descends`]). The header's author is the
+    /// ([`super::Resolved::descends`]). The change's author is the
     /// caller's to match with this member.
     pub fn admits(
         &self,
-        header: &Header,
+        header: impl Into<HeaderFields>,
         seen: &BTreeMap<ChangeId, BTreeSet<ChangeId>>,
         descends: impl Fn(u64, u64) -> bool,
     ) -> bool {
+        let header = header.into();
         let writes = |role: Option<Role>| role >= Some(Role::Writer);
         self.grants.iter().any(|grant| {
             let seen = seen.get(&grant.change);
