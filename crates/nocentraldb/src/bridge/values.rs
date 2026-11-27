@@ -231,6 +231,13 @@ fn value_of(field: &Field) -> Value {
         // Nor a rich-text update, which only a binding writes.
         #[cfg(ncdb_rich_text)]
         Repr::RichText(_) => Value::Null,
+        // A rich-text field's document, which the TypeScript SDK does not
+        // read through the bridge yet.
+        #[cfg(ncdb_rich_text)]
+        Repr::RichTextRead(_) => Value::Null,
+        // Nor a first document from Markdown, which only a write holds.
+        #[cfg(ncdb_rich_text)]
+        Repr::Markdown(_) => Value::Null,
     }
 }
 

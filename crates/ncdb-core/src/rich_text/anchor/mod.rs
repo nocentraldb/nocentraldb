@@ -30,12 +30,15 @@
 
 mod apply;
 mod diff;
+mod first;
 mod lookup;
 mod parse;
 mod view;
 
 use std::collections::BTreeMap;
 use std::fmt;
+
+pub use first::from_markdown;
 
 use yrs::updates::decoder::Decode;
 use yrs::{ClientID, Doc, OffsetKind, Options, ReadTxn, Transact, Update};
