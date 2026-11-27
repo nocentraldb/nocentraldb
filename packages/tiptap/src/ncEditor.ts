@@ -27,7 +27,7 @@ import {
   getSchema,
 } from "@tiptap/core";
 import Collaboration from "@tiptap/extension-collaboration";
-import { Plugin } from "@tiptap/pm/state";
+import { Plugin, TextSelection } from "@tiptap/pm/state";
 import {
   absolutePositionToRelativePosition,
   relativePositionToAbsolutePosition,
@@ -54,28 +54,45 @@ export interface NcEditorOptions {
  * URL or the trailing paragraph, is refused, since it would reach the Y.Doc
  * as an edit nobody made. ProseMirror filters an appended transaction
  * before it marks it as appended, so the filter notes the render it lets
- * through, and refuses every transaction that changes the document within
- * the same task; a person's edit always comes in a task of its own, and the
- * selection the rebuild restores changes no document.
+ * through and refuses every transaction that changes the document until
+ * the view has taken the render in; an edit after that, also one an app
+ * makes in the same task, goes through. The selection a rebuild restores is
+ * treated as a render: what a plugin appends to it, such as a trailing
+ * paragraph, is not written either.
  */
+/** Marks the transaction that restores the selection after a rebuild, which, like a render, nobody made. */
+const RESTORE = "ncRestoreSelection";
+
 const noWriteOnRender = () => {
   let rendering = false;
   return Extension.create({
     name: "ncNoWriteOnRender",
+    // Before y-sync's plugin, so its view exists when y-sync renders the
+    // document while the editor's view is built.
+    priority: 1000,
     addProseMirrorPlugins: () => [
       new Plugin({
         filterTransaction: (tr) => {
-          if (tr.getMeta(ySyncPluginKey)?.isChangeOrigin) {
-            if (!rendering) {
-              rendering = true;
-              queueMicrotask(() => {
-                rendering = false;
-              });
-            }
+          if (
+            tr.getMeta(ySyncPluginKey)?.isChangeOrigin ||
+            tr.getMeta(RESTORE)
+          ) {
+            rendering = true;
+            // At the latest, the task's end ends the render.
+            queueMicrotask(() => {
+              rendering = false;
+            });
             return true;
           }
           return !(rendering && tr.docChanged);
         },
+        // The view takes the render, and what was appended to it, in at
+        // once: from then on, transactions are no longer appended to it.
+        view: () => ({
+          update: () => {
+            rendering = false;
+          },
+        }),
       }),
     ],
   });
@@ -172,7 +189,19 @@ export const ncEditor = (
         sync.binding.mapping,
       );
       if (anchor !== null && head !== null) {
-        editor.commands.setTextSelection({ from: anchor, to: head });
+        const { state } = editor;
+        const max = state.doc.content.size;
+        editor.view.dispatch(
+          state.tr
+            .setSelection(
+              TextSelection.create(
+                state.doc,
+                Math.min(anchor, max),
+                Math.min(head, max),
+              ),
+            )
+            .setMeta(RESTORE, true),
+        );
       }
     }
     if (focus) editor.view.focus();
