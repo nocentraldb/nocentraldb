@@ -213,3 +213,39 @@ describe("the UndoManager", () => {
     expect(text(body.doc)).toBe(text(core));
   });
 });
+
+describe("the status (NOC-538, Q2)", () => {
+  test("is shown while every write goes through", async () => {
+    const { core, port } = fakeCore();
+    const body = bind(opened(core), port);
+    type(body.doc, "Fine");
+    await body.hidden();
+    expect(body.status).toEqual({ status: "shown" });
+  });
+
+  test("turns read-only when the core refuses a write, and tells onStatus once", async () => {
+    const { core, writes, port } = fakeCore(true);
+    const body = bind(opened(core), port);
+    const heard: unknown[] = [];
+    body.onStatus((status) => heard.push(status));
+    type(body.doc, "Refused");
+    await body.hidden();
+    expect(body.status).toEqual({ status: "readOnly" });
+    expect(heard).toEqual([{ status: "readOnly" }]);
+    type(body.doc, "More");
+    await body.hidden();
+    expect(writes).toHaveLength(0);
+    expect(heard).toHaveLength(1);
+  });
+
+  test("a listener that stops listening hears nothing more", async () => {
+    const { core, port } = fakeCore(true);
+    const body = bind(opened(core), port);
+    const heard: unknown[] = [];
+    const stop = body.onStatus((status) => heard.push(status));
+    stop();
+    type(body.doc, "Refused");
+    await body.hidden();
+    expect(heard).toEqual([]);
+  });
+});
