@@ -34,11 +34,16 @@ const OTHER: SpaceId = SpaceId([2; 16]);
 #[test]
 fn a_kept_record_is_read_back_once_by_its_space() {
     let mut view = View::open_in_memory(&lock()).unwrap();
-    view.keep_person_key_record(SPACE, &record(5, 1), false).unwrap();
-    view.keep_person_key_record(SPACE, &record(4, 2), false).unwrap();
-    view.keep_person_key_record(SPACE, &record(4, 1), false).unwrap();
-    view.keep_person_key_record(SPACE, &record(4, 1), false).unwrap();
-    view.keep_person_key_record(OTHER, &record(4, 1), false).unwrap();
+    view.keep_person_key_record(SPACE, &record(5, 1), false)
+        .unwrap();
+    view.keep_person_key_record(SPACE, &record(4, 2), false)
+        .unwrap();
+    view.keep_person_key_record(SPACE, &record(4, 1), false)
+        .unwrap();
+    view.keep_person_key_record(SPACE, &record(4, 1), false)
+        .unwrap();
+    view.keep_person_key_record(OTHER, &record(4, 1), false)
+        .unwrap();
 
     assert_eq!(
         view.person_key_records(SPACE).unwrap(),
@@ -50,10 +55,14 @@ fn a_kept_record_is_read_back_once_by_its_space() {
 #[test]
 fn a_forgotten_person_key_keeps_no_record_in_its_space() {
     let mut view = View::open_in_memory(&lock()).unwrap();
-    view.keep_person_key_record(SPACE, &record(4, 1), false).unwrap();
-    view.keep_person_key_record(SPACE, &record(4, 2), false).unwrap();
-    view.keep_person_key_record(SPACE, &record(5, 1), false).unwrap();
-    view.keep_person_key_record(OTHER, &record(4, 1), false).unwrap();
+    view.keep_person_key_record(SPACE, &record(4, 1), false)
+        .unwrap();
+    view.keep_person_key_record(SPACE, &record(4, 2), false)
+        .unwrap();
+    view.keep_person_key_record(SPACE, &record(5, 1), false)
+        .unwrap();
+    view.keep_person_key_record(OTHER, &record(4, 1), false)
+        .unwrap();
 
     view.forget_person_key_records(SPACE, [4; 16]).unwrap();
 
@@ -66,10 +75,14 @@ fn a_forgotten_person_key_keeps_no_record_in_its_space() {
 #[test]
 fn a_record_waits_to_be_put_until_the_relay_took_it() {
     let mut view = View::open_in_memory(&lock()).unwrap();
-    view.keep_person_key_record(SPACE, &record(4, 1), true).unwrap();
-    view.keep_person_key_record(SPACE, &record(5, 1), true).unwrap();
-    view.keep_person_key_record(SPACE, &record(6, 1), false).unwrap();
-    view.keep_person_key_record(OTHER, &record(4, 1), true).unwrap();
+    view.keep_person_key_record(SPACE, &record(4, 1), true)
+        .unwrap();
+    view.keep_person_key_record(SPACE, &record(5, 1), true)
+        .unwrap();
+    view.keep_person_key_record(SPACE, &record(6, 1), false)
+        .unwrap();
+    view.keep_person_key_record(OTHER, &record(4, 1), true)
+        .unwrap();
 
     assert_eq!(
         view.waiting_person_key_records().unwrap(),
@@ -81,9 +94,11 @@ fn a_record_waits_to_be_put_until_the_relay_took_it() {
     );
     view.person_key_records_put(SPACE, &[record(4, 1)]).unwrap();
     // The relay served it: it holds it.
-    view.keep_person_key_record(SPACE, &record(5, 1), false).unwrap();
+    view.keep_person_key_record(SPACE, &record(5, 1), false)
+        .unwrap();
     // A record the relay served is not put again by a later keep.
-    view.keep_person_key_record(SPACE, &record(6, 1), true).unwrap();
+    view.keep_person_key_record(SPACE, &record(6, 1), true)
+        .unwrap();
 
     assert_eq!(
         view.waiting_person_key_records().unwrap(),
@@ -96,7 +111,8 @@ fn a_record_waits_to_be_put_until_the_relay_took_it() {
 fn the_records_survive_a_reopen() {
     let db = TempDb::new("person-key-records-reopen");
     let mut view = View::open(&db.0, &lock()).unwrap();
-    view.keep_person_key_record(SPACE, &record(4, 1), true).unwrap();
+    view.keep_person_key_record(SPACE, &record(4, 1), true)
+        .unwrap();
     drop(view);
 
     let view = View::open(&db.0, &lock()).unwrap();
@@ -118,9 +134,7 @@ fn the_table_holds_the_record_as_the_relay_stores_it() {
     drop(View::open(&db.0, &lock()).unwrap());
     let conn = Connection::open(&db.0).unwrap();
     let columns: Vec<(String, String, bool, i64)> = conn
-        .prepare(
-            "SELECT name, type, \"notnull\", pk FROM pragma_table_info('person_key_records')",
-        )
+        .prepare("SELECT name, type, \"notnull\", pk FROM pragma_table_info('person_key_records')")
         .unwrap()
         .query_map([], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))

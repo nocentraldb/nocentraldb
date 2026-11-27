@@ -17,17 +17,16 @@ const MEMBER: Who = 2;
 async fn open_at(dir: &TempDir, url: &str) -> crate::Db {
     let key_file = dir.0.join("member.key");
     if !key_file.exists() {
-        let keys = Keys::of_account(
-            Secrets::new([ADMIN; 32], [ADMIN ^ 0x80; 32]),
-            account(),
-        );
+        let keys = Keys::of_account(Secrets::new([ADMIN; 32], [ADMIN ^ 0x80; 32]), account());
         std::fs::write(&key_file, keys.encode()).unwrap();
     }
     let options = OpenOptions::new(&crate::personal_write_tests::lock())
         .path(dir.0.join("data"))
         .key_file(key_file)
         .relay(url);
-    crate::Db::open(options).await.expect("the personal lock opens")
+    crate::Db::open(options)
+        .await
+        .expect("the personal lock opens")
 }
 
 #[tokio::test(flavor = "multi_thread")]
