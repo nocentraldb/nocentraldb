@@ -122,7 +122,7 @@ describe("db.find and space.find", () => {
     ]);
   });
 
-  test("where asks the core what equal asks, so both spellings read the same pages (RFC 0018, "Named equality and order in an index")", async () => {
+  test('where asks the core what equal asks, so both spellings read the same pages (RFC 0018, "Named equality and order in an index")', async () => {
     const { core, requests } = fake();
     const db = await connect(core, { model, lock });
     const index = model.tasks.indexes.byStatusPriority;
