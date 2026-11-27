@@ -121,7 +121,8 @@ impl From<bool> for Value {
 /// space id and object id (RFC 0004, "References"; Carsten, 2026-11-16,
 /// NOC-354). Written with `Value::from`, read with `get::<Reference>`. It
 /// names the target and holds nothing of it: an app that wants the target
-/// reads it in its space. A reference field also takes an [`ObjectId`],
+/// reads it in its space. `Reference::from(&object)` makes one of an object
+/// the SDK read. A reference field also takes an [`ObjectId`],
 /// which names the written object's own space, and a link field takes a
 /// `Reference` into the object's own space and refuses one into another
 /// with `InvalidValue` (RFC 0018, "One function, two cases").
@@ -138,6 +139,16 @@ impl Reference {
     /// The reference to the object `id` in `space`.
     pub fn new(space: SpaceId, id: ObjectId) -> Reference {
         Reference { space, id }
+    }
+}
+
+impl From<&crate::object::Object> for Reference {
+    /// The reference to an object the SDK read: its space and id, and
+    /// nothing else of it (Carsten, 2026-11-27, NOC-573), as TypeScript takes
+    /// `$space` and `$id` of a read object (RFC 0018, "One function, two
+    /// cases").
+    fn from(object: &crate::object::Object) -> Reference {
+        Reference::new(object.space(), object.id())
     }
 }
 
