@@ -44,6 +44,7 @@ use super::State;
 use super::document::ROOT;
 use crate::ids::{ObjectId, SpaceId};
 use crate::redact::Size;
+use crate::texts;
 use crate::view::Lease;
 
 /// The field a read version belongs to.
@@ -152,16 +153,14 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::AnchorNotFound { edit } => write!(f, "edit {edit}: the quote is not found"),
+            Error::AnchorNotFound { edit } => f.write_str(&texts::anchor_not_found(edit)),
             Error::AnchorAmbiguous { edit, matches } => {
-                write!(f, "edit {edit}: the quote occurs {matches} times")
+                f.write_str(&texts::anchor_ambiguous(edit, matches))
             }
-            Error::VersionUnknown => f.write_str("the version is no longer held"),
-            Error::LeaseMismatch => f.write_str("the lease is for another object"),
-            Error::LeaseBehind => f.write_str("the version is behind the lease"),
-            Error::Unsupported { edit } => {
-                write!(f, "edit {edit}: the core does not make this edit")
-            }
+            Error::VersionUnknown => f.write_str(texts::ANCHOR_VERSION_UNKNOWN),
+            Error::LeaseMismatch => f.write_str(texts::ANCHOR_LEASE_MISMATCH),
+            Error::LeaseBehind => f.write_str(texts::ANCHOR_LEASE_BEHIND),
+            Error::Unsupported { edit } => f.write_str(&texts::anchor_unsupported(edit)),
         }
     }
 }

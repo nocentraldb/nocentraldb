@@ -384,6 +384,14 @@ fn inline<T: ReadTxn>(txn: &T, element: &XmlElementRef, code: bool) -> (Vec<Atom
     (atoms, at)
 }
 
+/// A link's address, when it is a text.
+fn href(attrs: Option<&std::sync::Arc<std::collections::HashMap<String, Any>>>) -> Option<String> {
+    match attrs?.get("href")? {
+        Any::String(href) => Some(href.to_string()),
+        _ => None,
+    }
+}
+
 /// The marks Markdown shows of a run's formatting attributes, or `None`
 /// when it holds a mark the rendering shows as a tag. Underline and
 /// highlight read as their text and are no part of the view.
@@ -401,10 +409,7 @@ fn marks(raw: &Attrs) -> Option<Marks> {
             "strike" => out.insert(Mark::Strike),
             "code" => out.insert(Mark::Code),
             "underline" | "highlight" => continue,
-            "link" => match attrs.and_then(|a| a.get("href")) {
-                Some(Any::String(href)) => out.insert(Mark::Link(href.to_string())),
-                _ => return None,
-            },
+            "link" => out.insert(Mark::Link(href(attrs)?)),
             _ => return None,
         };
     }
