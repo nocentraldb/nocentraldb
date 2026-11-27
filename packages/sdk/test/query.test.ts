@@ -122,6 +122,25 @@ describe("db.find and space.find", () => {
     ]);
   });
 
+  test("where asks the core what equal asks, so both spellings read the same pages (RFC 0018, R3)", async () => {
+    const { core, requests } = fake();
+    const db = await connect(core, { model, lock });
+    const index = model.tasks.indexes.byStatusPriority;
+    await db.find(index.where("open").take(20));
+    await db.find(index.equal("open").take(20));
+    await db.find(index.take(20).where("done"));
+    const [where, equal, later] = finds(requests).map((r) => r.args);
+    expect(where).toEqual(equal);
+    expect(later).toEqual({
+      query: {
+        collection: "tasks",
+        index: "byStatusPriority",
+        equal: ["done"],
+        take: 20,
+      },
+    });
+  });
+
   test("a page gives its items as objects, its cursor redacted, and hasMore", async () => {
     const { core } = fake((r) =>
       r.call === "find"

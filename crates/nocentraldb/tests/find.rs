@@ -68,6 +68,28 @@ fn db_find_reads_pages_of_an_index_across_every_space_in_index_order() {
 }
 
 #[test]
+fn where_eq_reads_the_pages_equal_reads() {
+    // RFC 0018, R3: `where_eq` is the Rust spelling of TypeScript's
+    // `.where(...)`, and `equal` stays as the same call.
+    let db = open();
+    two_spaces(&db);
+    let index = db.index("tasks", "byStatusPriority").unwrap();
+    let by_where = index.clone().where_eq(["open"]).take(2);
+    let by_equal = index.equal(["open"]).take(2);
+
+    let (first, same) = (now(db.find(&by_where)).unwrap(), now(db.find(&by_equal)).unwrap());
+    assert_eq!(titles(&first), ["b1", "a3"]);
+    assert_eq!(first, same);
+
+    let after = |query: &nocentraldb::Query, page: &nocentraldb::Page| {
+        now(db.find(&query.clone().after(page.cursor.clone().unwrap()))).unwrap()
+    };
+    let (second, again) = (after(&by_where, &first), after(&by_equal, &same));
+    assert_eq!(titles(&second), ["b4", "a5"]);
+    assert_eq!(second, again);
+}
+
+#[test]
 fn an_index_without_an_equality_prefix_takes_no_values() {
     let db = open();
     two_spaces(&db);

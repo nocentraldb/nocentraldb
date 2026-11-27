@@ -48,6 +48,12 @@ export const model = nc.model({
 });
 `);
 
+/** V1 with its index in the named form of RFC 0018, R3: the same model. */
+const V1_NAMED = V1.replace(
+  'nc.index(["status", "priority"], { equal: 1 })',
+  'nc.index({ where: ["status"], orderBy: ["priority"] })',
+);
+
 /** V1 without a field: a change old clients cannot read. */
 const WITHOUT_PRIORITY = V1.replace("priority: nc.int(),", "").replace(
   /nc\.index\(\["status", "priority"\], \{ equal: 1 \}\)/,
@@ -162,6 +168,27 @@ describe("npx ncdb model build writes what the native ncdb writes", () => {
       "out/app.lock.json",
     );
     expect(run.code).toBe(0);
+  });
+
+  test("for V1 with its index in the named form, the same lock byte for byte (RFC 0018, R3)", () => {
+    const run = same({ "model.ts": V1_NAMED, "model.lock.json": lockV1 }, [
+      "model",
+      "build",
+    ]);
+    expect(run).toMatchObject({ code: 0, lock: lockV1 });
+    const first = same({ "model.ts": V1_NAMED }, ["model", "build"]);
+    const today = same({ "model.ts": V1 }, ["model", "build"]);
+    expect(first.lock).not.toBeNull();
+    expect(first.lock).toBe(today.lock);
+  });
+
+  test("for a named index on an unknown field, which it refuses", () => {
+    const run = same(
+      { "model.ts": V1_NAMED.replace('orderBy: ["priority"]', 'orderBy: ["rank"]') },
+      ["model", "build"],
+    );
+    expect(run).toMatchObject({ code: 1, lock: null });
+    expect(run.stderr).toContain("rank");
   });
 
   test("for a change old clients cannot read, which it refuses", () => {
