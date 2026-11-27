@@ -62,3 +62,35 @@ export const unknownDeleted = (
   }
   return [...found];
 };
+
+/** A rich-text field's vocabulary from the lock (NOC-553): its nodes and marks, without ProseMirror's `doc` and `text`. */
+export interface Vocabulary {
+  readonly nodes: readonly string[];
+  readonly marks: readonly string[];
+}
+
+/** The node and mark names `root` holds that `vocabulary` does not declare, sorted. */
+export const undeclared = (
+  root: Y.XmlFragment,
+  vocabulary: Vocabulary,
+): string[] => {
+  const nodes = new Set(vocabulary.nodes);
+  const marks = new Set(vocabulary.marks);
+  const found = new Set<string>();
+  const walk = (type: Y.XmlFragment | Y.XmlElement) => {
+    for (const child of type.toArray()) {
+      if (child instanceof Y.XmlElement) {
+        if (!nodes.has(child.nodeName)) found.add(child.nodeName);
+        walk(child);
+      } else if (child instanceof Y.XmlText) {
+        for (const op of child.toDelta() as { attributes?: object }[]) {
+          for (const mark of Object.keys(op.attributes ?? {})) {
+            if (!marks.has(mark)) found.add(mark);
+          }
+        }
+      }
+    }
+  };
+  walk(root);
+  return [...found].sort();
+};

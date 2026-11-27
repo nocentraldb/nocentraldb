@@ -20,9 +20,14 @@
 // - One UndoManager for the document, which every editor of the binding
 //   uses (Carsten, 2026-11-22, NOC-467).
 import * as Y from "yjs";
-import { type Known, unknownDeleted } from "./guard.ts";
+import {
+  type Known,
+  undeclared,
+  unknownDeleted,
+  type Vocabulary,
+} from "./guard.ts";
 
-export type { Known } from "./guard.ts";
+export type { Known, Vocabulary } from "./guard.ts";
 
 /** The pause in typing after which the binding writes (RFC 0013, "An editor: the binding"). */
 export const PAUSE_MS = 500;
@@ -89,6 +94,8 @@ const FROM_CORE = Symbol("nocentraldb: from the core");
 export interface BindOptions {
   /** The names the editor knows, which the guard checks deletions against; without it, the guard is off. */
   readonly known?: () => Known;
+  /** The field's vocabulary from the lock; a document with other names is reported as not fully shown. */
+  readonly vocabulary?: Vocabulary;
 }
 
 /** Opens the binding's document on what the core answered. `refused` hears of a write the core refused; the binding then writes nothing more, its status is `readOnly`, and it loads its document again from the core (`onReload`). */
@@ -153,9 +160,21 @@ export const bind = (
   // Pulls asked for while a composition is open, run as one at its end.
   let waiting: { resolve: () => void; reject: (e: unknown) => void }[] = [];
   let pullCap: ReturnType<typeof setTimeout> | undefined;
+  /** Reports the document as not fully shown while it holds names the vocabulary does not declare. */
+  const checkVocabulary = () => {
+    if (!options.vocabulary || status.status !== "shown") return;
+    const names = undeclared(doc.getXmlFragment(ROOT), options.vocabulary);
+    if (names.length === 0) return;
+    report({
+      status: "notFullyShown",
+      reason: `the content uses names this version of the app does not declare: ${names.join(", ")}`,
+    });
+  };
+
   const pull = async () => {
     const missing = await port.pull(Y.encodeStateVector(doc));
     Y.applyUpdate(doc, missing, FROM_CORE);
+    checkVocabulary();
   };
   const pullWaiting = () => {
     clearTimeout(pullCap);
@@ -247,6 +266,7 @@ export const bind = (
   }
 
   load(opened.state);
+  checkVocabulary();
 
   return {
     get doc() {
