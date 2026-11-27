@@ -15,7 +15,7 @@ ignore = [
   { id = "RUSTSEC-2026-0370", reason = "NOC-408, expires 2027-02-21: zvariant 5 via the Linux keystore" },
   { id = "RUSTSEC-2026-0371", reason = "NOC-408, expires 2027-02-21: zbus_names 5 via the Linux keystore" },
   { id = "RUSTSEC-2026-0372", reason = "NOC-408, expires 2027-02-21: zvariant_derive 5 via the Linux keystore" },
-  # NOC-544, expires 2027-02-21: smallstr through yrs 0.28.2 (rich text in
+  # NOC-545, expires 2027-03-31: smallstr through yrs 0.28.2 (rich text in
   # ncdb-core). Removed when a yrs release drops smallstr.
-  { id = "RUSTSEC-2026-0215", reason = "NOC-544, expires 2027-02-21: smallstr via yrs" },
+  { id = "RUSTSEC-2026-0215", reason = "NOC-545, expires 2027-03-31: smallstr via yrs" },
 ]
