@@ -1,0 +1,6 @@
+{
+  "id": "ts.indexFieldInWhereAndOrderBy",
+  "kind": "ts",
+  "text": "{collection}.{key}: the field {field} is in both where and orderBy; a query fixes a where field, so it cannot order the result.",
+  "when": "ncdb model build, on a model whose index in the named form names one field in both where and orderBy (RFC 0018, \"Named equality and order in an index\")."
+}

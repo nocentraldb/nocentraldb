@@ -76,7 +76,7 @@ export const model = nc.model({
     },
     {
       indexes: {
-        byStatus: nc.index(["status", "title"], { equal: 1 }),
+        byStatus: nc.index({ where: ["status"], orderBy: ["title"] }),
       },
     },
   ),
@@ -241,7 +241,7 @@ import { model } from "../model.ts";
 const lock: unknown = await (await fetch("/model.lock.json")).json();
 const db = await nc.open({ model, lock, name: "tasks" });
 
-const open = model.tasks.indexes.byStatus.equal("open").take(20);
+const open = model.tasks.indexes.byStatus.where("open").take(20);
 let page = await db.find(open);
 for (;;) {
   for (const task of page.items) {
@@ -252,7 +252,7 @@ for (;;) {
 }
 ```
 
-`equal` takes as many values as the index's `equal` option allows, typed by the fields they fix: here one status. `db.find` reads every space of the database. An index declared with `scope: "space"` reads one space at a time, through `space.find`.
+`where` takes one value for each of the index's `where` fields, typed by the fields they fix: here one status. `db.find` reads every space of the database. An index declared with `scope: "space"` reads one space at a time, through `space.find`.
 
 ## 7. Follow a query
 
@@ -266,7 +266,7 @@ const lock: unknown = await (await fetch("/model.lock.json")).json();
 const db = await nc.open({ model, lock, name: "tasks" });
 
 const list = document.querySelector("#open");
-const open = model.tasks.indexes.byStatus.equal("open").take(50);
+const open = model.tasks.indexes.byStatus.where("open").take(50);
 const stop = db.subscribe(open, (page) => {
   list?.replaceChildren(
     ...page.items.map((task) => {

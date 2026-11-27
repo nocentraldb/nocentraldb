@@ -67,7 +67,7 @@ export const model = nc.model({
     },
     {
       indexes: {
-        byStatusPriority: nc.index(["status", "priority"], { equal: 1 }),
+        byStatusPriority: nc.index({ where: ["status"], orderBy: ["priority"] }),
       },
     },
   ),
@@ -117,7 +117,7 @@ await project.write((tx) => {
 A query names a declared index, fixes its leading fields and returns a page in index order, with a cursor for the next one. A subscription calls the listener with the page at once and again after every change that may alter it. Neither waits for the network:
 
 ```ts
-const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
+const query = model.tasks.indexes.byStatusPriority.where("open").take(50);
 const page = await db.find(query);
 if (page.cursor) {
   const more = await db.find(query.after(page.cursor));
