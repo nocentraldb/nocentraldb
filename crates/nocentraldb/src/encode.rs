@@ -85,8 +85,14 @@ impl Site<'_> {
                 Ok(vec![self.operation(basic, &write)])
             }
             (Field::Link(link), FieldState::Basic(state), Intent::Set(value)) => {
-                let target = match value.0 {
+                // A link takes a reference too, and refuses one into another
+                // space (RFC 0018, "Existing link fields read as references").
+                let target = match &value.0 {
                     Repr::Clear => None,
+                    Repr::Ref(reference) => Some(Target {
+                        space: reference.space.0,
+                        object: reference.id.0,
+                    }),
                     _ => Some(self.target(value)?),
                 };
                 let write = link
@@ -95,12 +101,15 @@ impl Site<'_> {
                 Ok(vec![self.operation(link, &write)])
             }
             (Field::Ref(reference), FieldState::Basic(state), Intent::Set(value)) => {
+                // A bare object id names the written object's own space
+                // (RFC 0018, "One function, two cases").
                 let target = match value.0 {
                     Repr::Clear => None,
                     Repr::Ref(reference) => Some(Target {
                         space: reference.space.0,
                         object: reference.id.0,
                     }),
+                    Repr::Id(_) => Some(self.target(value)?),
                     _ => return Err(invalid()),
                 };
                 let write = reference.set(state, id, author, stamp, target);

@@ -1,0 +1,6 @@
+{
+  "id": "core.anchorLeaseMismatch",
+  "kind": "core",
+  "text": "the lease is for another object",
+  "when": "When the lease an edit goes through is for another object than its version. An agent's anchored rich-text edit (RFC 0013, step 5), behind the cfg ncdb_rich_text; not shown to a developer today, the SDK names it (NOC-565)."
+}

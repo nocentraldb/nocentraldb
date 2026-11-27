@@ -121,7 +121,10 @@ impl From<bool> for Value {
 /// space id and object id (RFC 0004, "References"; Carsten, 2026-11-16,
 /// NOC-354). Written with `Value::from`, read with `get::<Reference>`. It
 /// names the target and holds nothing of it: an app that wants the target
-/// reads it in its space.
+/// reads it in its space. A reference field also takes an [`ObjectId`],
+/// which names the written object's own space, and a link field takes a
+/// `Reference` into the object's own space and refuses one into another
+/// with `InvalidValue` (RFC 0018, "One function, two cases").
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct Reference {

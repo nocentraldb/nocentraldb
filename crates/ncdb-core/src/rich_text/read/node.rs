@@ -134,7 +134,7 @@ fn mark(name: &str, value: &Any) -> Option<Mark> {
 
 /// The mark's name: y-prosemirror names a mark that may occur more than
 /// once on a run with a suffix of `--` and eight characters of a hash.
-fn mark_name(attribute: &str) -> &str {
+pub(crate) fn mark_name(attribute: &str) -> &str {
     let bytes = attribute.as_bytes();
     if bytes.len() > 10 {
         let (name, suffix) = attribute.split_at(attribute.len() - 10);

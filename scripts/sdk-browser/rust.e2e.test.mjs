@@ -217,11 +217,15 @@ test(`a ${engine} tab and a Rust device share a space through the local relay an
     await rust.ask("synced");
     await tab.evaluate(() => window.synced());
 
-    // Both hold both writes once each has the other's change: the tags
-    // of each, and the tab's status.
+    // Both hold all writes once each has the other's changes: the tags of
+    // each, the tab's status, and the Rust device's reference. `update`
+    // and `refer` are two changes of the Rust device, and the tab may fold
+    // the first before the second arrives (NOC-577), so it waits on each.
     const ids = [shared, ofTab];
     const both = (tasks) =>
-      tasks[0]?.tags.join() === "rust,x,y" && tasks[1]?.status === "done";
+      tasks[0]?.tags.join() === "rust,x,y" &&
+      tasks[0]?.customer?.id === projects[0] &&
+      tasks[1]?.status === "done";
     const start = Date.now();
     let onRust;
     let onTab;

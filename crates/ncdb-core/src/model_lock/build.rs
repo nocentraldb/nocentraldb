@@ -21,8 +21,8 @@ use super::read::{
     whole,
 };
 use super::{
-    Collection, Deprecation, Field, Index, IndexField, LockError, ModelId, ModelInfo, ModelLock,
-    Named, Plugin, Refusal, check,
+    Collection, Deprecation, Field, Index, IndexField, Kind, LockError, ModelId, ModelInfo,
+    ModelLock, Named, Person, Plugin, Refusal, check,
 };
 
 /// The description of a schema: what it declares, without history.
@@ -221,6 +221,7 @@ fn collection(draft: &DraftCollection, old: Option<&Collection>, version: u64) -
         .iter()
         .map(|(name, field)| {
             let before = old.and_then(|o| o.fields.get(name));
+            let kind = locked_kind(draft, name, &field.kind, before);
             let deprecated = deprecation(
                 field.deprecated.as_ref().map(|d| &d.reason),
                 before.and_then(|b| b.deprecated.as_ref()),
@@ -230,6 +231,7 @@ fn collection(draft: &DraftCollection, old: Option<&Collection>, version: u64) -
             (
                 name.clone(),
                 Field {
+                    kind,
                     since,
                     deprecated,
                     ..field.clone()
@@ -267,6 +269,31 @@ fn collection(draft: &DraftCollection, old: Option<&Collection>, version: u64) -
         computed: named(&draft.computed, old.map(|o| &o.computed)),
         views: named(&draft.views, old.map(|o| &o.views)),
         indexes,
+    }
+}
+
+/// The type the lock gives the field `name` that `draft` declares as
+/// `kind` (RFC 0018, "One function, two cases" and "Existing link fields
+/// read as references"). A reference is locked as a link, with its targets,
+/// when the lock already has the field as a link, or when it is new and is
+/// the `person` of a personal field of its collection: a person key lives
+/// in one space, and a link value cannot name another. Every other type is
+/// locked as declared, so a field locked as a reference keeps its type and
+/// the checks refuse it as a person.
+fn locked_kind(draft: &DraftCollection, name: &str, kind: &Kind, before: Option<&Field>) -> Kind {
+    let Kind::Ref(targets) = kind else {
+        return kind.clone();
+    };
+    let is_person = || {
+        draft
+            .fields
+            .values()
+            .any(|f| matches!(&f.personal, Some(Person::Link(person)) if person == name))
+    };
+    match before.map(|b| &b.kind) {
+        Some(Kind::Link(_)) => Kind::Link(targets.clone()),
+        None if is_person() => Kind::Link(targets.clone()),
+        _ => kind.clone(),
     }
 }
 

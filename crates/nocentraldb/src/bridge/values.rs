@@ -59,18 +59,26 @@ pub(super) fn equal(
 /// it. A whole number for a float field, or for an element of a set of
 /// floats, is that float: canonical CBOR writes 2.0 as the integer 2. An
 /// object id for a link, or for an element of many links, arrives as its
-/// 32 hex digits and is that object id (NOC-353). A reference arrives as
-/// `{ space, id }`, as a read gives it (NOC-354). A day arrives as its
+/// 32 hex digits and is that object id (NOC-353); a link also takes
+/// `{ space, id }` (RFC 0018). A reference arrives as `{ space, id }`, as a
+/// read gives it (NOC-354). A day arrives as its
 /// `"YYYY-MM-DD"` text, a point in time as its milliseconds (RFC 0005,
 /// "Days and points in time").
 fn typed(model: &Model, collection: &str, name: &str, value: &Value) -> Result<Field, Failed> {
     let kind = model.field(collection, name);
-    match kind {
-        Some(ModelField::Ref(_)) => return as_reference(value),
-        Some(ModelField::Basic(BasicValue { kind: Kind::Date })) => return as_day(value),
-        Some(ModelField::Basic(BasicValue {
-            kind: Kind::Timestamp,
-        })) => return as_point(value),
+    match (kind, value) {
+        (Some(ModelField::Ref(_)), _) => return as_reference(value),
+        // A field written nc.ref that the lock keeps as a link (RFC 0018,
+        // "Existing link fields read as references"); the SDK refuses a
+        // space other than the object's own.
+        (Some(ModelField::Link(_)), Value::Map(_)) => return as_reference(value),
+        (Some(ModelField::Basic(BasicValue { kind: Kind::Date })), _) => return as_day(value),
+        (
+            Some(ModelField::Basic(BasicValue {
+                kind: Kind::Timestamp,
+            })),
+            _,
+        ) => return as_point(value),
         _ => {}
     }
     let value = field(value)?;
