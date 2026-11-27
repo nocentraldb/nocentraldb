@@ -173,9 +173,9 @@ tasks:
     # per line, so git diff shows each change; the generated
     # crates/nocentraldb/src/texts/, crates/ncdb/src/texts.rs,
     # packages/sdk/src/texts.ts and crates/ncdb-core/src/texts/ equal to the
-    # files; no text written in the
-    # Rust SDK's (its bridge too), the TypeScript SDK's, the command line's
-    # or the core's code (T6); and every text used. A
+    # files, and none of them over the limit for a file (NOC-541); no text
+    # written in the Rust SDK's (its bridge too), the TypeScript SDK's, the
+    # command line's or the core's code (T6); and every text used. A
     # TypeScript text's code is one RFC 0009's error table lists (T3).
     command: "node scripts/texts.mjs --check"
     inputs:
@@ -184,11 +184,14 @@ tasks:
       - "/scripts/texts-ts.mjs"
       - "/scripts/texts-core.mjs"
       - "/scripts/texts-review.mjs"
+      - "/scripts/texts-files.mjs"
+      - "/scripts/texts-size.mjs"
       - "/crates/nocentraldb/src/**/*"
       - "/crates/ncdb/src/**/*"
       - "/crates/ncdb-core/src/**/*"
       - "/packages/sdk/src/**/*"
       - "/docs/rfc/0009-sdk-api.md"
+      - "/factory/CONFIG.md"
   test-changes:
     # NOC-508: a pull request that removes a test, skips one, removes an
     # assertion or changes an expected value passes only with a

@@ -191,8 +191,13 @@ test("the bridge's errors generate a file of their own, bridge.rs, without their
     /pub\(crate\) fn no_such_call\(call: impl std::fmt::Display\) -> String/,
   );
   assert.match(files["bridge.rs"], /pub\(crate\) const OPEN_ALREADY: &str =/);
-  assert.doesNotMatch(files["error.rs"], /OPEN_ALREADY|no_such_call/);
-  assert.match(files["error.rs"], /NO_SUCH_SPACE/);
+  // The error texts stand in error/ and its shards (NOC-541).
+  const errors = Object.keys(files)
+    .filter((name) => name.startsWith("error/"))
+    .map((name) => files[name])
+    .join("\n");
+  assert.doesNotMatch(errors, /OPEN_ALREADY|no_such_call/);
+  assert.match(errors, /NO_SUCH_SPACE/);
   const module = "crates/nocentraldb/src/texts";
   const uses = [
     "crates/nocentraldb/src/bridge/mod.rs",
