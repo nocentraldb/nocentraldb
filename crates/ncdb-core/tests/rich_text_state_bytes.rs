@@ -3,7 +3,9 @@
 //! updates in any order hold the same bytes, also when a value holds a map
 //! of several attributes, as every TipTap link mark and many node
 //! attributes do. Yrs keeps such maps in hash maps, whose order differs
-//! from map to map.
+//! from map to map. And the rule for the same id twice (RFC 0013) takes
+//! items with the same content as the same, whatever order their writer
+//! wrote a map in.
 #![cfg(ncdb_rich_text)]
 
 mod rich_text_support;
@@ -17,10 +19,11 @@ use ncdb_core::cbor::{Key, Value};
 use ncdb_core::change::Operation;
 use ncdb_core::clock::Hlc;
 use ncdb_core::field::FieldType;
+use ncdb_core::field::Outcome;
 use ncdb_core::field_op::{Encoding, Origin};
 use ncdb_core::ids::{ChangeId, MemberId, ObjectId, OperationId};
-use ncdb_core::rich_text::{Edit, RichText, State, client_id};
-use rich_text_support::{add_block, doc, link, mark, set_attribute_value, type_text};
+use ncdb_core::rich_text::{Edit, RichText, State, client_id, update};
+use rich_text_support::{add_block, doc, link, mark, set_attribute_value, state, type_text};
 use yrs::Any;
 
 const ALICE: MemberId = MemberId([0xa; 32]);
@@ -133,4 +136,58 @@ fn a_node_attribute_holding_a_map_folds_to_the_same_bytes_in_every_order() {
         type_text(&alice, 0, 4, " here"),
     ];
     assert_one_state(&updates);
+}
+
+/// The link's attributes as the key-order writer writes them, and the same
+/// attributes in the reverse order, as another writer may: equal lengths.
+const SORTED: &str = r#"{"class":null,"href":"https://example.com/a","rel":"noopener noreferrer nofollow","target":"_blank"}"#;
+const REVERSED: &str = r#"{"target":"_blank","rel":"noopener noreferrer nofollow","href":"https://example.com/a","class":null}"#;
+
+/// `update` with the link's attributes written in the reverse order.
+fn reversed(update: &[u8]) -> Vec<u8> {
+    let at = update
+        .windows(SORTED.len())
+        .position(|w| w == SORTED.as_bytes())
+        .expect("the update holds the link's attributes in key order");
+    let mut out = update.to_vec();
+    out[at..at + SORTED.len()].copy_from_slice(REVERSED.as_bytes());
+    out
+}
+
+/// Alice writes a paragraph with a link as one update, in key order; a
+/// writer that encodes maps in another order sends the same items again
+/// with the link's attributes reversed, as a member restored from a
+/// backup does; then Alice types on.
+fn restored_writer() -> Vec<Vec<u8>> {
+    let alice = doc(client_id(&ALICE, &NONCE));
+    let canonical = |u: Vec<u8>| update::canonical(&u).expect("an update Yrs wrote");
+    add_block(&alice, "paragraph", "Ship it on Friday");
+    mark(&alice, 0, 0, 7, "link", link("https://example.com/a"));
+    let first = canonical(state(&alice));
+    let again = reversed(&first);
+    let typed = canonical(type_text(&alice, 0, 17, " please"));
+    vec![first, again, typed]
+}
+
+#[test]
+fn a_map_in_another_key_order_gives_the_same_digest() {
+    let updates = restored_writer();
+    assert_ne!(updates[0], updates[1]);
+    assert_eq!(
+        update::read(&updates[1]).unwrap().runs,
+        update::read(&updates[0]).unwrap().runs
+    );
+}
+
+#[test]
+fn a_writer_that_sends_the_same_items_with_a_map_in_another_key_order_does_not_park() {
+    let edits = edits(&restored_writer());
+    let mut state = State::default();
+    for edit in &edits {
+        assert_eq!(RichText.try_apply(&mut state, edit), Ok(()));
+    }
+    for edit in &edits {
+        assert_eq!(RichText.outcome(&state, edit.id), Some(Outcome::Visible));
+    }
+    assert!(RichText.read(&state).markdown.contains("Friday please"));
 }
