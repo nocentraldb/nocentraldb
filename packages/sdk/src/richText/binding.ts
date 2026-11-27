@@ -20,6 +20,9 @@
 // - One UndoManager for the document, which every editor of the binding
 //   uses (Carsten, 2026-11-22, NOC-467).
 import * as Y from "yjs";
+import { type Known, unknownDeleted } from "./guard.ts";
+
+export type { Known } from "./guard.ts";
 
 /** The pause in typing after which the binding writes (RFC 0013, "An editor: the binding"). */
 export const PAUSE_MS = 500;
@@ -59,7 +62,10 @@ export type RichTextStatus =
   | { readonly status: "readOnly" };
 
 export interface Binding {
+  /** The document the editor binds; a reload replaces it (`onReload`). */
   readonly doc: Y.Doc;
+  /** Calls `listener` with the new document after a reload; answers a function that stops it. */
+  onReload(listener: (doc: Y.Doc) => void): () => void;
   /** The status now. */
   readonly status: RichTextStatus;
   /** Calls `listener` with each new status; answers a function that stops it. */
@@ -79,25 +85,48 @@ export interface Binding {
 /** The origin under which the binding applies what the core folded. */
 const FROM_CORE = Symbol("nocentraldb: from the core");
 
+/** What the binding is opened with besides the core's answer. */
+export interface BindOptions {
+  /** The names the editor knows, which the guard checks deletions against; without it, the guard is off. */
+  readonly known?: () => Known;
+}
+
 /** Opens the binding's document on what the core answered. `refused` hears of a write the core refused; the binding then writes nothing more and its status is `readOnly`. */
 export const bind = (
   opened: Opened,
   port: RichTextPort,
   refused: (error: unknown) => void = () => {},
+  options: BindOptions = {},
 ): Binding => {
-  const doc = new Y.Doc();
-  const root = doc.getXmlFragment(ROOT);
-  // The state may hold items of the leased client id, written before
-  // under the same lease. Applied under that id, Yjs would draw a new one
-  // ("another client seems to be using it"), so the id is set after.
-  Y.applyUpdate(doc, opened.state, FROM_CORE);
-  doc.clientID = opened.client;
-  // It tracks the edits made without an origin; an editor adds its own
-  // (TipTap's sync plugin key, with @nocentraldb/tiptap). It never tracks
-  // FROM_CORE, so what another member wrote is never taken back.
-  const undoManager = new Y.UndoManager(root, {
-    trackedOrigins: new Set([null]),
-  });
+  let doc: Y.Doc;
+  let undoManager: Y.UndoManager;
+  // Unknown names a local edit not yet written deleted (the guard).
+  let deletes: string[] = [];
+  let trips = 0;
+  const reloadListeners = new Set<(doc: Y.Doc) => void>();
+
+  /** A document under the leased client id, loaded from `state`. */
+  const load = (state: Uint8Array) => {
+    const next = new Y.Doc();
+    next.clientID = opened.client;
+    const root = next.getXmlFragment(ROOT);
+    Y.applyUpdate(next, state, FROM_CORE);
+    // It tracks the edits made without an origin; an editor adds its own
+    // (TipTap's sync plugin key, with @nocentraldb/tiptap). It never tracks
+    // FROM_CORE, so what another member wrote is never taken back.
+    const origins = undoManager?.trackedOrigins ?? new Set([null]);
+    undoManager = new Y.UndoManager(root, { trackedOrigins: new Set(origins) });
+    root.observeDeep((events, tr) => {
+      if (next !== doc || tr.origin === FROM_CORE || !options.known) return;
+      const names = unknownDeleted(events, options.known());
+      deletes = [...new Set([...deletes, ...names])];
+    });
+    next.on("update", (update: Uint8Array, origin: unknown) => {
+      if (next !== doc) return;
+      edited(update, origin);
+    });
+    doc = next;
+  };
 
   let unwritten: Uint8Array[] = [];
   let pause: ReturnType<typeof setTimeout> | undefined;
@@ -150,8 +179,37 @@ export const bind = (
     pause = hold = undefined;
   };
 
+  /** The guard refused the edits not yet written: reload once, then stop. */
+  const refuse = async () => {
+    const names = deletes;
+    deletes = [];
+    unwritten = [];
+    trips += 1;
+    if (trips > 1) {
+      stopped = true;
+      report({ status: "readOnly" });
+      return;
+    }
+    load(await port.pull(Y.encodeStateVector(new Y.Doc())));
+    report({
+      status: "notFullyShown",
+      reason: `the editor would delete parts it does not know: ${names.join(", ")}`,
+    });
+    for (const listener of [...reloadListeners]) {
+      try {
+        listener(doc);
+      } catch {
+        // A listener that throws misses nothing the others hear.
+      }
+    }
+  };
+
   const write = (): Promise<void> => {
     clearTimers();
+    if (!stopped && deletes.length > 0) {
+      writing = writing.then(refuse);
+      return writing;
+    }
     if (stopped || unwritten.length === 0) return writing;
     const update = Y.mergeUpdates(unwritten);
     unwritten = [];
@@ -168,7 +226,7 @@ export const bind = (
     return writing;
   };
 
-  doc.on("update", (update: Uint8Array, origin: unknown) => {
+  function edited(update: Uint8Array, origin: unknown) {
     if (origin === FROM_CORE || stopped) return;
     unwritten.push(update);
     clearTimeout(pause);
@@ -177,11 +235,21 @@ export const bind = (
       if (!composing) void write();
     }, PAUSE_MS);
     hold ??= setTimeout(() => void write(), MAX_HOLD_MS);
-  });
+  }
+
+  load(opened.state);
 
   return {
-    doc,
-    undoManager,
+    get doc() {
+      return doc;
+    },
+    get undoManager() {
+      return undoManager;
+    },
+    onReload: (listener) => {
+      reloadListeners.add(listener);
+      return () => reloadListeners.delete(listener);
+    },
     writable: opened.writable,
     get status() {
       return status;
