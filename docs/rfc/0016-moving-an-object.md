@@ -21,7 +21,7 @@ It builds on the object model of [RFC 0002](0002-change-and-log-format.md) and [
 | What is a move? | Two changes, one in each space. The new space gets the object's current state as a create; the old space gets a **move**, an operation on the object that says where it went. A change never spans two spaces, so a move is not atomic, and the SDK writes the new space first. |
 | Does the object keep its id? | Yes. The id stays; only the space changes. The old space keeps a **trace** under the same id, which reads as moved and names the new space. |
 | What happens to its history? | It stays in the old space's log, signed as it was. The new space's history starts at the move. Edits to the object that the old space receives after the move, from members that had not seen it, are **later edits**: every member of the old space identifies them the same way, and the app can carry them over. |
-| Its links and references? | Links between objects moved together stay. A link to an object left behind is cleared in the new space and counted. A link in the old space to the moved object reads `moved`, with the new space. A reference to the object follows the trace when the member holds the old space. |
+| Its links and references? | Links between objects moved together stay, and references between them are written with the new space. A link to an object left behind is cleared in the new space and counted; a reference to one keeps naming the old space. A link, or a reference in the same space, to the moved object reads `moved`, with the new space. A reference from another space follows the trace when the member holds the old space. |
 | Its personal fields? | Sealed again under a person key of the new space, for the same person id, so one erasure still finds every copy. The person's own object must move along or already be in the new space. They are built after the rest. |
 | Its rich-text fields? | Re-created in the new space: the mover writes the document its copy reads as one new rich-text update, under a client id of its own. The text, its marks and its nodes arrive; who wrote which part stays in the old space's log. |
 | Erasure? | An erasure that reaches both spaces shreds the person's key in each. A move erases nothing in the old space: the values it held stay sealed there under the old person key. |
@@ -131,7 +131,9 @@ Ana's phone moves the note to space T while her laptop, offline, moves it to spa
 
 ### Links in the moved object
 
-A link points only into its own space ([RFC 0004, "Links"](0004-merge-rules-basic-types.md#links)). After the move, a link from the moved object to an object that moved with it stays valid, because the target kept its id. A link to an object left behind is cleared in the new space, and the move counts it in its result as `clearedLinks`, the same rule as an ad-hoc copy ([RFC 0009, "Sub-agents and ad-hoc spaces"](0009-sdk-api.md#sub-agents-and-ad-hoc-spaces)). The link stays readable on the trace in the old space; an app that wants it moves the target along. A reference in the moved object stays as it is: it names its target's space, and it resolves in the new space as it did in the old.
+A link points only into its own space ([RFC 0004, "Links"](0004-merge-rules-basic-types.md#links)). After the move, a link from the moved object to an object that moved with it stays valid, because the target kept its id. A link to an object left behind is cleared in the new space, and the move counts it in its result as `clearedLinks`, the same rule as an ad-hoc copy ([RFC 0009, "Sub-agents and ad-hoc spaces"](0009-sdk-api.md#sub-agents-and-ad-hoc-spaces)). The link stays readable on the trace in the old space; an app that wants it moves the target along.
+
+A reference in the moved object whose target moves with it is written in the new space's create with the new space, so a reference between two objects moved together stays in-space and reads `ok` for a member that holds only the new space, as a link between them does ([RFC 0018, "When the source or the target moves"](0018-model-api-for-placement.md#when-the-source-or-the-target-moves)). A reference to an object left behind keeps naming the old space: it becomes a cross-space reference and is not cleared, unlike a link. A reference into a third space stays as written. A field locked as `ncdb/link` and written `nc.ref` in the schema is a link here, cleared and counted as one. Leaving every reference as written was not taken: a reference between two objects moved together would name the old space, so a member of the new space only would read it as `notAccessible`.
 
 **Options not taken.**
 
@@ -148,7 +150,7 @@ A link in the old space to the moved object finds the trace, and reads a new sta
 
 ### References to the moved object
 
-A reference names a space and an object ([RFC 0004, "How a reference resolves"](0004-merge-rules-basic-types.md#how-a-reference-resolves)). After a move, a reference that names the old space finds the trace, and resolution follows it: the SDK follows the traces, up to 8 in a row so that a cycle of moves ends, and resolves the reference to `ok`, `notAccessible` or `missing` where the object is now. A reference keeps working with no write. Resolution is already local to each member and never part of the shared state, so following a trace breaks no convergence, and the three states stay as RFC 0005 named them. The read gives the space where it found the object, so an app that wants the reference to name the new space writes it once, as it writes any reference. A member that does not hold the old space cannot follow the trace and reads `notAccessible`, even when it holds the new space.
+A reference names a space and an object ([RFC 0004, "How a reference resolves"](0004-merge-rules-basic-types.md#how-a-reference-resolves)). A reference held in the old space itself to the moved object is in-space, and reads `moved` with the new space, as a link does. After a move, a reference from another space that names the old space finds the trace, and resolution follows it: the SDK follows the traces, up to 8 in a row so that a cycle of moves ends, and resolves the reference to `ok`, `notAccessible` or `missing` where the object is now. A reference keeps working with no write. Resolution is already local to each member and never part of the shared state, so following a trace breaks no convergence, and the three states stay as RFC 0005 named them. The read gives the space where it found the object, so an app that wants the reference to name the new space writes it once, as it writes any reference. A member that does not hold the old space cannot follow the trace and reads `notAccessible`, even when it holds the new space.
 
 **Options not taken.**
 
@@ -263,6 +265,7 @@ Stated plainly (principle 4):
 - **Two moves at once leave two live objects**, in two spaces, and only members of the old space can tell.
 - **Later edits do not follow by themselves.** They stay in the old space until the app carries them over; a later rich-text edit cannot be carried over by the SDK at all.
 - **A rich-text field starts again at the move.** Its document arrives, but every item in the new space names the mover; who wrote which part stays in the old space. A written rich-text document cannot move back yet.
+- **References to a moved object do not follow by themselves.** A member that does not hold the old space reads a reference from another space to the moved object as `notAccessible` until a member of the referencing space writes it with the new space.
 - **Old clients see the object as live** in the old space until they upgrade, and their edits there become later edits.
 
 ## Agreement with GENESIS.md
@@ -297,6 +300,7 @@ It adds an operation to [RFC 0002](0002-change-and-log-format.md)'s format and [
 - **2026-11-23 · Later edits are computed from the old space's log when the app asks, not stored on the trace.** (NOC-475)
 - **2026-11-27 · A move re-creates a rich-text field's document from its tree under a client id of the mover; carrying it as it is comes later, as an option per move.** ([decision](../../factory/decisions/2026-11-27-NOC-543-a-move-or-ad-hoc-copy-re-creates-a-rich-text-document-under-a-client-id-of-the-mover.md))
 - **2026-11-27 · A move back of a written rich-text document is refused until a move back writes only the difference (NOC-581).** ([decision](../../factory/decisions/2026-11-27-NOC-560-a-move-back-of-a-written-rich-text-document-is-refused-until-it-writes-only-the-difference.md))
+- **2026-11-27 · A move writes references among the moved objects with the new space, and keeps references to objects left behind.** ([decision](../../factory/decisions/2026-11-27-NOC-552-a-move-writes-references-among-the-moved-objects-with-the-new-space-and-keeps-references-to-objects-left-behind.md))
 
 ## History
 
@@ -304,3 +308,4 @@ It adds an operation to [RFC 0002](0002-change-and-log-format.md)'s format and [
 - 2026-11-23 · Its status line names nobody who decided; the decision log records it (NOC-454, #449)
 - 2026-11-23 · The move is operation 6, later edits are computed from the log, a set plugin field is refused for now, and the decided RFCs describe the move (NOC-474, #474)
 - 2026-11-27 · A move and an ad-hoc copy re-create a rich-text field's document under the mover's client id, and a move back of a written one is refused for now (NOC-539, NOC-543, NOC-560, #520)
+- 2026-11-27 · A move writes references among the moved objects with the new space; an in-space reference to the moved object reads moved, as RFC 0018 decided (NOC-568)
