@@ -99,6 +99,15 @@ pub struct SpaceStatus {
     /// key"; the owner decided the name on NOC-222). The member ignores
     /// such a record.
     pub bad_person_key_records: Vec<Fingerprint>,
+    /// How many person keys the space's log announces that this member
+    /// does not hold and that no shred destroyed (RFC 0009, "How a
+    /// personal field reads"; NOC-547). Every personal value sealed under
+    /// one of them reads as unset until the member holds its key: a key
+    /// another member drew and whose record this member has not fetched
+    /// yet, or one this device lost, as a device without a relay did
+    /// before it kept its person keys (0.2.0-alpha.22 and earlier). `0`
+    /// when every personal value of the space can be read.
+    pub missing_person_keys: u32,
     /// The erasures of the space that are still provisional, in change id
     /// order: in a space whose members all belong to one account, the
     /// performer's own account signed the shred off, and no finalize or
@@ -229,6 +238,7 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
         exposed: false,
         waiting_for_key: false,
         bad_person_key_records: Vec::new(),
+        missing_person_keys: 0,
         provisional_erasures: Vec::new(),
         only_member: false,
     };

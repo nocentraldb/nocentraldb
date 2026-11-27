@@ -118,6 +118,8 @@ mod fold_feed_tests;
 mod moving_tests;
 #[cfg(test)]
 mod page_limit_tests;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod personal_reopen_tests;
 #[cfg(test)]
 mod personal_write_tests;
 #[cfg(test)]
