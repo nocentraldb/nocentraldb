@@ -101,13 +101,13 @@ fn view_of(space: SpaceId, changes: &[&Change]) -> View {
     view
 }
 
-/// The body's stored state, its bytes and what it reads as XML.
+/// The body's stored state, its bytes and what it reads as Markdown.
 fn body(view: &View, space: SpaceId) -> (Vec<u8>, String) {
     let row = view.get(space, TASK, T).unwrap().expect("the task");
     let Some(FieldState::RichText(state)) = row.fields.get(BODY) else {
         panic!("the body holds no rich-text state");
     };
-    (RichText.state_bytes(state), RichText.read(state).xml)
+    (RichText.state_bytes(state), RichText.read(state).markdown)
 }
 
 fn parked(position: u64) -> State {

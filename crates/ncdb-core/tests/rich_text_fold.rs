@@ -247,7 +247,7 @@ fn edits_fold_to_the_same_state_bytes_in_any_order() {
     let other = fold(&[&a2, &b1, &a1]);
     assert_eq!(RichText.state_bytes(&one), RichText.state_bytes(&other));
     assert_eq!(RichText.read(&one), RichText.read(&other));
-    assert!(RichText.read(&one).xml.contains("Hello world"));
+    assert!(RichText.read(&one).markdown.contains("Hello world"));
 }
 
 #[test]
@@ -262,10 +262,10 @@ fn content_whose_dependencies_have_not_arrived_waits_and_then_shows() {
         origin(2, ALICE, 11),
     );
     let mut state = fold(&[&a2]);
-    assert!(!RichText.read(&state).xml.contains("world"));
+    assert!(!RichText.read(&state).markdown.contains("world"));
     assert_eq!(RichText.outcome(&state, a2.id), Some(Outcome::Visible));
     RichText.apply(&mut state, &a1);
-    assert!(RichText.read(&state).xml.contains("Hello world"));
+    assert!(RichText.read(&state).markdown.contains("Hello world"));
 }
 
 #[test]
