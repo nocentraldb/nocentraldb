@@ -31,6 +31,7 @@ import { Cursor, queryState } from "./query.ts";
 import { relayAskOf } from "./relayAsk.ts";
 import { notify, spaceStatusOf, syncStatusOf } from "./reports.ts";
 import { spaceListOf } from "./spaceList.ts";
+import { recordOps } from "./spaceTx.ts";
 import type { SpaceStatus } from "./status.ts";
 import { guardLoss } from "./storageLost.ts";
 import type { SyncStatus } from "./sync.ts";
@@ -493,44 +494,7 @@ export const connect = async (
   const space = (id: Id): Space => {
     const write = async (record: (tx: Tx) => void): Promise<Written> => {
       if (closed) throw new NcError("closed", texts.DATABASE_CLOSED);
-      const ops: Record<string, unknown>[] = [];
-      const tx: Tx = {
-        create: (collection, written) => {
-          const name = nameOf(collection);
-          const created = randomId();
-          ops.push({
-            op: "create",
-            collection: name,
-            id: created,
-            values: values(name, written),
-          });
-          return created;
-        },
-        update: (collection, object, written) => {
-          const name = nameOf(collection);
-          ops.push({
-            op: "update",
-            collection: name,
-            id: object,
-            values: values(name, written),
-          });
-        },
-        delete: (collection, object) => {
-          ops.push({
-            op: "delete",
-            collection: nameOf(collection),
-            id: object,
-          });
-        },
-        restore: (collection, object) => {
-          ops.push({
-            op: "restore",
-            collection: nameOf(collection),
-            id: object,
-          });
-        },
-      };
-      record(tx);
+      const ops = recordOps(record, nameOf, values, randomId);
       return (await ask("write", { space: id, ops })) as unknown as Written;
     };
     return {
