@@ -239,3 +239,46 @@ fn an_object_whose_rich_text_field_nobody_wrote_is_copied_into_an_ad_hoc_space()
     assert_eq!(copied.get::<&str>("title").unwrap(), Some("Share me"));
     assert!(body(&db, created.space.id(), copy).is_empty());
 }
+
+#[test]
+fn a_move_back_of_a_written_rich_text_document_is_refused_until_noc_560() {
+    // The old space's log already holds the document: re-creating it there
+    // would show its text twice. Until the owner decides how (NOC-560), the
+    // move is refused, naming the object and the field, and writes nothing.
+    let db = db();
+    let personal = now(db.spaces().create()).unwrap();
+    let shared = now(db.spaces().create()).unwrap();
+    let (t, _) = task(&db, &personal, true);
+    now(personal.move_objects(&[read(&personal, t)], &shared)).unwrap();
+    let before = body(&db, shared.id(), t);
+
+    let refused = now(shared.move_objects(&[read(&shared, t)], &personal)).unwrap_err();
+    assert_eq!(refused.code(), crate::ErrorCode::NotAllowed);
+    let message = refused.to_string();
+    assert!(
+        message.contains("body") && message.contains(&t.to_string()),
+        "{message}"
+    );
+    assert!(
+        !message.contains("draft"),
+        "no content in an error: {message}"
+    );
+    assert_eq!(
+        read(&personal, t).moved_to(),
+        Some(shared.id()),
+        "still a trace"
+    );
+    assert_eq!(read(&shared, t).moved_to(), None, "still live");
+    assert_eq!(body(&db, shared.id(), t), before);
+}
+
+#[test]
+fn a_move_back_of_an_object_whose_rich_text_field_nobody_wrote_is_not_refused() {
+    let db = db();
+    let personal = now(db.spaces().create()).unwrap();
+    let shared = now(db.spaces().create()).unwrap();
+    let (t, _) = task(&db, &personal, false);
+    now(personal.move_objects(&[read(&personal, t)], &shared)).unwrap();
+
+    now(shared.move_objects(&[read(&shared, t)], &personal)).unwrap();
+}
