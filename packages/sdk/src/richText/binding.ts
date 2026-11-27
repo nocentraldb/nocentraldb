@@ -91,7 +91,7 @@ export interface BindOptions {
   readonly known?: () => Known;
 }
 
-/** Opens the binding's document on what the core answered. `refused` hears of a write the core refused; the binding then writes nothing more and its status is `readOnly`. */
+/** Opens the binding's document on what the core answered. `refused` hears of a write the core refused; the binding then writes nothing more, its status is `readOnly`, and it loads its document again from the core (`onReload`). */
 export const bind = (
   opened: Opened,
   port: RichTextPort,
@@ -179,6 +179,18 @@ export const bind = (
     pause = hold = undefined;
   };
 
+  /** Loads the document again from the core's state and tells onReload. */
+  const reload = async () => {
+    load(await port.pull(Y.encodeStateVector(new Y.Doc())));
+    for (const listener of [...reloadListeners]) {
+      try {
+        listener(doc);
+      } catch {
+        // A listener that throws misses nothing the others hear.
+      }
+    }
+  };
+
   /** The guard refused the edits not yet written: reload once, then stop. */
   const refuse = async () => {
     const names = deletes;
@@ -190,18 +202,11 @@ export const bind = (
       report({ status: "readOnly" });
       return;
     }
-    load(await port.pull(Y.encodeStateVector(new Y.Doc())));
+    await reload();
     report({
       status: "notFullyShown",
       reason: `the editor would delete parts it does not know: ${names.join(", ")}`,
     });
-    for (const listener of [...reloadListeners]) {
-      try {
-        listener(doc);
-      } catch {
-        // A listener that throws misses nothing the others hear.
-      }
-    }
   };
 
   const write = (): Promise<void> => {
@@ -219,8 +224,12 @@ export const bind = (
         await port.write(update);
       } catch (error) {
         stopped = true;
+        unwritten = [];
         report({ status: "readOnly" });
         refused(error);
+        // The editor must not show text no change holds (RFC 0013, "A
+        // reader"): the document is loaded again from the core.
+        await reload();
       }
     });
     return writing;
