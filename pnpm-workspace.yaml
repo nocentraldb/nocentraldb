@@ -3,6 +3,7 @@ packages:
   - "infra/*"
   - "packages/*"
 saveExact: true
+onlyBuiltDependencies: []
 # No dependency runs an install script. esbuild's only checks its platform
 # binary, which comes as an optional dependency, so it is denied, not needed.
 allowBuilds:

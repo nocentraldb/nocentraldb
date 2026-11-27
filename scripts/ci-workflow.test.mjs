@@ -433,6 +433,12 @@ const checks = [
     check: (ctx) => {
       assert.deepEqual(ctx.workspace.onlyBuiltDependencies, []);
       assert.equal(ctx.workspace.dangerouslyAllowAllBuilds, undefined);
+      // pnpm 12 records a denied build script in allowBuilds; none is allowed.
+      for (const [name, allowed] of Object.entries(
+        ctx.workspace.allowBuilds ?? {},
+      )) {
+        assert.equal(allowed, false, `allowBuilds lets ${name} run its script`);
+      }
     },
     mutants: {
       "drops the allow-list": (ctx) => {
@@ -443,6 +449,9 @@ const checks = [
       },
       "allows every build script": (ctx) => {
         ctx.workspace.dangerouslyAllowAllBuilds = true;
+      },
+      "allows a build script through allowBuilds": (ctx) => {
+        ctx.workspace.allowBuilds = { esbuild: true };
       },
     },
   },
