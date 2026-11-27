@@ -122,6 +122,16 @@ fn collection_lines(name: &str, old: &Collection, new: &Collection) -> Vec<Strin
                 add(0, format!("+ {at} targets {}", added.join(", ")));
             }
         }
+        let (was, is) = (&before.vocabulary, &field.vocabulary);
+        for (names, was, is) in [
+            ("nodes", &was.nodes, &is.nodes),
+            ("marks", &was.marks, &is.marks),
+        ] {
+            let added: Vec<_> = is.difference(was).cloned().collect();
+            if !added.is_empty() {
+                add(0, format!("+ {at} {names} {}", added.join(", ")));
+            }
+        }
         if let (None, Some(deprecation)) = (&before.deprecated, &field.deprecated) {
             add(1, format!("~ {at} deprecated: {}", deprecation.reason));
         }

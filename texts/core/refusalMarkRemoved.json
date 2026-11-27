@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalMarkRemoved",
+  "kind": "core",
+  "text": "{collection}.{field}: mark {mark} removed from the vocabulary.\nContent written with {mark} would hold a mark the app no longer declares, and the editor binding would refuse an editor that still has it.\nKeep {mark} in the vocabulary.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a mark is removed from a rich-text field's vocabulary."
+}

@@ -56,6 +56,7 @@ fn with_done_on() -> ModelLock {
             personal: None,
             description: None,
             deprecated: None,
+            vocabulary: Default::default(),
         },
     );
     lock.model.version = version;
