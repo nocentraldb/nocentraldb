@@ -133,3 +133,21 @@ test("ordinary typing and deleting known text is written", async () => {
   expect(writes).toHaveLength(1);
   expect(body.status).toEqual({ status: "shown" });
 });
+
+test("a write the core refuses is reloaded, so the editor shows only what the core holds", async () => {
+  const { core, port } = fakeCore();
+  const refusing: RichTextPort = {
+    ...port,
+    write: async () => {
+      throw new Error("notAllowed");
+    },
+  };
+  const body = open(core, refusing);
+  const reloads: Y.Doc[] = [];
+  body.onReload((doc) => reloads.push(doc));
+  paragraphText(body.doc).insert(0, "Not held ");
+  await pause();
+  expect(reloads).toHaveLength(1);
+  expect(root(body.doc).toString()).toBe(root(core).toString());
+  expect(body.status).toEqual({ status: "readOnly" });
+});
