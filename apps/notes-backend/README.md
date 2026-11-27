@@ -2,7 +2,7 @@
 
 The backend of a notes and projects app with open signup, as the guide [Cutting spaces, and invitations through your backend](../../docs/spaces-and-invitations.md) describes it. It does the two things a NoCentralDB app's backend does:
 
-- **It admits its users.** It holds the app's admission key and signs an admission for the identity of each signed-in user's account, in RFC 0015's format ([RFC 0015, "Admission tokens"](../../docs/rfc/0015-relay-admission.md#admission-tokens)). The relay's operator gives the key's public half to the relay: `NCDB_ADMISSION_KEYS` on AWS, `--admission-key` on a self-hosted `ncdb-relay`.
+- **It admits its users.** It holds the app's admission key and signs an admission for the identity of each signed-in user's account, in RFC 0015's format ([RFC 0015, "Admission tokens"](../../docs/rfc/0015-relay-admission.md#admission-tokens)). The relay's operator puts the key's public half in `NCDB_ADMISSION_KEYS`.
 - **It keeps a directory.** For each user it keeps the identity it admitted and the invitations of the user's devices, and it keeps the invites to a user who has no account yet, until the inviter's device carries them out.
 
 It holds no key that reads content and cannot add anyone to a space: only an admin's device can. It uses no crate of NoCentralDB, so a backend in any language does the same.
@@ -30,7 +30,7 @@ The journey test starts the Rust SDK's test relay with the backend's public admi
 cargo run -q -p notes-backend -- keygen
 ```
 
-prints a new admission key: `NOTES_ADMISSION_KEY`, the secret the backend keeps, and `NCDB_ADMISSION_KEYS`, its public half for the relay. Then serve with the relay's id: `NCDB_RELAY_ID` of the relay on AWS, or, for a self-hosted `ncdb-relay` started with `--admission-key`, the 16 bytes of `<database>.relay-id` in hex (`od -An -tx1 relay.sqlite.relay-id | tr -d ' \n'`):
+prints a new admission key: `NOTES_ADMISSION_KEY`, the secret the backend keeps, and `NCDB_ADMISSION_KEYS`, its public half for the relay. Then serve with the relay's id, `NCDB_RELAY_ID` of the relay you admit to:
 
 ```sh
 NOTES_RELAY_ID=<32 hex digits> NOTES_ADMISSION_KEY=<64 hex digits> cargo run -q -p notes-backend
@@ -38,4 +38,4 @@ NOTES_RELAY_ID=<32 hex digits> NOTES_ADMISSION_KEY=<64 hex digits> cargo run -q 
 
 It listens on `127.0.0.1:8080`, or on `NOTES_LISTEN`.
 
-**What it does not do.** It keeps the directory and the sessions in memory, so they are gone when it stops. Its signup takes a bare e-mail address and checks nothing: it stands in for your app's own signup and login, which decide who your users are. It serves plain HTTP on the loopback; your backend serves its routes behind its own login and TLS. The secret signs an admission for any identity on that relay: keep it where you keep your other secrets, never in your code or your logs.
+**What it does not do.** It keeps the directory and the sessions in memory, so they are gone when it stops. Its signup takes a bare e-mail address and checks nothing: it stands in for your app's own signup and login, which decide who your users are. It serves plain HTTP on the loopback; your backend serves its routes behind its own login and TLS. The secret signs an admission for any identity on that relay: keep it where you keep your other secrets, never in your code or your logs. The local relay `ncdb-relay` takes no admission keys yet (NOC-500, NOC-516), so the backend's admissions work with the test relay and with the relay on AWS, not with `ncdb-relay`.

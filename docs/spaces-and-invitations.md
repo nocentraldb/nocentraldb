@@ -103,7 +103,7 @@ console.log((await db.spaces.list()).length, typeof stop);
 
 ## Admit your users
 
-A relay lets only the accounts it admits create spaces. An app with open signup cannot list its users when the relay is deployed, so its backend admits them: it signs an **admission** for an account's identity with the app's **admission key**, an Ed25519 key that only the backend holds ([RFC 0015, "Admission tokens"](rfc/0015-relay-admission.md#admission-tokens)). The relay's operator configures the public half of the key once: in `NCDB_ADMISSION_KEYS` for the relay on AWS ([the relay's deploy guide](relay-deploy.md)), or with `--admission-key` for a self-hosted `ncdb-relay` ([its README](../crates/ncdb-relay-server/README.md)).
+A relay lets only the accounts it admits create spaces. An app with open signup cannot list its users when the relay is deployed, so its backend admits them: it signs an **admission** for an account's identity with the app's **admission key**, an Ed25519 key that only the backend holds ([RFC 0015, "Admission tokens"](rfc/0015-relay-admission.md#admission-tokens)). The relay's operator configures the public half of the key once, in `NCDB_ADMISSION_KEYS` ([the relay's deploy guide](relay-deploy.md)).
 
 Pass the SDK a function that fetches an admission from your backend. The SDK calls it when the relay refuses a new space with `not_allowed`, presents the answer, and pushes the space again, once:
 
@@ -235,18 +235,4 @@ An app that expects notes to be shared on their own can create each such note in
 cargo test -p notes-backend
 ```
 
-To run the backend beside a self-hosted relay, draw an admission key, start `ncdb-relay` with its public half, and give the backend the secret and the relay's id, which the relay keeps as 16 bytes next to its database:
-
-```sh
-cargo build -p ncdb-relay-server -p notes-backend
-./target/debug/notes-backend keygen > admission.env   # NOTES_ADMISSION_KEY and NCDB_ADMISSION_KEYS
-. ./admission.env
-./target/debug/ncdb-relay --database relay.sqlite --admission-key "$NCDB_ADMISSION_KEYS" &
-sleep 1  # the relay draws its id on the first start
-NOTES_RELAY_ID=$(od -An -tx1 relay.sqlite.relay-id | tr -d ' \n') \
-  NOTES_ADMISSION_KEY="$NOTES_ADMISSION_KEY" ./target/debug/notes-backend
-```
-
-The relay listens on `ws://127.0.0.1:7700` and the backend on `http://127.0.0.1:8080`. Keep `admission.env` out of your repository: its secret signs an admission for any identity on that relay.
-
-The example keeps its directory in memory and stands in for your signup with a bare e-mail address; your backend keeps the directory in its own database, behind its own login and TLS.
+The example keeps its directory in memory and stands in for your signup with a bare e-mail address; your backend keeps the directory in its own database, behind its own login and TLS. The local relay `ncdb-relay` takes no admission keys yet (NOC-500, NOC-516), so it admits accounts only by `--allow-invitation`; the test relay and the relay on AWS take admissions.
