@@ -72,6 +72,13 @@ impl Query {
         self
     }
 
+    /// Fixes the index's `where` fields, one value each, in their order:
+    /// the same call as [`Query::equal`], named after the schema's `where`
+    /// (RFC 0018, R3), which is a keyword in Rust.
+    pub fn where_eq<V: Into<Value>>(self, values: impl IntoIterator<Item = V>) -> Query {
+        self.equal(values)
+    }
+
     /// The page size: 50 unless set, at most 1000; a larger size is `InvalidValue`.
     pub fn take(mut self, n: usize) -> Query {
         self.take = n;

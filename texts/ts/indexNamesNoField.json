@@ -1,0 +1,6 @@
+{
+  "id": "ts.indexNamesNoField",
+  "kind": "ts",
+  "text": "{collection}.{key}: the index names no field; give where, orderBy or both.",
+  "when": "ncdb model build, on a model whose index in the named form has neither a where nor an orderBy field (RFC 0018, R3)."
+}

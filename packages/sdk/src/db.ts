@@ -54,13 +54,15 @@ interface Cursor {
 
 /**
  * A query of a declared index, whose objects are `T`: the handle
- * `model.<collection>.indexes.<index>`, with `.equal` fixing its equality
- * prefix (`E`, its values in index order), `.take` the page size (50 by
+ * `model.<collection>.indexes.<index>`, with `.where` fixing its `where`
+ * fields (`E`, their values in index order), `.take` the page size (50 by
  * default, at most 1000) and `.after` where the page starts (RFC 0009,
- * "Queries and indexes"). Each returns a new query.
+ * "Queries and indexes"; RFC 0018, R3). Each returns a new query.
  */
 export interface Query<T, E extends readonly unknown[] = readonly []> {
-  /** Fixes the index's leading fields, as many as its `equal` declares. */
+  /** Fixes the index's `where` fields, one value each, in their order. */
+  where(...values: E): Query<T>;
+  /** The same call as `where`, for an index declared with `equal`. */
   equal(...values: E): Query<T>;
   /** Sets the page size: 50 by default, at most 1000. */
   take(n: number): Query<T, E>;
