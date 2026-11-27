@@ -8,7 +8,7 @@ It builds on the schema of [RFC 0005](0005-schema-and-model-lock.md), the links 
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0018 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Draft. The owner decides it in its pull request. Each choice that decided text does not settle is a numbered question in the pull request's description, with its options; this text is written with the first option of each, and is rewritten where an answer differs. Each requirement is decided and built on its own, and R3 may come first: its section depends on no other.
+**Status.** Draft. The owner decides it in its pull request. Each choice that decided text does not settle is a numbered question in a ticket for the owner, which the pull request names, with its options; this text is written with the first option of each, and is rewritten where an answer differs. Each requirement is decided and built on its own, and R3 may come first: its section depends on no other.
 
 **At 0.1.** Not built. Release 0.1 has today's index form (`nc.index(fields, { equal })` and `.equal(...)`), `nc.link` and `nc.ref` as two field types, no edge collection and no index through a reference.
 
@@ -166,6 +166,14 @@ A move ([RFC 0016](0016-moving-an-object.md)) writes the moved objects' state as
 - **Among objects moved together**, the move writes each reference whose target moves with it with the new space. In-space references stay in-space, as links among them stay valid today.
 - **To an object left behind**, a reference in a moved object keeps naming the old space. It becomes a cross-space reference and is not cleared, unlike a link. A field locked as `ncdb/link` keeps RFC 0016's rule: it cannot name the old space, so it is cleared and counted in `clearedLinks`.
 - **To the moved object, from an object that did not move,** a reference resolves through the trace as RFC 0004 decides: **moved** with the new space when it is in-space, and the state where the object is now when it is cross-space, for a member that holds the old space. A member that holds only the new space reads such a reference as **not accessible** until a member of the referencing space writes it with the new space. [R1, "An end that moves"](#an-end-that-moves) says how the SDK names those references.
+
+### A reference to an object the reader cannot see
+
+A reference into a space that only some members hold is the normal case, not a fault. An app that keeps notes in a person's private space and moves a project with its actions into a shared space leaves each action's reference to its note naming the private space: the move writes it as it stands, where a link would be cleared ([When the source or the target moves](#when-the-source-or-the-target-moves)). For the person, the reference reads **ok**. For every other member of the shared space it reads **not accessible**: their database holds no copy of the private space ([RFC 0004, "How a reference resolves"](0004-merge-rules-basic-types.md#how-a-reference-resolves)).
+
+- **What it reveals.** Not accessible says only that this member holds no copy of the named space. It does not say whether the note exists, was deleted or was never written, and it shows none of the note's fields. The members of the shared space read the reference's value, the private space's random id and the note's random object id, as RFC 0004 says members of a referencing space do ([RFC 0004, "What the relay and the members see"](0004-merge-rules-basic-types.md#what-the-relay-and-the-members-see)): that the action points at something in a space they are not in, and nothing more. An app that must not show even that keeps the reference out of the shared space, for example in an edge in the private space ([R1](#r1-ncedge)).
+- **In a find.** An index on the reference itself holds the action by the reference's value, whatever its state, so every member of the shared space finds the same actions in it ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)). An index through the reference, such as actions ordered by `note.title`, holds only the rows whose note this member can read ([R2, "Which rows it holds"](#which-rows-it-holds)), so the other members do not find the action in it at all. An app lists the actions of a project through an index on the action's own fields, and uses an index through the note only for a view that is about the notes.
+- **On read.** The action reads as it does for every member: the reference as `{ space, id }`, with its state in `space.inspect`, never in the read object ([RFC 0009, "Get by id"](0009-sdk-api.md#get-by-id)).
 
 ### Options not taken
 
@@ -336,6 +344,7 @@ Nothing new. An edge is an object, its ends are references in a sealed payload, 
 Stated plainly (principle 4):
 
 - **A through index differs from member to member.** It holds only targets in spaces this member holds. Two members of one space can page the same query and see different rows.
+- **A through index leaves out what the member cannot read.** An action whose note lives in a private space is in no index through the note for the other members of the action's space; an index on the action's own fields still holds it.
 - **An object that many edges name makes its changes slower to fold.** The cost grows with the number of edges, on every device that holds them ([What it costs](#what-it-costs)).
 - **Nothing keeps a target alive.** Deleting a project leaves every edge to it; the edges leave the through indexes, and stay in the end's index and in the space.
 - **References to a moved object do not follow by themselves.** A member that does not hold the old space reads them as **not accessible** until a member writes them with the new space.
