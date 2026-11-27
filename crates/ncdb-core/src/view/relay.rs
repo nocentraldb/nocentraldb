@@ -33,6 +33,51 @@ impl View {
         )
     }
 
+    /// At most `limit` changes of `space` the relay has neither confirmed
+    /// nor refused, in local order, each with its local position: those
+    /// after the position `after` and up to `through`. A push walks the
+    /// unconfirmed changes this way, a push at a time, so it never holds
+    /// all of them at once (NOC-519).
+    pub fn unconfirmed_between(
+        &self,
+        space: SpaceId,
+        after: u64,
+        through: u64,
+        limit: usize,
+    ) -> Result<Vec<(u64, Change)>, Error> {
+        let position = |p: u64| i64::try_from(p).unwrap_or(i64::MAX);
+        let mut statement = self.conn.prepare(
+            "SELECT local_position, frame FROM log WHERE space_id = ?1
+             AND relay_position IS NULL AND relay_refusal IS NULL
+             AND local_position > ?2 AND local_position <= ?3
+             ORDER BY local_position LIMIT ?4",
+        )?;
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        let mut rows =
+            statement.query(params![space.0, position(after), position(through), limit])?;
+        let mut changes = Vec::new();
+        while let Some(row) = rows.next()? {
+            let at = u64::try_from(row.get::<_, i64>(0)?)
+                .map_err(|_| Error::Corrupt(texts::UNREADABLE_LOG_FRAME))?;
+            let frame: Vec<u8> = row.get(1)?;
+            let change =
+                Change::decode(&frame).map_err(|_| Error::Corrupt(texts::UNREADABLE_LOG_FRAME))?;
+            changes.push((at, change));
+        }
+        Ok(changes)
+    }
+
+    /// The local position of the newest change the log of `space` holds,
+    /// or 0 when it holds none: where a push that starts now ends.
+    pub fn last_local_position(&self, space: SpaceId) -> Result<u64, Error> {
+        let last: Option<i64> = self.conn.query_row(
+            "SELECT MAX(local_position) FROM log WHERE space_id = ?1",
+            [space.0],
+            |row| row.get(0),
+        )?;
+        Ok(last.and_then(|p| u64::try_from(p).ok()).unwrap_or(0))
+    }
+
     /// The changes of `space` the relay refused, in local order, with the
     /// relay's code.
     pub fn refused(&self, space: SpaceId) -> Result<Vec<(Change, RelayRefusal)>, Error> {

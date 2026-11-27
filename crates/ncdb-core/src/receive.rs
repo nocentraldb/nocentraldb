@@ -18,7 +18,7 @@ use std::collections::BTreeSet;
 
 use std::fmt;
 
-use crate::change::{Change, ChangeError, Header, Kind, Operation, Payload};
+use crate::change::{Change, ChangeError, Header, HeaderFields, Kind, Operation, Payload};
 use crate::field_op::{self, Origin};
 use crate::ids::{ChangeId, ObjectId, SpaceId};
 use crate::log::{
@@ -104,12 +104,11 @@ pub trait Checks {
     fn open_folded(&self, change: &Change) -> Result<Payload, Stop> {
         self.open(change)
     }
-    /// Whether a folded sealed change with this header, which holds no
-    /// payload, may fail [`Checks::is_member`] or [`Checks::still_opens`]
+    /// Whether a folded sealed change with these header fields may fail [`Checks::is_member`] or [`Checks::still_opens`]
     /// now. Un-folding reads only the changes this names from the store
     /// that keeps their frames (NOC-452), so it may name more than fail,
     /// never fewer. The default names every change.
-    fn may_unfold(&self, _header: &Header) -> bool {
+    fn may_unfold(&self, _fields: &HeaderFields) -> bool {
         true
     }
     /// The `model.id` the space's genesis names, once the checks can read
@@ -157,8 +156,8 @@ impl<C: Checks + ?Sized> Checks for Box<C> {
     fn open_folded(&self, change: &Change) -> Result<Payload, Stop> {
         (**self).open_folded(change)
     }
-    fn may_unfold(&self, header: &Header) -> bool {
-        (**self).may_unfold(header)
+    fn may_unfold(&self, fields: &HeaderFields) -> bool {
+        (**self).may_unfold(fields)
     }
     fn space_model_id(&self) -> Option<[u8; 16]> {
         (**self).space_model_id()
