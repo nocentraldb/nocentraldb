@@ -450,7 +450,7 @@ export const connect = async (
             op: "create",
             collection: name,
             id: created,
-            values: values(name, written),
+            values: values(name, written, id),
           });
           return created;
         },
@@ -460,7 +460,7 @@ export const connect = async (
             op: "update",
             collection: name,
             id: object,
-            values: values(name, written),
+            values: values(name, written, id),
           });
         },
         delete: (collection, object) => {
