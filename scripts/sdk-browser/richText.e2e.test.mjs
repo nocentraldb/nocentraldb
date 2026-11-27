@@ -75,34 +75,41 @@ const modules = (() => {
         paths: [dirname(from)],
       }),
     );
-  const visit = (specifier, from) => {
+  /** Serves the file at `path` under `url`, and each module it imports. */
+  const file = (path, url) => {
+    if (served.has(url)) return;
+    served.set(url, path);
+    for (const [, specifier] of readFileSync(path, "utf8").matchAll(
+      /(?:\bfrom|\bimport)\s*['"]([^'"]+)['"]/g,
+    )) {
+      if (specifier.startsWith(".")) {
+        file(
+          join(dirname(path), specifier),
+          new URL(specifier, `http://x${url}`).pathname,
+        );
+      } else {
+        bare(specifier, path);
+      }
+    }
+  };
+  /** Maps the bare `specifier`, as `from` imports it, onto its package's file. */
+  const bare = (specifier, from) => {
     if (entries[specifier]) return;
     const [scope, ...rest] = specifier.split("/");
     const dir = packageDir(scope, from);
     const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
     const key = rest.length ? `./${rest.join("/")}` : ".";
-    const exported = pkg.exports?.[key];
-    const file =
-      (typeof exported === "string" ? exported : exported?.import) ??
-      exported?.module ??
-      pkg.module;
-    const url = `/modules/${scope}/${file.replace(/^\.\//, "")}`;
+    // Conditions as a browser's bundler picks them.
+    const pick = (entry) =>
+      typeof entry === "string" || entry === undefined
+        ? entry
+        : pick(entry.browser ?? entry.import ?? entry.module ?? entry.default);
+    const target = pick(pkg.exports?.[key]) ?? pkg.module;
+    const url = `/modules/${scope}/${target.replace(/^\.\//, "")}`;
     entries[specifier] = url;
-    const path = join(dir, file);
-    served.set(url, path);
-    for (const [, bare] of readFileSync(path, "utf8").matchAll(
-      /from\s+['"]([^'"./][^'"]*)['"]/g,
-    )) {
-      visit(bare, path);
-    }
-    for (const [, relative] of readFileSync(path, "utf8").matchAll(
-      /from\s+['"](\.[^'"]+)['"]/g,
-    )) {
-      const target = join(dirname(path), relative);
-      served.set(new URL(relative, `http://x${url}`).pathname, target);
-    }
+    file(join(dir, target), url);
   };
-  visit("yjs", require.resolve("yjs"));
+  bare("yjs", require.resolve("yjs"));
   return { served, entries };
 })();
 
@@ -132,6 +139,21 @@ const open = async (server) => {
       contentType: "text/javascript; charset=utf-8",
     });
   });
+  tab.on(
+    "console",
+    (m) => process.env.RT_DEBUG && console.log("console:", m.text()),
+  );
+  tab.on(
+    "requestfailed",
+    (r) => process.env.RT_DEBUG && console.log("failed:", r.url()),
+  );
+  tab.on(
+    "response",
+    (r) =>
+      process.env.RT_DEBUG &&
+      r.status() >= 400 &&
+      console.log("status:", r.status(), r.url()),
+  );
   await tab.goto(`${server.url}/rich-text.html`);
   await tab.waitForFunction(() => window.ready === true);
   return { tab, errors };
