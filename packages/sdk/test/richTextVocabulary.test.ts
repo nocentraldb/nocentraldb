@@ -1,150 +1,75 @@
-// A rich-text field's vocabulary in the schema (RFC 0013, "The field in the
-// schema and the lock"; RFC 0005, "Field types"; NOC-553):
-// `nc.richText({ vocabulary: { nodes, marks } })` describes the names its
-// editor uses to `ncdb model build`, and nc.open refuses a lock whose
-// vocabulary differs from the model's, as for any field changed without a
-// build (NOC-323).
-import { describe, expect, test } from "vitest";
-import { nc } from "../src/index.ts";
-import { lockOutOfDate } from "../src/lockCheck.ts";
+// A document that holds a node or a mark the field's vocabulary does not
+// declare, written by a newer version of the app, is reported as not
+// fully shown, with the reason that the content uses names this version of
+// the app does not declare (RFC 0013, "The vocabulary, at start";
+// Carsten, 2026-11-27, NOC-553).
+import { expect, test } from "vitest";
+import * as Y from "yjs";
+import { bind, type RichTextPort } from "../src/richText/binding.ts";
 
-/** The key under which nc.model hides the description `ncdb model build` reads. */
-const DESCRIBE = Symbol.for("nocentraldb.model.describe");
+const vocabulary = { nodes: ["paragraph"], marks: ["bold"] };
 
-const notes = (body: Parameters<typeof nc.collection>[0][string]) =>
-  nc.model({ notes: nc.collection({ body }) });
-
-const described = (model: object): unknown => {
-  const describe = (model as Record<symbol, (() => unknown) | undefined>)[
-    DESCRIBE
-  ];
-  if (describe === undefined) throw new Error("not a model");
-  const draft = describe() as {
-    collections: { notes: { fields: { body: unknown } } };
+const coreWith = (build: (root: Y.XmlFragment) => void) => {
+  const core = new Y.Doc();
+  build(core.getXmlFragment("default"));
+  const port: RichTextPort = {
+    pull: async (sv) => Y.encodeStateAsUpdate(core, sv),
+    write: async (u) => Y.applyUpdate(core, u),
+    close: async () => {},
   };
-  return draft.collections.notes.fields.body;
+  return { core, port };
 };
 
-describe("the schema", () => {
-  test("describes the vocabulary as the schema lists it", () => {
-    expect(
-      described(
-        notes(
-          nc.richText({
-            vocabulary: {
-              nodes: ["paragraph", "heading", "callout"],
-              marks: ["bold", "link"],
-            },
-          }),
-        ),
-      ),
-    ).toEqual({
-      type: "ncdb/richText",
-      rule: 1,
-      vocabulary: {
-        nodes: ["paragraph", "heading", "callout"],
-        marks: ["bold", "link"],
-      },
-    });
-  });
+const paragraph = (words: string, marks?: Record<string, unknown>) => {
+  const p = new Y.XmlElement("paragraph");
+  const t = new Y.XmlText();
+  t.insert(0, words, marks);
+  p.insert(0, [t]);
+  return p;
+};
 
-  test("a missing list is empty, and without the option there is no vocabulary", () => {
-    expect(
-      described(notes(nc.richText({ vocabulary: { nodes: ["paragraph"] } }))),
-    ).toEqual({
-      type: "ncdb/richText",
-      rule: 1,
-      vocabulary: { nodes: ["paragraph"], marks: [] },
-    });
-    expect(described(notes(nc.richText()))).toEqual({
-      type: "ncdb/richText",
-      rule: 1,
-    });
-  });
-
-  test("the vocabulary stays through describe and deprecated", () => {
-    const vocabulary = { nodes: ["paragraph"], marks: ["bold"] };
-    expect(
-      described(notes(nc.richText({ vocabulary }).describe("The text."))),
-    ).toEqual({
-      type: "ncdb/richText",
-      rule: 1,
+const open = (core: Y.Doc, port: RichTextPort, writable = true) =>
+  bind(
+    { client: 7, state: Y.encodeStateAsUpdate(core), writable },
+    port,
+    () => {},
+    {
       vocabulary,
-      description: "The text.",
-    });
-    expect(
-      described(notes(nc.richText({ vocabulary }).deprecated("Use body2."))),
-    ).toEqual({
-      type: "ncdb/richText",
-      rule: 1,
-      vocabulary,
-      deprecated: "Use body2.",
-    });
-  });
+    },
+  );
 
-  test("the schema's lists are copies, so a later change to the app's array changes nothing", () => {
-    const nodes = ["paragraph"];
-    const model = notes(nc.richText({ vocabulary: { nodes } }));
-    nodes.push("callout");
-    expect(described(model)).toEqual({
-      type: "ncdb/richText",
-      rule: 1,
-      vocabulary: { nodes: ["paragraph"], marks: [] },
-    });
-  });
+test("a document in the vocabulary is shown", () => {
+  const { core, port } = coreWith((r) =>
+    r.insert(0, [paragraph("Hi", { bold: true })]),
+  );
+  expect(open(core, port).status).toEqual({ status: "shown" });
 });
 
-describe("nc.open's check against the lock", () => {
-  const lockWith = (vocabulary?: object) => ({
-    collections: {
-      notes: {
-        fields: {
-          body: {
-            rule: 1,
-            since: 1,
-            type: "ncdb/richText",
-            ...(vocabulary === undefined ? {} : { vocabulary }),
-          },
-        },
-        since: 1,
-      },
-    },
-  });
-  const body = nc.richText({
-    vocabulary: {
-      nodes: ["paragraph", "callout", "paragraph"],
-      marks: ["link", "bold"],
-    },
-  });
+test("a node or a mark outside the vocabulary is reported at open, with the names", () => {
+  const { core, port } = coreWith((r) =>
+    r.insert(0, [
+      paragraph("Hi", { highlight: { color: "red" } }),
+      new Y.XmlElement("callout"),
+    ]),
+  );
+  const status = open(core, port).status;
+  expect(status.status).toBe("notFullyShown");
+  expect(status.status === "notFullyShown" && status.reason).toMatch(
+    /does not declare: callout, highlight$/,
+  );
+});
 
-  test("passes when the lock holds the same names, in its sorted form", () => {
-    expect(
-      lockOutOfDate(
-        notes(body),
-        lockWith({ marks: ["bold", "link"], nodes: ["callout", "paragraph"] }),
-      ),
-    ).toBeUndefined();
-  });
+test("a node outside the vocabulary that arrives later is reported after the pull", async () => {
+  const { core, port } = coreWith((r) => r.insert(0, [paragraph("Hi")]));
+  const body = open(core, port);
+  core.getXmlFragment("default").insert(1, [new Y.XmlElement("callout")]);
+  await body.folded();
+  expect(body.status.status).toBe("notFullyShown");
+});
 
-  test("an empty vocabulary matches a lock entry without the key", () => {
-    expect(lockOutOfDate(notes(nc.richText()), lockWith())).toBeUndefined();
-    expect(
-      lockOutOfDate(
-        notes(nc.richText({ vocabulary: { nodes: [], marks: [] } })),
-        lockWith(),
-      ),
-    ).toBeUndefined();
-  });
-
-  test("refuses a lock whose vocabulary differs, as when the lock was not built again", () => {
-    for (const vocabulary of [
-      undefined,
-      { marks: ["bold"], nodes: ["callout", "paragraph"] },
-      { marks: ["bold", "link"], nodes: ["callout", "heading", "paragraph"] },
-    ]) {
-      expect(lockOutOfDate(notes(body), lockWith(vocabulary))).toContain(
-        "notes.body differs from the lock",
-      );
-    }
-  });
+test("a reader's binding stays readOnly", () => {
+  const { core, port } = coreWith((r) =>
+    r.insert(0, [new Y.XmlElement("callout")]),
+  );
+  expect(open(core, port, false).status).toEqual({ status: "readOnly" });
 });

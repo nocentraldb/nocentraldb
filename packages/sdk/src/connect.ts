@@ -30,7 +30,9 @@ import { membersOf, ownInvitation } from "./membership.ts";
 import { Cursor, queryState } from "./query.ts";
 import { relayAskOf } from "./relayAsk.ts";
 import { notify, spaceStatusOf, syncStatusOf } from "./reports.ts";
+import { richTextOf } from "./richText/space.ts";
 import { spaceListOf } from "./spaceList.ts";
+import { recordOps } from "./spaceTx.ts";
 import type { SpaceStatus } from "./status.ts";
 import { guardLoss } from "./storageLost.ts";
 import type { SyncStatus } from "./sync.ts";
@@ -161,6 +163,8 @@ export const connect = async (
   let relay =
     (opened as { relay?: string } | null)?.relay ??
     (typeof options.relay === "string" ? options.relay : undefined);
+  // Whether this core holds rich text (NOC-538, Q5).
+  const richText = (opened as { richText?: boolean } | null)?.richText === true;
   let rawSync = (opened as { sync?: unknown } | null)?.sync;
   let sync = syncStatusOf(rawSync, relay);
   const reports = reportsOf(
@@ -441,44 +445,12 @@ export const connect = async (
   const space = (id: Id): Space => {
     const write = async (record: (tx: Tx) => void): Promise<Written> => {
       if (closed) throw new NcError("closed", texts.DATABASE_CLOSED);
-      const ops: Record<string, unknown>[] = [];
-      const tx: Tx = {
-        create: (collection, written) => {
-          const name = nameOf(collection);
-          const created = randomId();
-          ops.push({
-            op: "create",
-            collection: name,
-            id: created,
-            values: values(name, written, id),
-          });
-          return created;
-        },
-        update: (collection, object, written) => {
-          const name = nameOf(collection);
-          ops.push({
-            op: "update",
-            collection: name,
-            id: object,
-            values: values(name, written, id),
-          });
-        },
-        delete: (collection, object) => {
-          ops.push({
-            op: "delete",
-            collection: nameOf(collection),
-            id: object,
-          });
-        },
-        restore: (collection, object) => {
-          ops.push({
-            op: "restore",
-            collection: nameOf(collection),
-            id: object,
-          });
-        },
-      };
-      record(tx);
+      const ops = recordOps(
+        record,
+        nameOf,
+        (name, written) => values(name, written, id),
+        randomId,
+      );
       return (await ask("write", { space: id, ops })) as unknown as Written;
     };
     return {
@@ -493,6 +465,17 @@ export const connect = async (
       restore: (collection, object) =>
         write((tx) => tx.restore(collection, object)),
       members: membersOf(ask, id),
+      richText: richTextOf(
+        ask,
+        id,
+        nameOf,
+        options.lock,
+        () => richText,
+        (l) => {
+          changeListeners.add(l);
+          return () => changeListeners.delete(l);
+        },
+      ),
       ...lookupsOf(ask, id),
       leave: async () =>
         (await ask("space.leave", { space: id })) as unknown as {

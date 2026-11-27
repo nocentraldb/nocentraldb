@@ -1,0 +1,7 @@
+{
+  "id": "ts.richTextNotSupported",
+  "kind": "ts",
+  "code": "notSupported",
+  "text": "this build of the SDK's core does not hold rich text yet; no release carries it until its guard is complete",
+  "when": "space.richText, on a core built without rich text, which every release is until the guard of NOC-468 is complete (NOC-538, Q5)."
+}
