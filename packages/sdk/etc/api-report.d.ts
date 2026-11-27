@@ -424,6 +424,7 @@ export interface SpaceStatus {
     readonly exposed: boolean;
     readonly waitingForKey: boolean;
     readonly badPersonKeyRecords: readonly string[];
+    readonly missingPersonKeys: number;
     readonly provisionalErasures: readonly ProvisionalErasure[];
     readonly onlyMember: boolean;
 }

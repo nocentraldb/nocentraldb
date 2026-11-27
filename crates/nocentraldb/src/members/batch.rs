@@ -132,7 +132,7 @@ pub(crate) fn commit(
         state.bad_person_key_records = bad;
         return Err(storage(error));
     }
-    state.drop_shredded();
+    state.forget_shredded(view, space).map_err(storage)?;
     crate::personal::refresh(view, space, state).map_err(storage)?;
     crate::status::note_shreds(view, space, state.checks.resolved()).map_err(storage)?;
     for frame in frames {
