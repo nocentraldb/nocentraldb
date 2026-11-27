@@ -341,7 +341,7 @@ type EqualValues<F extends Fields, K extends readonly string[], N extends number
     ...infer R extends readonly string[]
 ] ? EqualValues<F, R, N, [
     ...Taken,
-    Exclude<F[H & keyof F]["nc.reads"], undefined>
+    Exclude<F[H & keyof F]["nc.reads"], undefined> | null
 ]> : Taken;
 type EqualOf<F extends Fields, X> = X extends Index<infer K, infer N> ? EqualValues<F, K, N> : readonly [];
 type Visible<C> = {

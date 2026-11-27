@@ -66,7 +66,8 @@ impl std::fmt::Debug for Cursor {
 
 impl Query {
     /// Fixes the index's leading fields, as many as its equality prefix
-    /// declares, no more and no fewer.
+    /// declares, no more and no fewer. [`Value::clear`] fixes a field to
+    /// unset (RFC 0006, "Declared indexes and ordered pages").
     pub fn equal<V: Into<Value>>(mut self, values: impl IntoIterator<Item = V>) -> Query {
         self.equal = values.into_iter().map(Into::into).collect();
         self
@@ -101,7 +102,13 @@ impl Query {
         let equal: Vec<cbor::Value> = self
             .equal
             .iter()
-            .map(|value| value.to_cbor().ok_or_else(|| refused(QueryError::Equality)))
+            .map(|value| {
+                if value.is_clear() {
+                    Ok(cbor::Value::Null)
+                } else {
+                    value.to_cbor().ok_or_else(|| refused(QueryError::Equality))
+                }
+            })
             .collect::<Result<_, _>>()?;
         let after = self.after.as_ref().map(|cursor| &cursor.0);
         let page = lookup(&inner.view, space, self, &equal, after, self.take)?;

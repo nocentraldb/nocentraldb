@@ -85,7 +85,7 @@ type Item<F extends Fields> = Readable<F> & {
   readonly $deleted: boolean;
 };
 
-/** The values `.equal` takes for the first `N` fields `K` of a collection with the fields `F`: one per field, of that field's type. */
+/** The values `.where` and `.equal` take for the first `N` fields `K` of a collection with the fields `F`: one per field, of that field's type, or `null` for an unset field (RFC 0006, "Declared indexes and ordered pages"). */
 type EqualValues<
   F extends Fields,
   K extends readonly string[],
@@ -101,7 +101,7 @@ type EqualValues<
         F,
         R,
         N,
-        [...Taken, Exclude<F[H & keyof F]["nc.reads"], undefined>]
+        [...Taken, Exclude<F[H & keyof F]["nc.reads"], undefined> | null]
       >
     : Taken;
 

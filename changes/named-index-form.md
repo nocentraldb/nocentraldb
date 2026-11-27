@@ -7,7 +7,7 @@ components: [sdk-ts, sdk-rust]
 An index spelled its equality prefix as a count: `nc.index(["status", "priority"], { equal: 1 })` said which fields a query fixes only by counting them, and a descending field took an object, `{ field, direction: "desc" }`.
 
 ## Use
-Name the fields a query fixes in `where`, and the fields that order the result in `orderBy`, with a leading `-` for a descending one. A query fixes the `where` fields with `.where(...)` in TypeScript and `.where_eq(...)` in Rust.
+Name the fields a query fixes in `where`, and the fields that order the result in `orderBy`, with a leading `-` for a descending one. A query fixes the `where` fields with `.where(...)` in TypeScript and `.where_eq(...)` in Rust; `null` in TypeScript and `Value::clear()` in Rust fix a field to unset, in `.equal(...)` too.
 
 ```ts
 indexes: {
