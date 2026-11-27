@@ -15,3 +15,9 @@ A reference between two objects moved together kept naming the old space. A memb
 space.move_objects(&[project, task], &shared).await?;
 // task.customer now names `shared`, where the project moved too.
 ```
+
+A reference field also takes `Reference::from(&object)`, the space and id of an object the SDK read:
+
+```rust
+tx.update("tasks", task, [("customer", Value::from(Reference::from(&project)))])?;
+```
