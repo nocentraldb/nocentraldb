@@ -2349,6 +2349,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "notes-backend"
+version = "0.2.0"
+dependencies = [
+ "base64 0.22.1",
+ "ed25519-dalek",
+ "futures-core",
+ "getrandom 0.4.3",
+ "ncdb-relay-server",
+ "nocentraldb",
+ "serde_json",
+ "sha2 0.11.1",
+ "tokio",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

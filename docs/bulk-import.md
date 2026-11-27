@@ -126,7 +126,14 @@ The device opened its database again and wrote one more record; this is what it 
 
 On the heap counts what the Rust SDK allocates; SQLite's own memory comes on top of it. In the tab, a database with one record took 2 MiB of WebAssembly memory measured the same way. WebAssembly memory does not shrink, so the tab's numbers are the most the core held while it opened the database, read every change of it once, and wrote; SQLite runs inside that memory too.
 
-**What still grows with the log.** Each change still costs about 1.5 KB of memory for its header, its state and the bookkeeping beside them, whatever its size. With 500 operations to a change that is little. With one operation to a change it is most of it: after 81,000 changes of one operation each, the device held 120 MB on the heap, against 218 MB before NOC-452. A space that receives many small changes over a long time grows in memory the same way, so write in batches where you can.
+**What still grows with the log.** Each change still costs about 400 bytes of memory for its header fields, its state and the bookkeeping beside them, whatever its size (NOC-518). With 500 operations to a change that is little. With one operation to a change it is most of what an open space keeps:
+
+| Changes of one operation each | Rust SDK, on the heap | Before NOC-518 | Chromium tab, the core's WebAssembly memory | Before NOC-518 |
+| ----------------------------: | --------------------: | -------------: | ------------------------------------------: | -------------: |
+|                        81,000 |               30.5 MB |       120.4 MB |                                      53 MiB |        131 MiB |
+|                       300,000 |              113.1 MB |       458.7 MB |                                     147 MiB |        448 MiB |
+
+Before NOC-452, the 81,000 changes held 218 MB on the heap. A space that receives many small changes over a long time grows in memory the same way, so write in batches where you can.
 
 ## In a browser
 

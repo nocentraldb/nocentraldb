@@ -152,6 +152,14 @@ export interface Space {
    * A write whose change would exceed the relay's limit of 16 MiB is split, between objects, into several changes, each within the limit (NOC-431). On this device it stays atomic: every part is folded in one transaction. **On other devices it is not atomic**: the parts arrive and fold one by one, so another member can see part of the write before the rest arrives, and a part the relay refuses leaves the others standing. One operation, or the operations of one object, that do not fit into one change are refused with `tooLarge`, before anything is written. A write well below the limit, such as a few hundred objects, is always one change.
    */
   write(record: (tx: Tx) => void): Promise<Written>;
+  /**
+   * Opens a binding on the rich-text field `field` of the object `id`: a `Y.Doc` the SDK keeps in step with the field, which an editor edits (RFC 0013, "An editor: the binding"). It writes the editor's edits as one change at each pause in typing, reports in `status` whether the editor shows the whole field, and gives its client id back on `close`. A core without rich text answers `notSupported`; an object the copy does not hold, `notFound`.
+   */
+  richText(
+    collection: AnyCollection,
+    id: Id,
+    field: string,
+  ): Promise<import("./editor.ts").RichTextBinding>;
   /** A write with one create. */
   create<C extends AnyCollection>(
     collection: C,

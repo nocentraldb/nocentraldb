@@ -107,6 +107,9 @@
 //! text | null}` answers it with the URL, or with null when the function
 //! failed (`asks.rs`).
 //!
+//! `open` also answers `"richText"`: whether this core holds rich text,
+//! which only a build with the compiler cfg `ncdb_rich_text` does.
+//!
 //! For RFC 0015's `db.account.identity` (NOC-469), `open` and
 //! `account.completePairing` also answer `"identity"`: the account's
 //! recovery key in hex, or `null` while the database waits to be paired.
@@ -472,6 +475,10 @@ impl Bridge {
             ("sync", sync_status(&status)),
             ("durability", reports::durability(&durability)),
             ("view", reports::view(&view)),
+            // Only a core built with the cfg `ncdb_rich_text` holds rich
+            // text (NOC-468); without it, `space.richText` is
+            // `notSupported` (NOC-538, Q5).
+            ("richText", Value::Bool(cfg!(ncdb_rich_text))),
         ]))
     }
 }
