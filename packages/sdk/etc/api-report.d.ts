@@ -176,6 +176,7 @@ export interface Db {
             }[];
             readonly askAdmins: readonly Id[];
         }>;
+        pairingFingerprint(invitation: Invitation): Promise<string>;
         completePairing(answer: import("./account.ts").PairingAnswer): Promise<{
             readonly notices: readonly import("./members.ts").Notice[];
         }>;
