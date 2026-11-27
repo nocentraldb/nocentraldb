@@ -129,10 +129,7 @@ fn a_moved_target_reads_moved_with_the_new_space_and_is_not_followed() {
     // reference's.
     copies.insert(ELSEWHERE, [(NOTE, created("notes"))].into());
     let read = read(&to(HOME), &copies);
-    assert_eq!(
-        (read.status, read.found),
-        (Status::Moved(ELSEWHERE), None)
-    );
+    assert_eq!((read.status, read.found), (Status::Moved(ELSEWHERE), None));
 }
 
 #[test]
