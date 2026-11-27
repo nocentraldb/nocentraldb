@@ -46,6 +46,7 @@ mod http;
 mod http;
 mod large;
 mod merge;
+mod pages;
 mod pause;
 mod person_keys;
 #[cfg(test)]

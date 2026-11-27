@@ -246,23 +246,6 @@ fn folded_remote(inner: &mut Inner, space: SpaceId) {
     let _ = crate::account::reconcile(inner);
 }
 
-/// The changes of `space` the relay has neither confirmed nor refused, in
-/// local order: this member's own and those it received from others. A
-/// refused change the fold newly accepted since, after a control change
-/// the member wrote itself, is among them (RFC 0008, "How the relay applies the rules").
-pub(super) fn unconfirmed(
-    inner: &mut Inner,
-    space: SpaceId,
-) -> Result<Vec<(ChangeId, Vec<u8>)>, ViewError> {
-    again::check(inner, space)?;
-    Ok(inner
-        .view
-        .unconfirmed(space)?
-        .into_iter()
-        .map(|change| (change.id(), change.bytes().to_vec()))
-        .collect())
-}
-
 /// Records the results of a push of the changes `ids` of `space`. A
 /// refusal is recorded by the code [`wire::mapped_code`] maps it to, as the
 /// sync status shows it, so the relay's own text never reaches the log
