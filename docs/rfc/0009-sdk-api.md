@@ -47,8 +47,8 @@ const { ids } = await project.write((tx) => {
   tx.update(model.tasks, task, { tags: nc.add("docs") });
 });
 
-const page = await db.find(model.tasks.indexes.byStatusPriority.where("open").take(50));
-const stop = db.subscribe(model.tasks.indexes.byStatusPriority.where("open").take(50), (fresh) => render(fresh));
+const page = await db.find(model.tasks.indexes.byStatusPriority.equal("open").take(50));
+const stop = db.subscribe(model.tasks.indexes.byStatusPriority.equal("open").take(50), (fresh) => render(fresh));
 
 await project.members.add(invitation, { role: "writer" });
 db.sync.current(); // { connection: "connected", unconfirmed: 0, ... }
@@ -279,7 +279,7 @@ detail.deleted;          // { value: false, conflicts: [] }
 A query names a declared index, fixes its equality prefix and asks for a page ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)). The model gives every declared index a handle:
 
 ```ts
-const query = model.tasks.indexes.byStatusPriority.where("open").take(50);
+const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
 const page = await db.find(query);       // { items: Task[], cursor, hasMore }
 const more = await db.find(query.after(page.cursor));
 const firstFive = await db.find(model.tasks.indexes.byPriorityDesc.take(5));
@@ -287,20 +287,20 @@ const firstFive = await db.find(model.tasks.indexes.byPriorityDesc.take(5));
 
 A query is written from handles of the model and passed to `db.find`: it is the chain RFC 0001 shows for views, TypeScript checks the equality values against the index, and a view will be queried the same way. An options object, `db.find(model.tasks, { index: "byStatusPriority", equal: ["open"], limit: 50 })`, was not taken.
 
-- `.where(...values)` fixes the index's `where` fields, one value each, in their order, no more and no fewer, with `null` for an unset field, since the equality prefix is written `k IS ?` ([RFC 0006, "Declared indexes and ordered pages"](0006-local-view.md#declared-indexes-and-ordered-pages)); TypeScript checks the count and the types ([RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes)). `.equal(...values)` is the same call, for an index declared as `nc.index(fields, { equal })` ([RFC 0018, "Named equality and order in an index"](0018-model-api-for-placement.md#r3-named-equality-and-order-in-an-index)).
+- `.equal(...values)` fixes the index's leading fields, as many as its `equal` declares, no more and no fewer; TypeScript checks the count and the types ([RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes)).
 - `.take(n)` sets the page size, 50 by default and at most 1000; a larger `n` fails with `invalidValue`, in both SDKs (2026-11-12, NOC-274).
 - `.after(cursor)` starts after a page's cursor. A cursor from another model, or another index, fails with `cursorOfAnotherModel`, and the app starts from the first page ([RFC 0006, "Ordered pages"](0006-local-view.md#ordered-pages)).
 - `db.find(query)` returns `items` in index order, the `cursor` after the last item, and `hasMore`. Every item carries `$space`, because an index spans every space of the member ([RFC 0006, "Where the view lives"](0006-local-view.md#where-the-view-lives)).
 - Queries skip deleted objects, and the index does not hold them; `space.get` returns a deleted object with `$deleted: true`. An app almost never lists deleted objects, and filtering in the app reads rows it throws away. A deletion can be undone ([RFC 0004, "Creating and deleting an object"](0004-merge-rules-basic-types.md#creating-and-deleting-an-object)), so `get` still finds the object to restore it. Returning deleted objects from queries, flagged, with the app filtering, was not taken.
 - A view, once the computed-fields RFC designs it, is queried the same way: `model.tasks.views.ready.take(50)`, as RFC 0001 shows.
 
-There is nothing else: no filter on a field outside the index's `where` fields, no sort of the app's choosing, no raw SQL. An app that needs another filter declares another index, or a computed field and a view ([GENESIS.md, principle 6](../../factory/GENESIS.md#principles-in-priority-order)). A filter on any field needs a scan, which principle 6 rules out. Raw SQL against the view could scan, and read the merge state and the log ([RFC 0006, "Declared indexes and ordered pages"](0006-local-view.md#declared-indexes-and-ordered-pages)).
+There is nothing else: no `where` on a field outside the index, no sort of the app's choosing, no raw SQL. An app that needs another filter declares another index, or a computed field and a view ([GENESIS.md, principle 6](../../factory/GENESIS.md#principles-in-priority-order)). A `where` clause on any field needs a scan, which principle 6 rules out. Raw SQL against the view could scan, and read the merge state and the log ([RFC 0006, "Declared indexes and ordered pages"](0006-local-view.md#declared-indexes-and-ordered-pages)).
 
 **A query in one space.** An index ends with the space id and the object id ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)), so it cannot fix the space: "the open tasks of Project A" is no query such an index allows, and an app needs it on its first screen. So an index option, `scope: "space"`, puts the space id first, and `space.find(query)` fixes it:
 
 ```ts
-// in the schema: indexes: { openByPriority: nc.index({ where: ["status"], orderBy: ["priority"], scope: "space" }) }
-const mine = await project.find(model.tasks.indexes.openByPriority.where("open").take(50));
+// in the schema: indexes: { openByPriority: nc.index(["status", "priority"], { equal: 1, scope: "space" }) }
+const mine = await project.find(model.tasks.indexes.openByPriority.equal("open").take(50));
 ```
 
 RFC 0005 states the option and its key in the lock ([RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes)), and RFC 0006 the index's columns ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)). Two options were not taken. No query per space, with the app filtering the cross-space page in memory, reads rows it throws away, which principle 6 rules out. Every index per space, with `db.find` querying each space and merging, loses the page across spaces in one range lookup, which is why RFC 0006 keeps one database per member.
@@ -316,7 +316,7 @@ What the copy holds but does not show is reported per space, in `space.status` (
 Subscriptions re-run what an app reads when a fold touches it. They react to what arrived and never cause a network request ([RFC 0006, "Folding"](0006-local-view.md#folding), step 6).
 
 ```ts
-const stop = db.subscribe(model.tasks.indexes.byStatusPriority.where("open").take(50), (page) => {
+const stop = db.subscribe(model.tasks.indexes.byStatusPriority.equal("open").take(50), (page) => {
   render(page.items);
 });
 
@@ -623,6 +623,9 @@ The SDK throws one error class, `nc.Error`, with a string `code`, the ids it con
 | `alreadyMember` | `members.add` | The invitation's member is a member of the space already. |
 | `cursorOfAnotherModel` | `db.find` | The cursor was made under another model or index. |
 | `moved` | writes | The object was moved to another space; names the new space, where the write goes instead ([Moving an object](#moving-an-object)). |
+| `notSupported` | `space.richText` | This build of the SDK's core does not hold rich text yet: no release carries it until its guard is complete ([RFC 0013](0013-rich-text.md#an-editor-the-binding); 2026-11-27, NOC-538). |
+| `contentCheckMissing` | `ncEditor` of `@nocentraldb/tiptap`, `NcKeepUnknown` | The editor for a rich-text field leaves out `enableContentCheck`, without which it would delete what its schema does not know ([RFC 0013](0013-rich-text.md#an-editor-that-cannot-show-a-node); 2026-11-27, NOC-538). |
+| `vocabularyMismatch` | `ncEditor` of `@nocentraldb/tiptap`, `NcKeepUnknown` | The editor's nodes or marks differ from the field's vocabulary in the lock, in either direction; names the names on each side ([RFC 0013](0013-rich-text.md#an-editor-the-binding); 2026-11-27, NOC-553, NOC-538). |
 
 What syncing finds is never thrown, because no call of the app caused it: a relay refusal, a rejected or parked change, a lost grant or a gap arrives in a report. They arrive while no app call runs, and they are states of the copy, not failures of a call, so reports keep them readable at any time.
 
@@ -644,16 +647,15 @@ let result = project.write(|tx| {
     Ok(())
 }).await?;
 
-let page = db.find(db.index("tasks", "byStatusPriority")?.where_eq(["open"]).take(50)).await?;
+let page = db.find(db.index("tasks", "byStatusPriority")?.equal(["open"]).take(50)).await?;
 for task in &page.items {
     let title: Option<&str> = task.get("title")?;
 }
-let mut live = db.subscribe(db.index("tasks", "byStatusPriority")?.where_eq(["open"]).take(50));
+let mut live = db.subscribe(db.index("tasks", "byStatusPriority")?.equal(["open"]).take(50));
 while let Some(page) = live.next().await { /* ... */ }
 ```
 
 - `Db::open(options)` takes the lock's text; there is no TypeScript model, so the `lockOutOfDate` check does not apply.
-- **A query's `where` fields.** `Query::where_eq(values)` fixes them, as `.where(...)` does in TypeScript, since `where` is a keyword in Rust, with `Value::clear()` for an unset field; `Query::equal(values)` is the same call ([RFC 0018, "Named equality and order in an index"](0018-model-api-for-placement.md#r3-named-equality-and-order-in-an-index)).
 - **Clearing a field.** `Value::clear()`, a constructor beside `Value::add` and `Value::remove`, clears a field as `null` does in TypeScript: `tx.update("tasks", id, [("due", Value::clear())])` becomes a set (1) with no value ([Field operations per field type](#field-operations-per-field-type)). It clears a basic value, a link or a reference; a set or a list of links has nothing to clear in one value, so a clear of one fails with `invalidValue` (2026-11-12, NOC-277). `Option<Value>` in every write was not taken: it would make every value an `Option` to clear the few fields an app ever clears.
 - **A reference.** `Reference { space, id }`, the target's `SpaceId` and `ObjectId`, is the value of an `nc.ref` field, as `{ space, id }` is in TypeScript: `Value::from(Reference::new(space, id))` writes it, `object.get::<Reference>("customer")` reads it, and `Value::clear()` clears it ([Field operations per field type](#field-operations-per-field-type)). The struct is `#[non_exhaustive]`, so a field added later breaks no app, and `Reference::new` makes one. An object id in a reference field, or a reference in a link, is `InvalidValue`. It follows `Data`: one type to write and to read (2026-11-16, NOC-354). Not taken: a pair, `Value::from((SpaceId, ObjectId))` and `get::<(SpaceId, ObjectId)>`, which needs no new name but reads less clearly; and the name `Ref`, which abbreviates what the field type spells out.
 - **A day and a point in time.** `Date` is the value of an `nc.date` field and `Timestamp` of an `nc.timestamp` field, the SDK's own types, as `Reference` is: `Value::from(Date::new(2026, 11, 21)?)` and `Value::from(Timestamp::from_millis(ms)?)` write them, `object.get::<Date>("doneOn")` and `object.get::<Timestamp>("dueAt")` read them, and `Value::clear()` clears them. `Date` prints and parses as `"YYYY-MM-DD"` and gives `year()`, `month()` and `day()`; `Timestamp` prints as RFC 3339 in UTC, `"2026-11-21T19:08:44.636Z"`, gives `as_millis()`, and converts from and to `std::time::SystemTime` with `TryFrom`, a `SystemTime` rounding down to the millisecond. A value outside the years 1 to 9999, a day that does not exist, an integer in a day or point-in-time field, or a `Date` or `Timestamp` in a field of another type, is `InvalidValue` (2026-11-21, NOC-434). Not taken: the types of `chrono`, `time` or `jiff`, which would tie the SDK's API to another crate's major versions.
@@ -717,8 +719,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 | `db.find` | Runs a query across the member's spaces | Named in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page) |
 | `space.find` | Runs a query of an index scoped to one space | [RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes) |
 | `model.<collection>.indexes.<index>` | The handle of a declared index | [RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes) |
-| `.where(` | Fixes the index's `where` fields, its equality prefix | [RFC 0018, "Named equality and order in an index"](0018-model-api-for-placement.md#r3-named-equality-and-order-in-an-index) |
-| `.equal(` | The same call as `.where(` | [RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes) |
+| `.equal(` | Fixes the index's equality prefix | [RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes) |
 | `.take(` | The page size | Named in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page) |
 | `.after(` | Starts after a cursor | Named in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page) |
 | `items`, `cursor`, `hasMore` | The parts of a page | [RFC 0006, "Ordered pages"](0006-local-view.md#ordered-pages) |
@@ -913,6 +914,8 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - **2026-11-23 · A write above the relay's change limit is split between objects into several changes, not atomic on other devices; one operation or object above the limit is refused with `tooLarge`.** ([decision](../../factory/decisions/2026-11-23-NOC-421-a-write-above-the-relay-change-limit-is-split-between-objects.md))
 
 - **2026-11-23 · A space's status says `onlyMember` when this member is the space's only member.** ([decision](../../factory/decisions/2026-11-23-NOC-494-a-spaces-status-says-onlymember-when-this-member-is-its-only-member.md))
+- **2026-11-27 · `space.richText` answers `notSupported` until a release carries rich text.** ([decision](../../factory/decisions/2026-11-27-NOC-538-space-richtext-is-notsupported-until-a-release-carries-rich-text.md))
+- **2026-11-27 · An editor without the content check is `contentCheckMissing`, one that differs from the field's vocabulary `vocabularyMismatch`.** ([decision](../../factory/decisions/2026-11-27-NOC-538-an-editor-without-the-content-check-is-contentcheckmissing-and-one-that-differs-from-the-vocabulary-is-vocabularymismatch.md))
 
 ## History
 
@@ -974,4 +977,4 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - 2026-11-23 · The Rust SDK gains the change event, `db.changes().subscribe()`, with `Change` and `Origin` (NOC-506)
 - 2026-11-23 · Confirming the recovery code takes two of its words back: RecoveryCode gains challenge(), and confirm takes the answers (NOC-502, #484)
 - 2026-11-23 · A write above the relay's change limit is split between objects; one object above it is refused with `tooLarge` (NOC-421, #468)
-- 2026-11-27 · `.where(...)` and `Query::where_eq`, the same call as `.equal(...)`; `null` and `Value::clear()` fix a field to unset (NOC-563, #516)
+- 2026-11-27 · The errors `notSupported`, `contentCheckMissing` and `vocabularyMismatch` of rich text (NOC-538, NOC-461)
