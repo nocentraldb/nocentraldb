@@ -14,9 +14,9 @@ use yrs::Any;
 
 use super::{ARRAY, Cursor, Malformed, OBJECT, Value, read_all};
 
-/// `bytes`, an update in encoding v1, with every map in key order. The
-/// result encodes the same document.
-pub(in crate::rich_text) fn canonical(bytes: &[u8]) -> Result<Vec<u8>, Malformed> {
+/// `bytes`, a well-formed update in encoding v1, with every map in key
+/// order. The result encodes the same document.
+pub fn canonical(bytes: &[u8]) -> Result<Vec<u8>, Malformed> {
     let (_, _, values) = read_all(bytes)?;
     let mut out = Vec::with_capacity(bytes.len());
     let mut copied = 0;

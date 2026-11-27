@@ -94,7 +94,7 @@ pub(super) fn structs(bytes: &[u8]) -> Result<&[u8], Malformed> {
     read_with_structs(bytes).map(|(_, end)| &bytes[..end])
 }
 
-pub(super) use canonical::canonical;
+pub use canonical::canonical;
 
 /// [`read`], and where the update's delete set starts.
 fn read_with_structs(bytes: &[u8]) -> Result<(Shape, usize), Malformed> {

@@ -277,7 +277,11 @@ pub fn edit(doc: &Doc, &(kind, a, b, word): &Raw) -> Vec<u8> {
             }
         }
     }
-    txn.encode_update_v1()
+    // Yrs writes a map in its hash map's order, which differs from run to
+    // run; written in key order, a seed makes the same cases on every run
+    // and target (C3).
+    let update = txn.encode_update_v1();
+    ncdb_core::rich_text::update::canonical(&update).unwrap_or(update)
 }
 
 /// A mark as TipTap writes it, picked by `pick`: a link with its four
