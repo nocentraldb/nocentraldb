@@ -95,6 +95,25 @@ mod test_trap {
     }
 }
 
+/// Rich text, with the compiler cfg `ncdb_rich_text` only (NOC-468;
+/// NOC-461): the bridge then answers the editor binding's calls, and the
+/// core exports a marker, which packages/sdk/build.mjs refuses, so the
+/// package never ships a core with rich text before its guard is complete.
+#[cfg(ncdb_rich_text)]
+mod rich_text {
+    /// The marker, as packages/sdk/richText.mjs holds it; exported on
+    /// wasm32 only.
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    const RICH_TEXT: &str = "nocentraldb:rich-text";
+
+    /// The marker: a core whose bridge answers the editor binding's calls.
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen::prelude::wasm_bindgen(js_name = richText)]
+    pub fn rich_text() -> String {
+        RICH_TEXT.to_owned()
+    }
+}
+
 /// The answer to a request that came while another was answered.
 fn busy(request: &[u8]) -> Vec<u8> {
     use nocentraldb::bridge::cbor::{self, Key, Value};

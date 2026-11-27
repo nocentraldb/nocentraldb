@@ -149,6 +149,12 @@ pub(crate) fn view_invalid_equality(index: impl std::fmt::Display) -> String {
     format!("index {index} fixes more fields with equality than it orders by.")
 }
 
+/// `unreadablePersonKeyRecord`: In core.viewCorrupt, as `what`, when the
+/// database holds a person-key record whose ids, generation or signature it
+/// cannot read.
+pub(crate) const UNREADABLE_PERSON_KEY_RECORD: &str =
+    "person-key record";
+
 /// `unreadableRelayEpoch`: In core.viewCorrupt, as `what`, when the database
 /// holds a relay epoch it cannot read.
 pub(crate) const UNREADABLE_RELAY_EPOCH: &str =

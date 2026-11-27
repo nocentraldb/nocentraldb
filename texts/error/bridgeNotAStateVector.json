@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeNotAStateVector",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "a state vector is a Yjs state vector in encoding v1",
+  "when": "The bridge, on a request from the TypeScript SDK: a richText.pull whose stateVector Yjs cannot read."
+}

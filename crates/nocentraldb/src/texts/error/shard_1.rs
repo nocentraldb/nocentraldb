@@ -71,7 +71,8 @@ pub(crate) fn no_later_edit(position: impl std::fmt::Display, change: impl std::
 }
 
 /// `fieldDoesNotHold` (invalidValue): Object::get::<T> when the field holds
-/// another kind of value than T.
+/// another kind of value than T; the bridge's rich-text editor binding
+/// (richText.open) on a field that is not rich text.
 pub(crate) fn field_does_not_hold(asked: impl std::fmt::Display) -> String {
     format!("the field does not hold {asked}")
 }

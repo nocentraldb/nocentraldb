@@ -48,6 +48,10 @@ pub(crate) enum Repr {
     /// The clear of a basic field, a link or a reference: a set (1) with
     /// no value.
     Clear,
+    /// A rich-text update under a leased client id, which only the bridge's
+    /// editor binding writes (RFC 0013, "An editor: the binding").
+    #[cfg(all(ncdb_rich_text, any(test, feature = "bridge")))]
+    RichText(crate::rich_text::RichTextUpdate),
 }
 
 impl Value {
@@ -221,6 +225,9 @@ impl Value {
             Repr::List(_) | Repr::Add(_) | Repr::Remove(_) | Repr::Data(_) | Repr::Clear => {
                 return None;
             }
+            // Operation 5's arguments, which `crate::encode` makes.
+            #[cfg(all(ncdb_rich_text, any(test, feature = "bridge")))]
+            Repr::RichText(_) => return None,
         })
     }
 

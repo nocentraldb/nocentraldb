@@ -30,6 +30,7 @@ const NEW = {
   exposed: false,
   waitingForKey: false,
   badPersonKeyRecords: [],
+  missingPersonKeys: 0,
   provisionalErasures: [],
   onlyMember: true,
 };
@@ -85,6 +86,7 @@ test("a space comes with its status, read with space.status.current()", async ()
     exposed: false,
     waitingForKey: false,
     badPersonKeyRecords: [],
+    missingPersonKeys: 0,
     provisionalErasures: [],
     onlyMember: true,
   });
@@ -123,6 +125,15 @@ test("its values keep their details: reasons, refusals, a newer model, provision
     { change: CHANGE, code: "author_not_member" },
   ]);
   expect(status.provisionalErasures).toEqual([erasure]);
+});
+
+// NOC-547: a reopen that cannot read a personal field says so.
+test("missingPersonKeys counts the person keys the device does not hold", async () => {
+  const { core } = fake({ ...NEW, missingPersonKeys: 2 });
+  const db = await connect(core, { model, lock });
+  const status = (await db.spaces.get(SPACE)).status.current();
+  expect(status.missingPersonKeys).toBe(2);
+  expectTypeOf(status.missingPersonKeys).toEqualTypeOf<number>();
 });
 
 test("a spaceStatus event changes current() and calls subscribers of that space only", async () => {

@@ -62,6 +62,10 @@ mod pairing;
 mod personal;
 mod query;
 mod relay;
+// What the TypeScript SDK's rich-text editor binding asks through the
+// bridge (NOC-461), built only with the compiler cfg `ncdb_rich_text`.
+#[cfg(all(ncdb_rich_text, any(test, feature = "bridge")))]
+mod rich_text;
 mod space;
 mod split;
 mod status;
@@ -118,6 +122,8 @@ mod fold_feed_tests;
 mod moving_tests;
 #[cfg(test)]
 mod page_limit_tests;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod personal_reopen_tests;
 #[cfg(test)]
 mod personal_write_tests;
 #[cfg(test)]
