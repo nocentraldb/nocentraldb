@@ -8,7 +8,7 @@ It builds on the schema of [RFC 0005](0005-schema-and-model-lock.md), the links 
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0018 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Draft. The owner decides it in its pull request. Each choice that decided text does not settle is a numbered question in a ticket for the owner, which the pull request names, with its options; this text is written with the first option of each, and is rewritten where an answer differs. Each requirement is decided and built on its own, and R3 may come first: its section depends on no other.
+**Status.** Draft. The owner decides it in its pull request. Each choice that decided text does not settle is a numbered question in NOC-552, a ticket for the owner, with its options; this text is written with the first option of each, and is rewritten where an answer differs. Each requirement is decided and built on its own, and R3 may come first: its section depends on no other.
 
 **At 0.1.** Not built. Release 0.1 has today's index form (`nc.index(fields, { equal })` and `.equal(...)`), `nc.link` and `nc.ref` as two field types, no edge collection and no index through a reference.
 
