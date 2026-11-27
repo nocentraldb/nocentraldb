@@ -1,0 +1,31 @@
+[package]
+name = "notes-backend"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "An example app backend: it signs admissions for its users (RFC 0015) and keeps a directory of their identities and invitations."
+
+[[bin]]
+name = "notes-backend"
+path = "src/main.rs"
+
+# The backend holds the app's admission key and signs admissions in RFC
+# 0015's format, without any crate of NoCentralDB: a backend in another
+# language does the same with its own Ed25519, SHA-256 and base64url. The
+# versions the SDK and the core pin.
+[dependencies]
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["alloc", "fast", "zeroize"] }
+sha2 = { version = "=0.11.1", default-features = false }
+base64 = { version = "=0.22.1", default-features = false, features = ["std"] }
+getrandom = { version = "=0.4.3", default-features = false }
+serde_json = { version = "=1.0.154", default-features = false, features = ["std"] }
+
+# The journey test runs the backend against the test relay, with devices on
+# the public Rust SDK, as an app's own tests would.
+[dev-dependencies]
+nocentraldb.workspace = true
+ncdb-relay-server.workspace = true
+tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "macros", "time"] }
+futures-core = { version = "=0.3.34", default-features = false, features = ["std"] }
