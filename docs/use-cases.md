@@ -116,7 +116,7 @@ You add the agent with an invitation it accepted and remove it by its member id,
 **In your app.**
 
 ```ts
-const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
+const query = model.tasks.indexes.byStatusPriority.where("open").take(50);
 const page = await db.find(query);                       // the first 50 open tasks, by priority
 const more = await db.find(query.after(page.cursor));    // the next 50
 ```
@@ -178,8 +178,8 @@ Rich text is one of several field types. In the Rust SDK, you can already define
 **In your app.**
 
 ```ts
-// in the schema: indexes: { unreadFor: nc.index(["to", "read"], { equal: 2 }) }
-db.subscribe(model.messages.indexes.unreadFor.equal(me, false).take(50), (page) => {
+// in the schema: indexes: { unreadFor: nc.index({ where: ["to", "read"] }) }
+db.subscribe(model.messages.indexes.unreadFor.where(me, false).take(50), (page) => {
   showUnread(page.items);   // called with the whole page after every fold that may change it
 });
 ```

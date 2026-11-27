@@ -208,6 +208,11 @@ impl Value {
     /// The value as a change carries it (RFC 0004, "Value rules per
     /// kind"): an object id as its 16 bytes. A list, an addition or a
     /// removal is no single value, nor is a clear.
+    /// Whether this is [`Value::clear`]: in a query, a field fixed to unset.
+    pub(crate) fn is_clear(&self) -> bool {
+        matches!(self.0, Repr::Clear)
+    }
+
     pub(crate) fn to_cbor(&self) -> Option<cbor::Value> {
         Some(match &self.0 {
             Repr::Text(text) => cbor::Value::Text(text.clone()),

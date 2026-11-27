@@ -15,13 +15,23 @@ const DESCRIBE = Symbol.for("nocentraldb.model.describe");
 type Json = unknown;
 type Entries = Record<string, Record<string, Json> | undefined>;
 
-/** What a field's type is in the lock and in the model's description: the type, with its options, targets, element and person. */
+/** A rich-text field's vocabulary as the lock keeps it: each list sorted, without duplicates, and none when both are empty (RFC 0013). */
+const vocabularyShape = (vocabulary: Json): Json => {
+  const { nodes, marks } = (vocabulary ?? {}) as { nodes?: Json; marks?: Json };
+  const names = (list: Json) =>
+    [...new Set(Array.isArray(list) ? list : [])].sort();
+  const shaped = { nodes: names(nodes), marks: names(marks) };
+  return shaped.nodes.length + shaped.marks.length === 0 ? undefined : shaped;
+};
+
+/** What a field's type is in the lock and in the model's description: the type, with its options, targets, element, person and vocabulary. */
 const shape = (field: Record<string, Json>): Json => ({
   type: field.type,
   options: field.options,
   targets: field.targets,
   of: field.of,
   personal: field.personal,
+  vocabulary: vocabularyShape(field.vocabulary),
 });
 
 /** What an index is: its fields with their directions, its equality prefix and its scope. */

@@ -102,9 +102,17 @@ fn a_wrong_word_is_refused_and_the_code_stays() {
     );
     let error = field(&answer, "error").expect("refused");
     assert_eq!(field(error, "code"), Some(&text("invalidValue")));
+    // The message names the position and no word: neither the typed word
+    // nor the code's word. It is compared whole, because the code's word
+    // is random and can be a word of the message itself, such as "word"
+    // or "match" (NOC-535).
     let message = as_text(field(error, "message").expect("a message"));
-    assert!(message.contains(&format!("word {b}")), "{message}");
-    assert!(!message.contains(wrong) && !message.contains(&shown[b - 1]));
+    assert_eq!(
+        message,
+        format!(
+            "word {b} does not match the recovery code, which stays until two of its words match"
+        )
+    );
     assert_eq!(words(&mut bridge), Some(shown));
 }
 

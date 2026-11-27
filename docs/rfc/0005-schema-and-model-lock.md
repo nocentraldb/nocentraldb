@@ -15,7 +15,7 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 ## What this RFC does not cover
 
 - **Computed fields and views.** This RFC names the places where they go in the schema and in `model.lock.json`, so their names are reserved, but it does not design them. A later RFC does. Indexes are declared here (see [Indexes](#indexes)); how a query uses them is RFC 0006's.
-- **Rich text and streams.** The agent task board needs a rich-text body, so this RFC reserves the names `nc.richText` and `nc.stream`. Their field types, and so their entries in `model.lock.json`, belong to later RFCs.
+- **Rich text and streams.** The agent task board needs a rich-text body, so this RFC reserves the names `nc.richText` and `nc.stream`. Their field types belong to later RFCs: rich text to [RFC 0013](0013-rich-text.md), whose vocabulary this RFC's lock and additive-change rule hold ([Field types](#field-types)); streams to an RFC not yet written.
 - **Writing a field type plugin.** This RFC says how a schema uses a plugin's field type and how `model.lock.json` references it. How a plugin is written and registered is [RFC 0011](0011-plugin-field-types.md)'s, under the contract of RFC 0004: it is Rust compiled into the core, never code loaded at run time (2026-11-12, NOC-232).
 - **The crypto of personal fields.** This RFC says how the schema marks a field as personal and ties it to a person. RFC 0003 encrypts it.
 - **Migrations.** A change that is not additive is refused (see [The additive-change rule](#the-additive-change-rule)). That includes moving a field to a new rule version of its type, which RFC 0004 allows only with a migration. Migrations are a later RFC.
@@ -64,8 +64,8 @@ export const model = nc.model({
       computed: { blocked: nc.reach("dependsOn", { status: ["open", "in_progress"] }) },
       views: { ready: nc.view("tasks", { where: { blocked: false }, sort: ["priority"] }) },
       indexes: {
-        byStatusPriority: nc.index(["status", "priority"], { equal: 1 }),
-        byPriorityDesc: nc.index([{ field: "priority", direction: "desc" }]),
+        byStatusPriority: nc.index({ where: ["status"], orderBy: ["priority"] }),
+        byPriorityDesc: nc.index({ orderBy: ["-priority"] }),
       },
     },
   ),
@@ -119,12 +119,14 @@ Each function returns a field. The functions map to the field types of [RFC 0001
 | `nc.link("collection")` | `ncdb/link` | Basic value whose value is an object id | The target, with its resolution status |
 | `nc.links("collection")` | `ncdb/links` | Set of object ids | The targets, each with its resolution status |
 | `nc.ref("collection")` | `ncdb/ref` | Basic value whose value is a space id and an object id ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references)) | The target's space id and object id; its state, ok, not accessible or missing, comes from the member's own copies |
-| `nc.richText()` | reserved | Later RFC (Yjs and Yrs) | Later RFC |
+| `nc.richText({ vocabulary })` | `ncdb/richText` | Rich text, a Yjs document ([RFC 0013](0013-rich-text.md)) | Its Markdown |
 | `nc.stream()` | reserved | Later RFC | Later RFC |
 
 `nc.set` takes one of the basic value functions as its element, except `nc.date()` and `nc.timestamp()`: `nc.set(nc.string())`, `nc.set(nc.oneOf(["bug", "feature"]))`. A set of links is `nc.links`, not `nc.set(nc.link(...))`.
 
 `nc.link` and `nc.links` take one collection name, or a list of them when a link may point into several collections: `nc.links(["tasks", "milestones"])`. A link always points into the object's own space (RFC 0004).
+
+`nc.richText` takes the field's vocabulary: the names of the nodes and the marks its editor's schema holds, `nc.richText({ vocabulary: { nodes: ["paragraph", "heading"], marks: ["bold", "link"] } })`. The lock keeps it under the field's key `vocabulary`, each list sorted and without duplicates: `"vocabulary": { "marks": ["bold", "link"], "nodes": ["heading", "paragraph"] }`. `nc.richText()` without it declares an empty vocabulary and writes no `vocabulary` key. The vocabulary may only grow ([Accepted](#accepted), [Refused](#refused)); it is no part of the merge rule, and the editor binding, not the core, checks it ([RFC 0013, "The field in the schema and the lock"](0013-rich-text.md#the-field-in-the-schema-and-the-lock)).
 
 A field type from a plugin is used the same way: the plugin's package exports a function that returns a field, and the schema calls it next to the built-in ones. In v1 a plugin field is Rust only: only the Rust SDK registers plugins, and the TypeScript SDK has none ([RFC 0011, "TypeScript"](0011-plugin-field-types.md#typescript); 2026-11-20, NOC-362).
 
@@ -154,7 +156,7 @@ export const model = nc.model({
       customer: nc.ref("customers"),
       total: nc.float(),
     },
-    { indexes: { byCustomer: nc.index(["customer"], { equal: 1 }) } },
+    { indexes: { byCustomer: nc.index({ where: ["customer"] }) } },
   ),
 });
 ```
@@ -194,7 +196,7 @@ export const model = nc.model({
       occurredAt: nc.timestamp(),
       doneOn: nc.date(),
     },
-    { indexes: { byOccurredAt: nc.index([{ field: "occurredAt", direction: "desc" }]) } },
+    { indexes: { byOccurredAt: nc.index({ orderBy: ["-occurredAt"] }) } },
   ),
 });
 ```
@@ -248,8 +250,8 @@ The second argument of `nc.collection` has two places, `computed` and `views`, a
 
 GENESIS.md's principle 6 says queries run only through declared indexes. The schema declares them in the `indexes` place of `nc.collection`, by name:
 
-- `nc.index(fields, options)` takes the fields in index order. Each is a field name, which sorts ascending, or `{ field, direction }` with `direction` `"asc"` or `"desc"`.
-- The option `equal` is the number of leading fields a query must fix with equality, 0 by default. `byStatusPriority` above has `equal: 1`: a query on it names one status and pages through that status's tasks by priority.
+- `nc.index({ where, orderBy })` names the fields a query fixes with equality, `where`, and the fields that order the result, `orderBy`, each in index order ([RFC 0018, "Named equality and order in an index"](0018-model-api-for-placement.md#r3-named-equality-and-order-in-an-index)). An `orderBy` name sorts ascending; a name with a leading `-` sorts descending. `byStatusPriority` above names `status` in `where`: a query on it names one status and pages through that status's tasks by priority. Either list may be left out, but not both, and no field is named twice.
+- `nc.index(fields, options)` is a second spelling of the same index, and stays valid. It takes the fields in index order, each a field name, which sorts ascending, or `{ field, direction }` with `direction` `"asc"` or `"desc"`; its option `equal` is the number of leading fields a query must fix with equality, 0 by default. `nc.index({ where: ["status"], orderBy: ["priority"] })` and `nc.index(["status", "priority"], { equal: 1 })` build the same lock entry, byte for byte: the lock writes the `where` fields first, each ascending, then the `orderBy` fields with their directions, and `equal` is the number of `where` fields.
 - The option `scope: "space"` puts the space id before the index's fields, so that a query on it runs in one space, through `space.find` ([RFC 0009, "Queries and indexes"](0009-sdk-api.md#queries-and-indexes)). Without it, an index spans every space of the member. Where the space id goes among the index's columns is RFC 0006's.
 - An index can use basic values (`nc.string`, `nc.int`, `nc.float`, `nc.boolean`, `nc.oneOf`, `nc.date`, `nc.timestamp`), single links (`nc.link`) and references (`nc.ref`). A reference indexes as one column, the target's space id followed by its object id, as stored and whatever its state, so the index is the same on every member of the space ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)). Sets, many links, rich text, streams and plugin types cannot be indexed in v1: a field with many values, or with no order of its own, needs its own rule for which rows it puts in an index. Computed fields in indexes belong to the computed-fields RFC.
 - A personal field can be indexed. The view holds it in plaintext on the device anyway, and erases it from the view and its indexes after a shred (RFC 0006).
@@ -388,7 +390,7 @@ At the top:
 
 | Key | Meaning |
 | --- | --- |
-| `format` | The version of the lock's own format. This RFC defines format 1. A reader that does not know the format refuses the lock, because the lock ships with the app and a mismatch is a build error, not data to keep. A later format is a superset of the previous one, and every SDK reads every earlier format. |
+| `format` | The version of the lock's own format. This RFC defines format 1. A reader that does not know the format refuses the lock, because the lock ships with the app and a mismatch is a build error, not data to keep. A later format is a superset of the previous one, and every SDK reads every earlier format. Within a format, a later lock may add an optional key that changes no merge rule, such as a rich-text field's `vocabulary`; a reader ignores a key it does not know, so an older core reads such a lock and folds it as a newer core does. |
 | `model.id` | 128 random bits in hex, drawn by the first `ncdb model build` of the app and never changed. It names the model's lineage, so the SDK can refuse a lock that is not a successor of the newest one it opened the database with (see [Two checks: at build and on the device](#two-checks-at-build-and-on-the-device)). |
 | `model.version` | The model version: 1 for the first build, one higher for each build that changes the model. A build that changes only descriptions keeps the version. |
 | `model.hash` | `sha256:` and the SHA-256 hash of the canonical JSON (RFC 8785) of `format`, `plugins` and `collections`, with every `description` removed. It identifies the model's content: two locks with the same hash describe the same model. It is a fingerprint, not a security feature. |
@@ -415,6 +417,7 @@ Per field:
 | `description` | The text of `.describe()`. |
 | `deprecated` | The model version that deprecated the field, and `deprecatedReason`, the text of `.deprecated()`. |
 | `config` | For a plugin's field type: its options, as the plugin defines them. |
+| `vocabulary` | For `ncdb/richText`: `nodes` and `marks`, the names its editor's schema holds, each sorted; left out when both are empty. |
 
 ### Canonical form
 
@@ -451,6 +454,7 @@ GENESIS.md gives up "free schema changes (rename, retype, delete a field)" so th
 | Add a field to a collection | The same. Objects written before read the new field as unset. |
 | Add a personal field | As adding a field. |
 | Append an option to a choice, or to a set of choices | Old clients keep the new option as written and read it as an unknown option (RFC 0004). |
+| Add a node or a mark to a rich-text field's `vocabulary` | The vocabulary is no part of the merge rule, so every client folds the field as before. An older app's editor meets the new name as a node it does not know, and the binding's three measures keep it editing ([RFC 0013, "An editor that cannot show a node"](0013-rich-text.md#an-editor-that-cannot-show-a-node)). |
 | Add a collection to a link's or a reference's `targets` | Old clients keep the link and read its status as **wrong collection** (RFC 0004), and keep the reference and read its state as **missing** ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references)), until they upgrade. |
 | Add a computed field or a view (name only, for now) | Computed values are derived locally; they are not in the changes. |
 | Add, change or remove an index, or change its scope | Indexes are built locally from the view (RFC 0006) and never travel in a change. A page cursor names its index and the model hash (RFC 0006), so a cursor from before the change is refused, not misread. |
@@ -469,6 +473,7 @@ Appending options and adding targets are accepted because a task board without a
 | Move a field to a new rule version of its type | RFC 0004 allows a new rule version only with a migration that every member runs before the schema uses it. Migrations are a later RFC; until it exists, the build refuses. A new field can use the new rule version at once, and the old field can be deprecated. |
 | Change a plugin field's `config` | A plugin type's `config` is part of its merge rule: two members that fold one field with different options could diverge (principle 2). A `config` that appears or disappears is a change too, since a field folded without options and the same field folded with them could merge differently; configs compare as JSON values, so another key order is no change (NOC-251; [decision](../../factory/decisions/2026-11-12-NOC-251-a-plugin-config-that-appears-or-disappears-is-a-change.md)). Add a new field with the new `config`, and deprecate the old one (2026-11-12, NOC-232; [RFC 0011, "A type that is not registered"](0011-plugin-field-types.md#a-type-that-is-not-registered)). |
 | Remove, rename or reorder an option of a choice | Stored values name options; order may become sort order in views. |
+| Remove a node or a mark from a rich-text field's `vocabulary` | Content written with the name would hold a node or a mark the app no longer declares, and the binding would refuse the editor that still writes it. Keep the name. |
 | Remove a collection from a link's or a reference's `targets` | Existing links would turn from **ok** to **wrong collection**, and references from **ok** to **missing**, on upgraded clients only. |
 | Mark an existing field as personal | The field's earlier values are already in the log in plain form, under the space key only. Destroying a person key would not erase them, and a reader would believe it did (principle 4). Add a new personal field instead. |
 | Unmark a personal field, or change its `person` | Old values stay sealed under person keys; new ones would not be. The field would be half erasable. |
@@ -660,7 +665,7 @@ Every public name this RFC introduces or keeps, in one place. They are the first
 | `nc.link` | A link to one object | new |
 | `nc.links` | Links to many objects | RFC 0001 |
 | `nc.ref` | A reference to one object, which may live in another space | new |
-| `nc.richText` | Rich text | reserved |
+| `nc.richText` | Rich text, with the option `vocabulary` (`nodes`, `marks`) | RFC 0013 |
 | `nc.stream` | A stream | reserved |
 | `nc.reach` | A computed function | RFC 0001, reserved |
 | `nc.view` | A view | RFC 0001, reserved |
@@ -689,8 +694,10 @@ Every public name this RFC introduces or keeps, in one place. They are the first
 | Collection keys `since`, `fields`, `computed`, `views`, `indexes`, `deprecated`, `deprecatedReason` | new |
 | Index keys `fields` (`field`, `direction`), `equal`, `scope`, `since` | new |
 | Field keys `type`, `rule`, `since`, `options`, `of`, `targets`, `personal` (`person`), `description`, `deprecated`, `deprecatedReason`, `config` | new |
+| Field key `vocabulary` (`nodes`, `marks`) | RFC 0013 |
 | Plugin keys `npm`, `crate` | new |
 | The type id namespace `ncdb/` and the ids `ncdb/string`, `ncdb/int`, `ncdb/float`, `ncdb/boolean`, `ncdb/choice`, `ncdb/date`, `ncdb/timestamp`, `ncdb/set`, `ncdb/link`, `ncdb/links`, `ncdb/ref` | new |
+| The type id `ncdb/richText` | RFC 0013 |
 
 ## How this RFC is tested
 
@@ -713,6 +720,7 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 - **2026-11-22 · Every sealed change of a space of another model parks as "another model", whatever its key 64 says.** ([decision](../../factory/decisions/2026-11-11-NOC-57-a-space-of-another-model-parks-every-sealed-change.md))
 - **2026-11-22 · A plugin field's `config` that appears or disappears is a changed `config`.** ([decision](../../factory/decisions/2026-11-12-NOC-251-a-plugin-config-that-appears-or-disappears-is-a-change.md))
 - **2026-11-22 · The hidden field `$movedFrom` names the space a moved object came from.** (NOC-447)
+- **2026-11-27 · `nc.richText({ vocabulary })` declares a rich-text field's nodes and marks in the lock, which may only grow.** ([decision](../../factory/decisions/2026-11-27-NOC-553-a-rich-text-field-declares-its-vocabulary-in-the-schema-and-the-lock-which-may-only-grow.md))
 
 ## History
 
@@ -729,3 +737,5 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
 - 2026-11-23 · The hidden field `$movedFrom` of RFC 0016's move (NOC-474, #474)
 - 2026-11-23 · Inline attributions keep the date and the ticket and name nobody who decided; the decision log records it (NOC-481, #475)
+- 2026-11-27 · `nc.richText({ vocabulary })`, its lock key, and a vocabulary that may only grow (NOC-553, NOC-558, NOC-554, #509)
+- 2026-11-27 · The named index form `nc.index({ where, orderBy })` beside `nc.index(fields, { equal })`, which builds the same lock entry (NOC-563, #516)

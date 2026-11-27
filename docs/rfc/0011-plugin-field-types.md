@@ -125,6 +125,8 @@ This keeps what a member does not understand, as principle 3 asks and as an unkn
 
 **A changed `config` is refused by the build.** A plugin type's `config` is part of its merge rule: two members that fold one field with different options could reach different states. So `ncdb model build` and the check on the device refuse a change of a field's `config`, as they refuse a change of its type ([RFC 0005, "Refused"](0005-schema-and-model-lock.md#refused)). A new field with the new `config` can be added, and the old one deprecated.
 
+**One configuration may grow: a rich-text field's vocabulary.** The names of the nodes and marks a rich-text field declares ([RFC 0013, "The field in the schema and the lock"](0013-rich-text.md#the-field-in-the-schema-and-the-lock)) are the one configuration of a field that may change after the field was added, and only by growing: the build and the check on the device accept an added name and refuse a removed one. It is no exception to the reason above, because the vocabulary is no part of rich text's merge rule: every member folds the field the same way whatever its lock declares, and only the editor binding reads it. A plugin's `config` stays fixed.
+
 **Not taken.** Refusing to open, with `modelRefused` naming the field: the lock and the binary ship together, so a missing plugin is a build error, as RFC 0005 treats an unknown lock format, but it would stop every app and tool that lacks the plugin, which is every TypeScript app in v1. Refusing only in debug builds and opening in release builds: the same lock would then behave differently by build, which a developer meets only once it ships.
 
 ## Checking a plugin: ncdb-harness
@@ -166,7 +168,7 @@ A plugin is code in the member's process. It sees the decrypted content of its f
 - **It does not prove a plugin converges.** The harness checks it in the plugin's CI; the core runs what the app registers.
 - **It does not sandbox a plugin.** A plugin is trusted code in the member's process, like any dependency.
 - **It gives TypeScript no plugins in v1.** A plugin field reads as unset on a TypeScript member and cannot be written there, until `ncdb core build` lands.
-- **It does not change a field's rule or `config`.** Both stay as the field was added, until migrations exist.
+- **It does not change a field's rule or `config`.** Both stay as the field was added, until migrations exist. The one configuration that may grow is a built-in type's: a rich-text field's vocabulary ([A type that is not registered](#a-type-that-is-not-registered)).
 - **It does not index a plugin field.** There is no column and no order for its values yet.
 - **It does not copy a plugin field into an ad-hoc space.** A plugin's read is no intent its `write` takes, as a counter reads 5 and takes an increment, and a plugin has no copy operation, so the SDK cannot copy a plugin field from what it reads. An ad-hoc copy leaves the field unset and counts each set plugin field it left out, in `plugin_fields_not_copied` in Rust and `pluginFieldsNotCopied` in TypeScript, beside the notice ([RFC 0009, "Sub-agents and ad-hoc spaces"](0009-sdk-api.md#sub-agents-and-ad-hoc-spaces); NOC-318; [decision](../../factory/decisions/2026-11-15-NOC-318-an-ad-hoc-copy-leaves-plugin-fields-unset-and-counts-what-it-left-out.md)). Refusing an object with a set plugin field, which would keep a sub-agent from objects its task needs, was not taken. A copy operation in the plugin API is later work.
 - **It does not keep old rule versions for a plugin.** A plugin release that drops a rule version makes the fields that name it park.
@@ -200,6 +202,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which lets developers add field ty
 
 - **2026-11-15 · An ad-hoc copy leaves a plugin field unset and counts it.** ([decision](../../factory/decisions/2026-11-15-NOC-318-an-ad-hoc-copy-leaves-plugin-fields-unset-and-counts-what-it-left-out.md))
 - **2026-11-20 · `ncdb-harness` is published to crates.io after 0.1.** ([decision](../../factory/decisions/2026-11-20-NOC-362-ncdb-harness-stays-unpublished-until-after-0-1.md))
+- **2026-11-27 · A rich-text field's vocabulary is the one configuration that may grow; a plugin's `config` stays fixed.** ([decision](../../factory/decisions/2026-11-27-NOC-553-a-rich-text-field-declares-its-vocabulary-in-the-schema-and-the-lock-which-may-only-grow.md))
 
 ## History
 
@@ -211,6 +214,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which lets developers add field ty
 - 2026-11-22 · An ad-hoc copy leaves a plugin field unset and counts it (NOC-379, NOC-318, #449)
 - 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
 - 2026-11-23 · Inline attributions keep the date and the ticket and name nobody who decided; the decision log records it (NOC-481, #475)
+- 2026-11-27 · A rich-text field's vocabulary is the one configuration that may grow (NOC-553, NOC-558, NOC-554, #509)
 
 ## How this RFC is tested
 

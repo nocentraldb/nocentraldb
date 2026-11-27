@@ -12,8 +12,8 @@ export const model = nc.model({
     {
       indexes: {
         // The tasks of one status, in every space of the device, by
-        // title: a query fixes the status with `.equal(...)`.
-        byStatus: nc.index(["status", "title"], { equal: 1 }),
+        // title: a query fixes the status with `.where(...)`.
+        byStatus: nc.index({ where: ["status"], orderBy: ["title"] }),
       },
     },
   ),

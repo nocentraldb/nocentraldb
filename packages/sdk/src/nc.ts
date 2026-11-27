@@ -85,7 +85,7 @@ type Item<F extends Fields> = Readable<F> & {
   readonly $deleted: boolean;
 };
 
-/** The values `.equal` takes for the first `N` fields `K` of a collection with the fields `F`: one per field, of that field's type. */
+/** The values `.where` and `.equal` take for the first `N` fields `K` of a collection with the fields `F`: one per field, of that field's type, or `null` for an unset field (RFC 0006, "Declared indexes and ordered pages"). */
 type EqualValues<
   F extends Fields,
   K extends readonly string[],
@@ -101,7 +101,7 @@ type EqualValues<
         F,
         R,
         N,
-        [...Taken, Exclude<F[H & keyof F]["nc.reads"], undefined>]
+        [...Taken, Exclude<F[H & keyof F]["nc.reads"], undefined> | null]
       >
     : Taken;
 
@@ -170,8 +170,11 @@ type Spec =
       type: "ncdb/link" | "ncdb/links" | "ncdb/ref";
       targets: string[];
     }
-  | { kind: "richText" }
+  | { kind: "richText"; vocabulary?: Vocabulary }
   | { kind: "reserved"; name: string };
+
+/** A rich-text field's vocabulary: the names of the nodes and the marks its editor uses (RFC 0013, "The field in the schema and the lock"). */
+type Vocabulary = { nodes: string[]; marks: string[] };
 
 /** A field's type with its modifiers. */
 type FieldState = {
@@ -193,7 +196,15 @@ type IndexState = {
   fields: { field: string; direction: "asc" | "desc" }[];
   equal: number;
   scope?: "space";
+  /** For the named form: what the build refuses in it, if anything. */
+  named?: NamedRefusal | undefined;
 };
+
+/** A named index the build refuses: one without a field, one that names a field twice, or one with a field in both `where` and `orderBy`. */
+type NamedRefusal =
+  | { kind: "noField" }
+  | { kind: "twice"; field: string }
+  | { kind: "both"; field: string };
 
 /** An object id, as a link reads: its 16 bytes as 32 lowercase hex digits (RFC 0009, "Get by id"). */
 type ObjectId = string;
@@ -323,9 +334,24 @@ export const ref = (target: string | readonly string[]): Ref =>
   unpersonal({
     spec: { kind: "link", type: "ncdb/ref", targets: targets(target) },
   });
-/** Rich text: a shared document, which reads as its Markdown and takes no options (RFC 0013, "The field in the schema and the lock"). */
-export const richText = (): RichText =>
-  unpersonal({ spec: { kind: "richText" } });
+/** Rich text: a shared document, which reads as its Markdown. `vocabulary` names the nodes and marks its editor uses; a later model may add names, never remove one (RFC 0013, "The field in the schema and the lock"). */
+export const richText = (options?: {
+  vocabulary?: { nodes?: readonly string[]; marks?: readonly string[] };
+}): RichText => {
+  const vocabulary = options?.vocabulary;
+  return unpersonal({
+    spec:
+      vocabulary === undefined
+        ? { kind: "richText" }
+        : {
+            kind: "richText",
+            vocabulary: {
+              nodes: [...(vocabulary.nodes ?? [])],
+              marks: [...(vocabulary.marks ?? [])],
+            },
+          },
+  });
+};
 /** A stream: reserved, its field type belongs to a later RFC. */
 export const stream = (): Field<never> =>
   field({ spec: { kind: "reserved", name: "nc.stream" } });
@@ -341,28 +367,103 @@ export const reach = (..._args: unknown[]): Named => name();
 /** A view: named now, its arguments belong to the computed-fields RFC. */
 export const view = (..._args: unknown[]): Named => name();
 
+/** An index in the named form (RFC 0018, "Named equality and order in an index"): the fields a query fixes with equality, `where`, and the fields that order the result, `orderBy`, each ascending unless its name starts with `-`. */
+type NamedIndex<
+  W extends readonly string[] = readonly string[],
+  O extends readonly string[] = readonly string[],
+> = { where?: W; orderBy?: O; scope?: "space" };
+
+/** The field names of `orderBy`, without the `-` of a descending one. */
+type Unsigned<O extends readonly string[]> = {
+  [P in keyof O]: O[P] extends `-${infer N}` ? N : O[P];
+};
+
+/**
+ * Declares an index in the named form: `where` lists the fields a query
+ * fixes with `.where(...)`, in index order, and `orderBy` the fields that
+ * order the result, each ascending unless its name starts with `-`; with
+ * `scope: "space"` it runs in one space at a time instead of across every
+ * space of the member. It builds the same lock entry as today's form with
+ * the `where` fields first and `equal` their count (RFC 0018, "Named equality and order in an index").
+ */
+export function index<
+  const W extends readonly string[] = readonly [],
+  const O extends readonly string[] = readonly [],
+>(spec: NamedIndex<W, O>): Index<[...W, ...Unsigned<O>], W["length"]>;
 /** Declares an index: fields in index order, each ascending unless it says otherwise, how many leading fields a query fixes with equality (`equal`, 0 by default), and with `scope: "space"` an index that runs in one space at a time instead of across every space of the member. */
-export const index = <
+export function index<
   const K extends readonly (
     | string
     | { field: string; direction: "asc" | "desc" }
   )[],
   const N extends number = 0,
->(
-  fields: K,
-  options: { equal?: N; scope?: "space" } = {},
-): Index<Names<K>, N> => {
-  const made = {} as Index<Names<K>, N>;
-  indexStates.set(made, {
-    fields: fields.map((entry) =>
-      typeof entry === "string"
-        ? { field: entry, direction: "asc" }
-        : { field: entry.field, direction: entry.direction },
-    ),
-    equal: options.equal ?? 0,
-    ...(options.scope === undefined ? {} : { scope: options.scope }),
-  });
+>(fields: K, options?: { equal?: N; scope?: "space" }): Index<Names<K>, N>;
+export function index(
+  given: readonly (string | IndexField)[] | NamedIndex,
+  options: { equal?: number; scope?: "space" } = {},
+): Index {
+  const made = {} as Index;
+  indexStates.set(
+    made,
+    isNamed(given) ? namedState(given) : todayState(given, options),
+  );
   return made;
+}
+
+type IndexField = { field: string; direction: "asc" | "desc" };
+
+const isNamed = (
+  given: readonly (string | IndexField)[] | NamedIndex,
+): given is NamedIndex => !Array.isArray(given);
+
+const scoped = (scope: "space" | undefined) =>
+  scope === undefined ? {} : { scope };
+
+const todayState = (
+  fields: readonly (string | IndexField)[],
+  options: { equal?: number; scope?: "space" },
+): IndexState => ({
+  fields: fields.map((entry) =>
+    typeof entry === "string"
+      ? { field: entry, direction: "asc" }
+      : { field: entry.field, direction: entry.direction },
+  ),
+  equal: options.equal ?? 0,
+  ...scoped(options.scope),
+});
+
+const namedState = (spec: NamedIndex): IndexState => {
+  const where = spec.where ?? [];
+  const orderBy = (spec.orderBy ?? []).map(
+    (name): IndexField =>
+      name.startsWith("-")
+        ? { field: name.slice(1), direction: "desc" }
+        : { field: name, direction: "asc" },
+  );
+  return {
+    fields: [
+      ...where.map((field): IndexField => ({ field, direction: "asc" })),
+      ...orderBy,
+    ],
+    equal: where.length,
+    ...scoped(spec.scope),
+    named: refusal(where, orderBy),
+  };
+};
+
+/** What the build refuses in a named index, when anything. */
+const refusal = (
+  where: readonly string[],
+  orderBy: readonly IndexField[],
+): NamedRefusal | undefined => {
+  if (where.length + orderBy.length === 0) return { kind: "noField" };
+  const ordered = orderBy.map((entry) => entry.field);
+  for (const list of [where, ordered]) {
+    const twice = list.find((name, i) => list.indexOf(name) !== i);
+    if (twice !== undefined) return { kind: "twice", field: twice };
+  }
+  const both = where.find((name) => ordered.includes(name));
+  return both === undefined ? undefined : { kind: "both", field: both };
 };
 
 /** The model as `ncdb model build` reads it (the core's `Draft`). */
@@ -401,7 +502,11 @@ const describeCollection = (name: string, state: CollectionState) => {
     if (declared === undefined) {
       throw new Error(texts.notAnIndex(name, key));
     }
-    indexes[key] = declared;
+    const { named, ...entry } = declared;
+    if (named !== undefined) {
+      throw new Error(refused(name, key, named));
+    }
+    indexes[key] = entry;
   }
   return {
     ...(state.deprecated === undefined ? {} : { deprecated: state.deprecated }),
@@ -414,6 +519,21 @@ const describeCollection = (name: string, state: CollectionState) => {
     ),
     indexes,
   };
+};
+
+const refused = (
+  collection: string,
+  key: string,
+  named: NamedRefusal,
+): string => {
+  switch (named.kind) {
+    case "noField":
+      return texts.indexNamesNoField(collection, key);
+    case "twice":
+      return texts.indexNamesFieldTwice(collection, key, named.field);
+    case "both":
+      return texts.indexFieldInWhereAndOrderBy(collection, key, named.field);
+  }
 };
 
 const describeField = (
@@ -445,7 +565,9 @@ const describeType = (path: string, spec: Spec): Record<string, unknown> => {
     case "link":
       return { type: spec.type, targets: spec.targets };
     case "richText":
-      return { type: "ncdb/richText" };
+      return spec.vocabulary === undefined
+        ? { type: "ncdb/richText" }
+        : { type: "ncdb/richText", vocabulary: spec.vocabulary };
     case "reserved":
       throw new Error(texts.reservedFieldType(path, spec.name));
     case "set": {
