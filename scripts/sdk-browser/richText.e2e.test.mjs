@@ -11,11 +11,10 @@
 // `repo:sdk-browser`, not by `pnpm gates`.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
 import { after, before, test } from "node:test";
-import { build, DIST, LOCK, prebuilt, ROOT } from "./build.mjs";
+import { build, DIST, LOCK, prebuilt } from "./build.mjs";
 import { launch } from "./engine.mjs";
+import { routeModules, yjsModules } from "./importMap.mjs";
 import {
   buildRichText,
   prebuiltRichText,
@@ -65,59 +64,9 @@ const MODEL = `nc.model({
   }),
 })`;
 
-// Yjs and the lib0 modules it imports, as files of the repository's
-// node_modules: the import map's entries, and where each is served from.
-const require = createRequire(join(ROOT, "packages", "sdk", "package.json"));
-const modules = (() => {
-  const served = new Map();
-  const entries = {};
-  const packageDir = (name, from) =>
-    dirname(
-      createRequire(from).resolve(`${name}/package.json`, {
-        paths: [dirname(from)],
-      }),
-    );
-  /** Serves the file at `path` under `url`, and each module it imports. */
-  const file = (path, url) => {
-    if (served.has(url)) return;
-    served.set(url, path);
-    for (const [, specifier] of readFileSync(path, "utf8").matchAll(
-      /(?:\bfrom|\bimport)\s*['"]([^'"]+)['"]/g,
-    )) {
-      if (specifier.startsWith(".")) {
-        file(
-          join(dirname(path), specifier),
-          new URL(specifier, `http://x${url}`).pathname,
-        );
-      } else {
-        bare(specifier, path);
-      }
-    }
-  };
-  /** Maps the bare `specifier`, as `from` imports it, onto its package's file. */
-  const bare = (specifier, from) => {
-    if (entries[specifier]) return;
-    const [scope, ...rest] = specifier.split("/");
-    const dir = packageDir(scope, from);
-    const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
-    const key = rest.length ? `./${rest.join("/")}` : ".";
-    // Conditions as a browser's bundler picks them.
-    const pick = (entry) =>
-      typeof entry === "string" || entry === undefined
-        ? entry
-        : pick(entry.browser ?? entry.import ?? entry.module ?? entry.default);
-    const target = pick(pkg.exports?.[key]) ?? pkg.module;
-    const url = `/modules/${scope}/${target.replace(/^\.\//, "")}`;
-    entries[specifier] = url;
-    file(join(dir, target), url);
-  };
-  bare("yjs", require.resolve("yjs"));
-  return { served, entries };
-})();
-
 const page = `<!doctype html>
 <meta charset="utf-8">
-<script type="importmap">${JSON.stringify({ imports: modules.entries })}</script>
+<script type="importmap">${JSON.stringify({ imports: yjsModules.entries })}</script>
 <script type="module">
   import { nc } from "/sdk/index.js";
   import * as Y from "yjs";
@@ -141,14 +90,7 @@ const open = async (server) => {
   await tab.route(`${server.url}/rich-text.html`, (route) =>
     route.fulfill({ body: page, contentType: "text/html; charset=utf-8" }),
   );
-  await tab.route(`${server.url}/modules/**`, (route) => {
-    const path = modules.served.get(new URL(route.request().url()).pathname);
-    if (!path) return route.fulfill({ status: 404 });
-    return route.fulfill({
-      body: readFileSync(path),
-      contentType: "text/javascript; charset=utf-8",
-    });
-  });
+  await routeModules(tab, server.url);
   await tab.goto(`${server.url}/rich-text.html`);
   await tab.waitForFunction(() => window.ready === true);
   return { tab, errors };
