@@ -660,6 +660,15 @@ pub(crate) const DATABASE_NAME: &str =
 pub(crate) const EQUALITY_PREFIX: &str =
     "the query does not give one value per field of the index's equality prefix";
 
+/// `moveRichTextBackLater` (notAllowed): Space::move_objects (space.move) when
+/// an object with a written rich-text field moves into a space whose copy
+/// already holds the object, such as a move back: re-creating the document
+/// there would show its text twice, and how it moves back is open (NOC-539;
+/// owner question NOC-560).
+pub(crate) fn move_rich_text_back_later(id: impl std::fmt::Display, name: impl std::fmt::Display) -> String {
+    format!("the object {id} has a written rich-text field {name}, and the space it moves to already holds the object, so its document cannot be moved there yet")
+}
+
 /// `moveAlreadyMoved` (invalidValue): Space::move_objects (space.move) when an
 /// object to move reads as moved in this space (RFC 0016, "The SDK call and its
 /// notice").

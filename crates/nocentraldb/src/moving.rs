@@ -100,6 +100,10 @@ impl Space {
             )?;
         }
         let sources = sources(&inner, old.0, objects)?;
+        #[cfg(ncdb_rich_text)]
+        for object in &sources {
+            back_without_rich_text(&inner, new.0, object)?;
+        }
         let moved: BTreeSet<CoreObjectId> = sources.iter().map(|o| o.id().0).collect();
         let model = inner.model.clone();
         let mut create = Transaction::new(&model);
@@ -368,6 +372,32 @@ fn carried(
         }
     }
     Ok(carried)
+}
+
+/// Refuses a move of `object` into `space` when the copy of `space`
+/// already holds the object, as after a move back, and one of its
+/// rich-text fields was written: re-creating the document there would show
+/// its text twice, and how a document moves back is open (NOC-560).
+#[cfg(ncdb_rich_text)]
+fn back_without_rich_text(inner: &Inner, space: CoreSpaceId, object: &Object) -> Result<(), Error> {
+    let held = inner
+        .view
+        .get(space, object.collection(), object.id().0)
+        .map_err(storage)?;
+    if held.is_none() {
+        return Ok(());
+    }
+    let fields = &inner.model.collections[object.collection()];
+    for (name, field) in fields {
+        let Field::RichText(_) = field else { continue };
+        if !object.rich_text_document(inner, name)?.is_empty() {
+            return Err(Error::new(
+                ErrorCode::NotAllowed,
+                crate::texts::error::move_rich_text_back_later(object.id(), name),
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// The fields of `object` whose basic value, link or reference holds a
