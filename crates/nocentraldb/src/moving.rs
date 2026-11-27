@@ -377,7 +377,8 @@ fn carried(
 /// Refuses a move of `object` into `space` when the copy of `space`
 /// already holds the object, as after a move back, and one of its
 /// rich-text fields was written: re-creating the document there would show
-/// its text twice, and how a document moves back is open (NOC-560).
+/// its text twice. Refused until a move back writes only the difference
+/// (Carsten, 2026-11-27, NOC-560; NOC-581).
 #[cfg(ncdb_rich_text)]
 fn back_without_rich_text(inner: &Inner, space: CoreSpaceId, object: &Object) -> Result<(), Error> {
     let held = inner

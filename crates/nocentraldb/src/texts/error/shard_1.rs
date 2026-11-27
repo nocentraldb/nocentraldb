@@ -214,8 +214,8 @@ pub(crate) const EQUALITY_PREFIX: &str =
 /// `moveRichTextBackLater` (notAllowed): Space::move_objects (space.move) when
 /// an object with a written rich-text field moves into a space whose copy
 /// already holds the object, such as a move back: re-creating the document
-/// there would show its text twice, and how it moves back is open (NOC-539;
-/// owner question NOC-560).
+/// there would show its text twice, so it is refused until a move back writes
+/// only the difference (Carsten, 2026-11-27, NOC-560; NOC-581).
 pub(crate) fn move_rich_text_back_later(id: impl std::fmt::Display, name: impl std::fmt::Display) -> String {
     format!("the object {id} has a written rich-text field {name}, and the space it moves to already holds the object, so its document cannot be moved there yet")
 }

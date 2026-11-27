@@ -241,10 +241,11 @@ fn an_object_whose_rich_text_field_nobody_wrote_is_copied_into_an_ad_hoc_space()
 }
 
 #[test]
-fn a_move_back_of_a_written_rich_text_document_is_refused_until_noc_560() {
+fn a_move_back_of_a_written_rich_text_document_is_refused_until_it_writes_only_the_difference() {
     // The old space's log already holds the document: re-creating it there
-    // would show its text twice. Until the owner decides how (NOC-560), the
-    // move is refused, naming the object and the field, and writes nothing.
+    // would show its text twice. Until a move back writes only the
+    // difference (NOC-560; NOC-581), the move is refused, naming the object
+    // and the field, and writes nothing.
     let db = db();
     let personal = now(db.spaces().create()).unwrap();
     let shared = now(db.spaces().create()).unwrap();

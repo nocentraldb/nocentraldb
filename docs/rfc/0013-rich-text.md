@@ -382,7 +382,7 @@ So the member that moves or copies the object re-creates the document. It reads 
 - **Every item in the other space names the member that moved or copied it.** Who wrote which part, and the document's history, stay in the old space's log, where `space.inspect` keeps showing them.
 - **An update written in the old space after the move** names items the other space does not hold. RFC 0016 lists it as a later edit the SDK cannot write again; its text has to be carried over by hand.
 - **A field nobody wrote** holds no document, and the create leaves it unset.
-- **A move back is refused for now**, for a written field, since the space moved back into holds the document already and would show its text twice; RFC 0016 says how ([Its rich-text fields](0016-moving-an-object.md#its-rich-text-fields); NOC-560).
+- **A move back is refused for now**, for a written field, since the space moved back into holds the document already and would show its text twice; RFC 0016 says how, until a move back writes only the difference (NOC-581; [Its rich-text fields](0016-moving-an-object.md#its-rich-text-fields)).
 
 Carrying the document as it is, with its client ids and nonces, would keep each item's author, but the other space's members would have to accept items under other members' client ids: that needs a change to the format and the fold and weakens the rule above. It comes later, as an option an app chooses per move (NOC-559). Re-creating the document from its Markdown was not taken, because it drops what Markdown does not show.
 
@@ -539,6 +539,7 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 - **2026-11-22 · The guard reloads once, then makes the field read-only; an editor without `enableContentCheck` is refused.** ([decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-guard-reloads-once-then-the-field-is-read-only-and-an-editor-without-the-content-check-is-refused.md))
 - **2026-11-27 · A rich-text field declares its vocabulary in the schema and the lock, which may only grow, and the binding refuses an editor that differs from it.** ([decision](../../factory/decisions/2026-11-27-NOC-553-a-rich-text-field-declares-its-vocabulary-in-the-schema-and-the-lock-which-may-only-grow.md))
 - **2026-11-27 · A move or an ad-hoc copy re-creates the document from its tree under a client id of the member that moves or copies it; carrying it as it is comes later, as an option per move.** ([decision](../../factory/decisions/2026-11-27-NOC-543-a-move-or-ad-hoc-copy-re-creates-a-rich-text-document-under-a-client-id-of-the-mover.md))
+- **2026-11-27 · A move back of a written document is refused until a move back writes only the difference (NOC-581).** ([decision](../../factory/decisions/2026-11-27-NOC-560-a-move-back-of-a-written-rich-text-document-is-refused-until-it-writes-only-the-difference.md))
 
 ## History
 
@@ -548,4 +549,4 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 - 2026-11-23 · RFC 0004 gives number 5 to the rich-text update and reserves 7 to 63 (NOC-474, #474)
 - 2026-11-27 · A rich-text field declares its vocabulary in the schema and the lock, which may only grow (NOC-553, NOC-558, NOC-554, #509)
 - 2026-11-27 · The binding defers its pull while a composition is open instead of a rebuild waiting for `compositionend`, as the owner decided after the spike on NOC-555 (NOC-556, NOC-461)
-- 2026-11-27 · A move and an ad-hoc copy re-create the document under the mover's client id (NOC-539, NOC-543)
+- 2026-11-27 · A move and an ad-hoc copy re-create the document under the mover's client id, and a move back of a written one is refused for now (NOC-539, NOC-543, NOC-560, #520)

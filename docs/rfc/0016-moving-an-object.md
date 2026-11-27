@@ -179,7 +179,7 @@ So the move re-creates it. The mover reads the field's document as its copy hold
 - **Authorship starts at the move.** Every item in the new space names the mover, and `space.inspect` there shows the move's change as the author of the whole document. Who wrote which part, and every earlier version, stay in the old space's log, as the history of every other field does ([Its history](#its-history)).
 - **A later edit of the document is not carried over.** A rich-text update that reaches the old space after the move names items of the old document, which the new space does not hold. The SDK lists it among the later edits as one it cannot write again, and `carryOver` refuses it with `notAllowed` ([Later edits](#later-edits)). Its text has to be carried over by hand.
 - **A field nobody wrote** holds no document and moves as an unset field.
-- **A move back is refused for now.** When the new space's copy already holds the object, as after a move back ([Moving back, and moving again](#what-a-move-is)), that space's log already holds the document, and re-creating it there would show its text twice. Until it is decided how a document moves back (NOC-560), the SDK refuses such a move of an object whose rich-text field was written, with `notAllowed` and the text `error.moveRichTextBackLater`, writing nothing. An object whose rich-text fields nobody wrote moves back.
+- **A move back is refused for now.** When the new space's copy already holds the object, as after a move back ([Moving back, and moving again](#what-a-move-is)), that space's log already holds the document, and re-creating it there would show its text twice. Until a move back writes only the difference between that space's document and the current one (NOC-581), the SDK refuses such a move of an object whose rich-text field was written, with `notAllowed` and the text `error.moveRichTextBackLater`, writing nothing. An object whose rich-text fields nobody wrote moves back.
 - **An ad-hoc copy works the same way** ([RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space)): the parent re-creates the document in the copy, a new object, under a client id it leases there, and the sub-agent reads the document, not who wrote it.
 
 **Options not taken.**
@@ -296,10 +296,11 @@ It adds an operation to [RFC 0002](0002-change-and-log-format.md)'s format and [
 - **2026-11-23 · The move is operation 6: numbers 0, 4 and 6 belong to the object, and 5 is the rich-text update of RFC 0013.** (NOC-474)
 - **2026-11-23 · Later edits are computed from the old space's log when the app asks, not stored on the trace.** (NOC-475)
 - **2026-11-27 · A move re-creates a rich-text field's document from its tree under a client id of the mover; carrying it as it is comes later, as an option per move.** ([decision](../../factory/decisions/2026-11-27-NOC-543-a-move-or-ad-hoc-copy-re-creates-a-rich-text-document-under-a-client-id-of-the-mover.md))
+- **2026-11-27 · A move back of a written rich-text document is refused until a move back writes only the difference (NOC-581).** ([decision](../../factory/decisions/2026-11-27-NOC-560-a-move-back-of-a-written-rich-text-document-is-refused-until-it-writes-only-the-difference.md))
 
 ## History
 
 - 2026-11-22 · First published (NOC-447)
 - 2026-11-23 · Its status line names nobody who decided; the decision log records it (NOC-454, #449)
 - 2026-11-23 · The move is operation 6, later edits are computed from the log, a set plugin field is refused for now, and the decided RFCs describe the move (NOC-474, #474)
-- 2026-11-27 · A move and an ad-hoc copy re-create a rich-text field's document under the mover's client id (NOC-539, NOC-543)
+- 2026-11-27 · A move and an ad-hoc copy re-create a rich-text field's document under the mover's client id, and a move back of a written one is refused for now (NOC-539, NOC-543, NOC-560, #520)
