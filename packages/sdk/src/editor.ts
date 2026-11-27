@@ -2,18 +2,12 @@
 // the binding"; NOC-461). They import only Yjs's types, so the SDK's API
 // report shows them and nothing of the binding's internals.
 import type * as Y from "yjs";
+import type { KnownNames } from "./known.ts";
 
 /** A rich-text field's vocabulary from the lock (NOC-553): its nodes and marks, without ProseMirror's `doc` and `text`. */
 export interface Vocabulary {
   readonly nodes: readonly string[];
   readonly marks: readonly string[];
-}
-
-/** Names an editor knows besides the field's vocabulary: nodes, marks, and attributes by node. */
-export interface KnownNames {
-  readonly nodes: readonly string[];
-  readonly marks: readonly string[];
-  readonly attributes?: Readonly<Record<string, readonly string[]>>;
 }
 
 /**
