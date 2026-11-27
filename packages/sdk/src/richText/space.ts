@@ -53,6 +53,7 @@ export const richTextOf =
       id,
       field,
     });
+    const vocabulary = vocabularyOf(lock, name, field);
     let stop = () => {};
     const body = bind(
       opened,
@@ -64,9 +65,25 @@ export const richTextOf =
         },
       },
       () => {},
-      { vocabulary: vocabularyOf(lock, name, field) },
+      // Until an editor declares its names, placeholders included, the
+      // guard knows the vocabulary's.
+      { vocabulary, known: () => vocabulary },
     );
-    stop = onChange((change) => {
+    // The page hidden, the binding writes at once (RFC 0013, "An editor: the binding").
+    const page = (
+      globalThis as {
+        document?: {
+          visibilityState: string;
+          addEventListener(type: string, listener: () => void): void;
+          removeEventListener(type: string, listener: () => void): void;
+        };
+      }
+    ).document;
+    const hidden = () => {
+      if (page?.visibilityState === "hidden") body.hidden().catch(() => {});
+    };
+    page?.addEventListener("visibilitychange", hidden);
+    const stopChanges = onChange((change) => {
       if (
         change.space === space &&
         change.collection === name &&
@@ -75,5 +92,9 @@ export const richTextOf =
         body.folded().catch(() => {});
       }
     });
+    stop = () => {
+      stopChanges();
+      page?.removeEventListener("visibilitychange", hidden);
+    };
     return body;
   };
