@@ -27,6 +27,7 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operations carry a
 | How does TipTap bind? | `space.richText(collection, id, field)` returns a binding with a `Y.Doc`; the app passes it to TipTap's `Collaboration` extension. The SDK collects the editor's updates, writes one change per pause in typing, and applies what other members write. |
 | What does an agent do? | It reads the field as Markdown, with a version. It edits by quoting the Markdown it read and giving the Markdown that replaces it; the core looks the quote up in the version the agent read and writes the smallest Yjs update made at that version, which Yjs merges with whatever a person typed since ([An agent: anchored edits](#an-agent-anchored-edits)). |
 | What does the Rust SDK read? | `get::<RichText>`, with the document as Markdown, as plain text, as a tree and as the references its mentions hold. |
+| What happens when the object moves or is copied? | The document is re-created in the other space from its tree, under a client id of the member that moves or copies it. Who wrote which part stays in the old space's log ([Moving and copying the object](#moving-and-copying-the-object)). |
 | What does the relay see? | Nothing new: the update sits inside the sealed payload. It sees one change per pause in typing, not one per keystroke. |
 | Does erasure reach rich text? | No, as for every unmarked text. A mention should store only a reference to the person object, never the name, so an erased person's name never was in the text; this is a recommendation, which the core does not enforce. Deleted text stays in the log. |
 
@@ -372,6 +373,19 @@ Prior art points the same way. Tiptap's AI Toolkit edits whole nodes by a hash a
 
 The Rust SDK reads a rich-text field with `object.get::<RichText>("body")`: `markdown()`, `plain_text()`, `tree()` as `Data`, and `mentions()` as `Reference`s. It reads a field with its version through `read_rich_text`, edits it with `RichTextEdit::at(version)` and its `replace`, `insert_after` and `append`, and writes a first document with `RichText::from_markdown`. It has no editor binding in rule 1; a native app that wants one asks for it in a follow-up ticket. `space.inspect` gives the lost operations, as in TypeScript.
 
+## Moving and copying the object
+
+When an object moves to another space ([RFC 0016](0016-moving-an-object.md#its-rich-text-fields)), or a parent copies it into an ad-hoc space ([RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space)), the field's document cannot be carried as it is: its items name their writers by client ids, which the other space's members accept only from the members they derive from ([Client ids name their author](#client-ids-name-their-author)).
+
+So the member that moves or copies the object re-creates the document. It reads the field's document from its copy as a tree, and writes it into the create in the other space as one rich-text update under a client id it leases for that field there. The update is an ordinary operation 5: the format, the client-id check and the fold stay as they are. It is built from the tree, not from the Markdown, so every node, mark and attribute arrives, those that the Markdown does not show included ([Reading](#reading)). Deleted text, content still pending in the mover's copy and what lost operations wrote stay behind, in the old space's log.
+
+- **Every item in the other space names the member that moved or copied it.** Who wrote which part, and the document's history, stay in the old space's log, where `space.inspect` keeps showing them.
+- **An update written in the old space after the move** names items the other space does not hold. RFC 0016 lists it as a later edit the SDK cannot write again; its text has to be carried over by hand.
+- **A field nobody wrote** holds no document, and the create leaves it unset.
+- **A move back is refused for now**, for a written field, since the space moved back into holds the document already and would show its text twice; RFC 0016 says how, until a move back writes only the difference (NOC-581; [Its rich-text fields](0016-moving-an-object.md#its-rich-text-fields)).
+
+Carrying the document as it is, with its client ids and nonces, would keep each item's author, but the other space's members would have to accept items under other members' client ids: that needs a change to the format and the fold and weakens the rule above. It comes later, as an option an app chooses per move (NOC-559). Re-creating the document from its Markdown was not taken, because it drops what Markdown does not show.
+
 ## What the relay and the other RFCs see
 
 ### RFC 0003: encryption
@@ -435,6 +449,7 @@ Step 7c of the build plan writes these into the decided texts ([How a decided RF
 - **An older `ncdb model build` drops the vocabulary.** It ignores the key it does not know, so a build with an older `ncdb` and an older SDK writes a lock without it. The current `ncdb model check` and the check on the device refuse that lock as a removal, so nothing is folded differently, but the app does not open its database until the lock is built again with the current `ncdb`.
 - **A rejected change's attribute value** leaves the attribute unset, not restored ([Un-folding a rejected change](#un-folding-a-rejected-change)).
 - **No embeds**, such as images or files, and no comments or suggestions.
+- **A moved or copied document starts again in its new space.** Its items there name the member that moved or copied it, and an update written in the old space after a move is not carried over by the SDK ([Moving and copying the object](#moving-and-copying-the-object)).
 - **No Yjs 14.** Rule 1 is Yjs 13's integration; a later Yjs whose integration differs is a new rule.
 
 ## Follow-up tickets
@@ -514,7 +529,7 @@ F8 applied 60 updates of three documents, each editing at random and syncing now
 
 ## How this RFC relates to the others
 
-It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carries the rich-text update and whose fold never waits for a gap; on [RFC 0004](0004-merge-rules-basic-types.md), whose operation numbers and plugin contract C1 to C7 the type meets; on [RFC 0005](0005-schema-and-model-lock.md), which reserves `nc.richText` and leaves the mention token to this RFC; on [RFC 0006](0006-local-view.md), which keeps the field's state in `fs_<collection>`; on [RFC 0003](0003-keys-and-cryptography.md), whose space key seals the update; on [RFC 0008](0008-membership.md), whose un-folding this RFC applies to a document; on [RFC 0009](0009-sdk-api.md), whose write, read and inspect calls it extends; and on [RFC 0012](0012-multi-tab-browser-storage.md), whose tabs each open their own binding. [RFC 0011](0011-plugin-field-types.md) leaves rich text out: it is a built-in type, whose vocabulary is the one configuration of a field that may grow.
+It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carries the rich-text update and whose fold never waits for a gap; on [RFC 0004](0004-merge-rules-basic-types.md), whose operation numbers and plugin contract C1 to C7 the type meets; on [RFC 0005](0005-schema-and-model-lock.md), which reserves `nc.richText` and leaves the mention token to this RFC; on [RFC 0006](0006-local-view.md), which keeps the field's state in `fs_<collection>`; on [RFC 0003](0003-keys-and-cryptography.md), whose space key seals the update; on [RFC 0008](0008-membership.md), whose un-folding this RFC applies to a document; on [RFC 0009](0009-sdk-api.md), whose write, read and inspect calls it extends; on [RFC 0012](0012-multi-tab-browser-storage.md), whose tabs each open their own binding; and on [RFC 0016](0016-moving-an-object.md), whose move, like RFC 0003's ad-hoc copy, re-creates the document in the other space. [RFC 0011](0011-plugin-field-types.md) leaves rich text out: it is a built-in type, whose vocabulary is the one configuration of a field that may grow.
 
 ## Decisions
 
@@ -523,6 +538,8 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 - **2026-11-22 · One UndoManager per binding outlives the rebuilds, so a rebuild keeps the undo history.** ([decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-binding-keeps-one-undomanager-across-editor-rebuilds.md))
 - **2026-11-22 · The guard reloads once, then makes the field read-only; an editor without `enableContentCheck` is refused.** ([decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-guard-reloads-once-then-the-field-is-read-only-and-an-editor-without-the-content-check-is-refused.md))
 - **2026-11-27 · A rich-text field declares its vocabulary in the schema and the lock, which may only grow, and the binding refuses an editor that differs from it.** ([decision](../../factory/decisions/2026-11-27-NOC-553-a-rich-text-field-declares-its-vocabulary-in-the-schema-and-the-lock-which-may-only-grow.md))
+- **2026-11-27 · A move or an ad-hoc copy re-creates the document from its tree under a client id of the member that moves or copies it; carrying it as it is comes later, as an option per move.** ([decision](../../factory/decisions/2026-11-27-NOC-543-a-move-or-ad-hoc-copy-re-creates-a-rich-text-document-under-a-client-id-of-the-mover.md))
+- **2026-11-27 · A move back of a written document is refused until a move back writes only the difference (NOC-581).** ([decision](../../factory/decisions/2026-11-27-NOC-560-a-move-back-of-a-written-rich-text-document-is-refused-until-it-writes-only-the-difference.md))
 
 ## History
 
@@ -532,3 +549,4 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 - 2026-11-23 · RFC 0004 gives number 5 to the rich-text update and reserves 7 to 63 (NOC-474, #474)
 - 2026-11-27 · A rich-text field declares its vocabulary in the schema and the lock, which may only grow (NOC-553, NOC-558, NOC-554, #509)
 - 2026-11-27 · The binding defers its pull while a composition is open instead of a rebuild waiting for `compositionend`, as the owner decided after the spike on NOC-555 (NOC-556, NOC-461)
+- 2026-11-27 · A move and an ad-hoc copy re-create the document under the mover's client id, and a move back of a written one is refused for now (NOC-539, NOC-543, NOC-560, #520)

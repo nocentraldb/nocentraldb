@@ -104,28 +104,62 @@ impl Spaces<'_> {
             .map(|source| ((source.object.space().0, source.object.id().0), source.copy))
             .collect();
         let model = inner.model.clone();
-        let mut tx = Transaction::new(&model);
         let mut cleared_links = 0;
         let mut plugin_fields_not_copied = 0;
+        let mut all_copied = Vec::new();
         for source in &sources {
-            let copied = values(&inner, &source.object, &copies);
+            let copied = values(&inner, &source.object, &copies)?;
             cleared_links += copied.cleared_links;
             plugin_fields_not_copied += copied.plugin_fields_not_copied;
-            let values = copied
-                .values
-                .iter()
-                .map(|(name, value)| (name.as_str(), value.clone()));
-            tx.create_at(source.object.collection(), source.copy, values)?;
+            all_copied.push(copied);
         }
 
         crate::account::create(&mut inner)?;
         let model_id = inner.model_id;
         let space = create_space(&mut inner, model_id)?;
+        let mut tx = Transaction::new(&model);
+        #[cfg(ncdb_rich_text)]
+        let mut leased = Vec::new();
+        for (source, copied) in sources.iter().zip(all_copied) {
+            #[cfg_attr(not(ncdb_rich_text), allow(unused_mut))]
+            let mut values = copied.values;
+            // Each written rich-text document is re-created in the copy,
+            // under a client id this member leases there (RFC 0013,
+            // "Moving and copying the object").
+            #[cfg(ncdb_rich_text)]
+            for (name, document) in copied.documents {
+                let collection = source.object.collection();
+                let re_created = crate::rich_text_copy::re_create(
+                    &mut inner,
+                    space,
+                    collection,
+                    source.copy,
+                    &name,
+                    &document,
+                );
+                let re_created = match re_created {
+                    Ok(re_created) => re_created,
+                    Err(error) => {
+                        crate::rich_text_copy::release(&mut inner, &leased, false)?;
+                        return Err(error);
+                    }
+                };
+                values.push((name, re_created.value.clone()));
+                leased.push(re_created);
+            }
+            let values = values
+                .iter()
+                .map(|(name, value)| (name.as_str(), value.clone()));
+            tx.create_at(source.object.collection(), source.copy, values)?;
+        }
         let writer = WriterModel {
             id: inner.model.id,
             version: inner.model.version,
         };
-        write_change(&mut inner, space, tx, writer, |_| Ok(()))?;
+        let written = write_change(&mut inner, space, tx, writer, |_| Ok(()));
+        #[cfg(ncdb_rich_text)]
+        crate::rich_text_copy::release(&mut inner, &leased, written.is_ok())?;
+        written?;
         let recorded: Vec<AdHocCopy> = sources
             .iter()
             .map(|source| AdHocCopy {
@@ -192,15 +226,20 @@ struct Copied {
     values: Vec<(String, Value)>,
     cleared_links: usize,
     plugin_fields_not_copied: usize,
+    /// Each written rich-text field and its document, which the copy
+    /// re-creates (RFC 0013, "Moving and copying the object").
+    #[cfg(ncdb_rich_text)]
+    documents: Vec<(String, Vec<u8>)>,
 }
 
 /// The values of the copy of `object`: each set field that is neither
-/// personal nor of a plugin; a link to the copy of its target, or none.
+/// personal nor of a plugin; a link to the copy of its target, or none;
+/// and the documents of its written rich-text fields.
 fn values(
     inner: &Inner,
     object: &Object,
     copies: &BTreeMap<(CoreSpaceId, CoreObjectId), CoreObjectId>,
-) -> Copied {
+) -> Result<Copied, Error> {
     let collection = object.collection();
     let fields = &inner.model.collections[collection];
     let space = object.space().0;
@@ -214,8 +253,23 @@ fn values(
         values: Vec::new(),
         cleared_links: 0,
         plugin_fields_not_copied: 0,
+        #[cfg(ncdb_rich_text)]
+        documents: Vec::new(),
     };
     for (name, value) in object.fields() {
+        // A plugin field whose type no plugin implements is in no model and
+        // reads unset: nothing to copy.
+        let Some(field) = fields.get(name) else {
+            continue;
+        };
+        // A rich-text field reads no value: its document is re-created.
+        #[cfg(ncdb_rich_text)]
+        if matches!(field, Field::RichText(_)) {
+            let document = object.rich_text_document(inner, name)?;
+            if !document.is_empty() {
+                copied.documents.push((name.clone(), document));
+            }
+        }
         let Some(value) = value else { continue };
         if inner.model.person(collection, name).is_some() {
             continue;
@@ -224,36 +278,41 @@ fn values(
             Repr::List(elements) => elements.as_slice(),
             _ => &[],
         };
-        let written = match fields.get(name) {
-            Some(Field::Basic(_)) => Some(value.clone()),
-            Some(Field::Set(_)) if !elements.is_empty() => Some(Value::add(elements.to_vec())),
-            Some(Field::Link(_)) => {
+        let written = match field {
+            Field::Basic(_) => Some(value.clone()),
+            Field::Set(_) => (!elements.is_empty()).then(|| Value::add(elements.to_vec())),
+            Field::Link(_) => {
                 let target = copy_of(value);
                 copied.cleared_links += usize::from(target.is_none());
                 target
             }
-            Some(Field::Links(_)) => {
+            Field::Links(_) => {
                 let targets: Vec<Value> = elements.iter().filter_map(copy_of).collect();
                 copied.cleared_links += elements.len() - targets.len();
                 (!targets.is_empty()).then(|| Value::add(targets))
             }
             // A reference names an object of any space by its id, so it
             // is never copied.
-            Some(Field::Ref(_)) => {
+            Field::Ref(_) => {
                 copied.cleared_links += 1;
                 None
             }
-            Some(Field::Plugin(_)) => {
+            Field::Plugin(_) => {
                 copied.plugin_fields_not_copied += 1;
                 None
             }
-            _ => None,
+            // `$person` is no field an object reads.
+            Field::Person(_) => None,
+            // A rich-text field reads no value; its document is taken
+            // above.
+            #[cfg(ncdb_rich_text)]
+            Field::RichText(_) => None,
         };
         if let Some(written) = written {
             copied.values.push((name.clone(), written));
         }
     }
-    copied
+    Ok(copied)
 }
 
 impl Space {

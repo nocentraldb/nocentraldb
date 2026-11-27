@@ -56,6 +56,8 @@ mod removed;
 mod renewed_key;
 mod reopen;
 #[cfg(ncdb_rich_text)]
+mod rich_text_move_lost;
+#[cfg(ncdb_rich_text)]
 mod rich_text_roles;
 mod rotation;
 mod slow_relay;
