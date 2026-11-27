@@ -23,9 +23,11 @@ import {
   type AnyExtension,
   Editor,
   type EditorOptions,
+  Extension,
   getSchema,
 } from "@tiptap/core";
 import Collaboration from "@tiptap/extension-collaboration";
+import { Plugin } from "@tiptap/pm/state";
 import {
   absolutePositionToRelativePosition,
   relativePositionToAbsolutePosition,
@@ -45,6 +47,39 @@ export interface NcEditorOptions {
   /** Called with the first editor and with each one a rebuild makes; read the editor from here, never from a closure. */
   onEditor: (editor: Editor) => void;
 }
+
+/**
+ * Rendering never writes (NOC-557): a transaction a plugin appends to y-sync's
+ * render of the document, such as Link's autolink on text that looks like a
+ * URL or the trailing paragraph, is refused, since it would reach the Y.Doc
+ * as an edit nobody made. ProseMirror filters an appended transaction
+ * before it marks it as appended, so the filter notes the render it lets
+ * through, and refuses every transaction that changes the document within
+ * the same task; a person's edit always comes in a task of its own, and the
+ * selection the rebuild restores changes no document.
+ */
+const noWriteOnRender = () => {
+  let rendering = false;
+  return Extension.create({
+    name: "ncNoWriteOnRender",
+    addProseMirrorPlugins: () => [
+      new Plugin({
+        filterTransaction: (tr) => {
+          if (tr.getMeta(ySyncPluginKey)?.isChangeOrigin) {
+            if (!rendering) {
+              rendering = true;
+              queueMicrotask(() => {
+                rendering = false;
+              });
+            }
+            return true;
+          }
+          return !(rendering && tr.docChanged);
+        },
+      }),
+    ],
+  });
+};
 
 /** The names `widened` adds to the schema `base` builds. */
 const placeholderNames = (
@@ -119,6 +154,7 @@ export const ncEditor = (
           document: body.doc,
           yUndoOptions: { undoManager: body.undoManager },
         }),
+        noWriteOnRender(),
       ],
     });
     const sync = ySyncPluginKey.getState(editor.state);

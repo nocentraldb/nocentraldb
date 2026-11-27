@@ -58,3 +58,24 @@ test("opening and rebuilding an editor on URL-like text writes nothing", async (
   expect(local).toEqual([]);
   expect(body.doc.getXmlFragment("default").toString()).not.toContain("link");
 });
+
+test("a person's edit still reaches the document", async () => {
+  const body = fakeBinding(vocabulary, (root) =>
+    root.insert(0, [paragraph("Hello")]),
+  );
+  const element = document.createElement("div");
+  document.body.append(element);
+  let editor: import("@tiptap/core").Editor | undefined;
+  mounted.push(
+    ncEditor(body, {
+      element,
+      extensions: kit,
+      onEditor: (e) => {
+        editor = e;
+      },
+    }),
+  );
+  await tick();
+  editor?.commands.insertContentAt(1, "Oh, ");
+  expect(body.doc.getXmlFragment("default").toString()).toContain("Oh, Hello");
+});
