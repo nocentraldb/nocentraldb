@@ -42,8 +42,22 @@ export interface Opened {
   readonly writable: boolean;
 }
 
+/**
+ * Whether the editor shows the whole field (NOC-538, Q2): `shown`; or
+ * `notFullyShown`, with its reason, which the guard reports; or
+ * `readOnly`, when the binding writes nothing more.
+ */
+export type RichTextStatus =
+  | { readonly status: "shown" }
+  | { readonly status: "notFullyShown"; readonly reason: string }
+  | { readonly status: "readOnly" };
+
 export interface Binding {
   readonly doc: Y.Doc;
+  /** The status now. */
+  readonly status: RichTextStatus;
+  /** Calls `listener` with each new status; answers a function that stops it. */
+  onStatus(listener: (status: RichTextStatus) => void): () => void;
   readonly undoManager: Y.UndoManager;
   readonly writable: boolean;
   /** Pulls what the core folded since; call it after a fold of the field's collection. */
@@ -59,7 +73,7 @@ export interface Binding {
 /** The origin under which the binding applies what the core folded. */
 const FROM_CORE = Symbol("nocentraldb: from the core");
 
-/** Opens the binding's document on what the core answered. `refused` hears of a write the core refused; the binding then writes nothing more. */
+/** Opens the binding's document on what the core answered. `refused` hears of a write the core refused; the binding then writes nothing more and its status is `readOnly`. */
 export const bind = (
   opened: Opened,
   port: RichTextPort,
@@ -83,6 +97,18 @@ export const bind = (
   let stopped = !opened.writable;
   // Writes go one at a time, in order.
   let writing: Promise<void> = Promise.resolve();
+  let status: RichTextStatus = { status: "shown" };
+  const listeners = new Set<(status: RichTextStatus) => void>();
+  const report = (next: RichTextStatus) => {
+    status = next;
+    for (const listener of [...listeners]) {
+      try {
+        listener(next);
+      } catch {
+        // A listener that throws misses nothing the others hear.
+      }
+    }
+  };
 
   const clearTimers = () => {
     clearTimeout(pause);
@@ -101,6 +127,7 @@ export const bind = (
         await port.write(update);
       } catch (error) {
         stopped = true;
+        report({ status: "readOnly" });
         refused(error);
       }
     });
@@ -122,6 +149,13 @@ export const bind = (
     doc,
     undoManager,
     writable: opened.writable,
+    get status() {
+      return status;
+    },
+    onStatus: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
     folded: async () => {
       const missing = await port.pull(Y.encodeStateVector(doc));
       Y.applyUpdate(doc, missing, FROM_CORE);
