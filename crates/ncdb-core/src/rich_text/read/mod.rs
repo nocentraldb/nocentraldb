@@ -12,6 +12,7 @@ use ncdb_plugin::Data;
 
 use super::State;
 pub use mention::Mention;
+pub(crate) use node::mark_name;
 
 /// The document as ProseMirror JSON, `{ type, attrs, content, marks, text
 /// }`, under a root of type `doc`, for apps that render the document
@@ -27,6 +28,12 @@ pub fn tree(state: &State) -> Data {
 /// returns.
 pub fn markdown(state: &State) -> String {
     markdown::render(&node::nodes(&state.document))
+}
+
+/// The Markdown of each top-level block of `document`, the whole state as
+/// a Yjs update, which [`markdown`] joins with a blank line.
+pub(crate) fn parts(document: &[u8]) -> Vec<String> {
+    markdown::parts(&node::nodes(document))
 }
 
 /// The document as plain text, the text of each block on a line of its
