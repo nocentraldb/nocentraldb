@@ -126,14 +126,6 @@ pub(crate) fn no_later_edit(position: impl std::fmt::Display, change: impl std::
     format!("the edit {position} of the change {change} is not a later edit of the object {id} in this space")
 }
 
-/// `moveRichTextLater` (notAllowed): Space::move_objects (space.move) when an
-/// object to move has a rich-text field that was written: no decided RFC says
-/// yet how a rich-text document travels to another space, so the move writes
-/// nothing (NOC-539; owner question NOC-543).
-pub(crate) fn move_rich_text_later(id: impl std::fmt::Display, name: impl std::fmt::Display) -> String {
-    format!("the object {id} has a written rich-text field {name}, and a rich-text document cannot be moved yet")
-}
-
 /// `certificateDoesNotHold` (invalidCertificate): Members::add and
 /// Account::pair (members.add, db.account.pair) when the invitation's
 /// certificate does not verify, or certifies another member.
@@ -222,15 +214,6 @@ pub(crate) fn carry_over_unreadable(position: impl std::fmt::Display, change: im
 /// type.
 pub(crate) fn value_does_not_fit(field: impl std::fmt::Display, collection: impl std::fmt::Display) -> String {
     format!("the value does not fit the field {field} of {collection}")
-}
-
-/// `copyRichTextLater` (notAllowed): Spaces::create_ad_hoc
-/// (db.spaces.createAdHoc) when an object to copy has a rich-text field that
-/// was written: no decided RFC says yet how a rich-text document travels to
-/// another space, so the call creates nothing (NOC-539; owner question
-/// NOC-543).
-pub(crate) fn copy_rich_text_later(id: impl std::fmt::Display, name: impl std::fmt::Display) -> String {
-    format!("the object {id} has a written rich-text field {name}, and a rich-text document cannot be copied into an ad-hoc space yet")
 }
 
 /// `recoveryCodeUnreadable` (invalidValue): Opening with a recovery code

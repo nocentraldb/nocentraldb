@@ -285,50 +285,31 @@ fn carried(
         cleared_links: 0,
     };
     for (name, value) in object.fields() {
-        // A plugin field whose type no plugin implements is in no model and
-        // reads unset: nothing to carry.
-        let Some(field) = fields.get(name) else {
-            continue;
-        };
-        // A written rich-text document is refused until an RFC says how it
-        // travels to another space (NOC-539, NOC-543).
-        #[cfg(ncdb_rich_text)]
-        if matches!(field, Field::RichText(_)) && object.rich_text_written(inner, name)? {
-            return Err(Error::new(
-                ErrorCode::NotAllowed,
-                crate::texts::error::move_rich_text_later(object.id(), name),
-            ));
-        }
         let Some(value) = value else { continue };
         let elements = match &value.0 {
             Repr::List(elements) => elements.as_slice(),
             _ => &[],
         };
-        let written = match field {
-            Field::Basic(_) | Field::Ref(_) => Some(value.clone()),
-            Field::Set(_) => (!elements.is_empty()).then(|| Value::add(elements.to_vec())),
-            Field::Link(_) => {
+        let written = match fields.get(name) {
+            Some(Field::Basic(_) | Field::Ref(_)) => Some(value.clone()),
+            Some(Field::Set(_)) if !elements.is_empty() => Some(Value::add(elements.to_vec())),
+            Some(Field::Link(_)) => {
                 let target = kept(value);
                 carried.cleared_links += usize::from(target.is_none());
                 target
             }
-            Field::Links(_) => {
+            Some(Field::Links(_)) => {
                 let targets: Vec<Value> = elements.iter().filter_map(kept).collect();
                 carried.cleared_links += elements.len() - targets.len();
                 (!targets.is_empty()).then(|| Value::add(targets))
             }
-            Field::Plugin(_) => {
+            Some(Field::Plugin(_)) => {
                 return Err(Error::new(
                     ErrorCode::NotAllowed,
                     crate::texts::error::move_plugin_later(object.id(), name),
                 ));
             }
-            // `$person` is no field an object reads.
-            Field::Person(_) => None,
-            // A rich-text field reads no value; a written one is refused
-            // above.
-            #[cfg(ncdb_rich_text)]
-            Field::RichText(_) => None,
+            _ => None,
         };
         if let Some(written) = written {
             carried.values.push((name.clone(), written));
@@ -364,14 +345,7 @@ fn conflicted(
                 Some(Field::Basic(t)) => t.read(state),
                 Some(Field::Link(t)) => t.read(state),
                 Some(Field::Ref(t)) => t.read(state),
-                // Only basic values, links and references hold a conflict
-                // the move writes the winner of.
-                Some(Field::Set(_) | Field::Links(_) | Field::Person(_) | Field::Plugin(_))
-                | None => {
-                    return false;
-                }
-                #[cfg(ncdb_rich_text)]
-                Some(Field::RichText(_)) => return false,
+                _ => return false,
             };
             !read.conflicts.is_empty()
         })

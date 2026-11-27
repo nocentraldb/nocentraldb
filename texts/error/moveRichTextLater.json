@@ -1,7 +1,0 @@
-{
-  "id": "error.moveRichTextLater",
-  "kind": "error",
-  "code": "notAllowed",
-  "text": "the object {id} has a written rich-text field {name}, and a rich-text document cannot be moved yet",
-  "when": "Space::move_objects (space.move) when an object to move has a rich-text field that was written: no decided RFC says yet how a rich-text document travels to another space, so the move writes nothing (NOC-539; owner question NOC-543)."
-}
