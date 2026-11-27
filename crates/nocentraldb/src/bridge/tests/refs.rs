@@ -99,3 +99,39 @@ fn a_reference_that_is_not_space_and_id_is_refused() {
         );
     }
 }
+
+#[test]
+fn a_link_takes_space_and_id_in_its_own_space_and_refuses_another() {
+    // A field written nc.ref that the lock keeps as ncdb/link (RFC 0018,
+    // "Existing link fields read as references"): the TypeScript SDK sends
+    // { space, id }, and the link holds the object id.
+    let mut bridge = opened_with(LOCK);
+    let space = ok(&mut bridge, "spaces.create", map(&[]));
+    let project = write(
+        &mut bridge,
+        &space,
+        vec![op("create", "projects", None, map(&[("name", text("p"))]))],
+    )
+    .remove(0);
+    let own = map(&[("space", space.clone()), ("id", project.clone())]);
+    let task = write(
+        &mut bridge,
+        &space,
+        vec![op("create", "tasks", None, map(&[("project", own)]))],
+    )
+    .remove(0);
+    assert_eq!(
+        field(&fields(&mut bridge, &space, "tasks", &task), "project"),
+        Some(&project)
+    );
+
+    let values = map(&[("project", customer(&mut bridge))]);
+    let written = map(&[
+        ("space", space.clone()),
+        (
+            "ops",
+            Value::Array(vec![op("create", "tasks", None, values)]),
+        ),
+    ]);
+    assert_eq!(code(&mut bridge, "write", written), "invalidValue");
+}
