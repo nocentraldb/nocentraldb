@@ -23,6 +23,9 @@ mod refs;
 #[cfg(not(target_arch = "wasm32"))]
 mod relay;
 mod reports;
+// Rich text is built only with the compiler cfg `ncdb_rich_text` (NOC-468).
+#[cfg(ncdb_rich_text)]
+mod rich_text;
 mod spaces;
 mod split;
 mod sync;

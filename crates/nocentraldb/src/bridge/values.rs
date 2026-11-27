@@ -220,6 +220,9 @@ fn value_of(field: &Field) -> Value {
         Repr::Data(data) => data.to_value().unwrap_or(Value::Null),
         // A read never holds a clear; an unset field reads null.
         Repr::Clear => Value::Null,
+        // Nor a rich-text update, which only a binding writes.
+        #[cfg(ncdb_rich_text)]
+        Repr::RichText(_) => Value::Null,
     }
 }
 

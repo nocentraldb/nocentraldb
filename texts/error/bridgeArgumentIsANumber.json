@@ -1,0 +1,7 @@
+{
+  "id": "error.bridgeArgumentIsANumber",
+  "kind": "error",
+  "code": "invalidValue",
+  "text": "{key} is a number",
+  "when": "The bridge, on a request from the TypeScript SDK: a request whose argument, such as the lease of a rich-text binding, is missing or not a whole number."
+}
