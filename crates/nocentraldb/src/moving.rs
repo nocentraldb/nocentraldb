@@ -21,12 +21,12 @@ use ncdb_core::view::{Field, FieldState};
 
 use crate::db::{Inner, lock};
 use crate::error::{Error, ErrorCode, storage};
-use crate::id::ObjectId;
+use crate::id::{ObjectId, SpaceId};
 use crate::members::{Notice, holds};
 use crate::object::Object;
 use crate::space::{Space, not_stopped, writable, write_change};
 use crate::tx::Transaction;
-use crate::value::{Repr, Value};
+use crate::value::{Reference, Repr, Value};
 
 /// What [`Space::move_objects`] returns (RFC 0016, "The SDK call and its
 /// notice").
@@ -53,7 +53,9 @@ impl Space {
     /// moved and shows no fields.
     ///
     /// A link to an object moved along stays; one to an object left
-    /// behind is cleared and counted. A reference stays as it is.
+    /// behind is cleared and counted. A reference to an object moved along
+    /// names the new space; any other reference stays as it is (RFC 0018,
+    /// "When the source or the target moves").
     ///
     /// Refused, with nothing written: an object of another space, one
     /// already moved, one named twice, or a destination that is this space
@@ -113,7 +115,7 @@ impl Space {
         let mut leased = Vec::new();
         for object in &sources {
             #[cfg_attr(not(ncdb_rich_text), allow(unused_mut))]
-            let mut carried = carried(&inner, object, &moved)?;
+            let mut carried = carried(&inner, object, &moved, (old, new))?;
             cleared_links += carried.cleared_links;
             #[cfg(ncdb_rich_text)]
             for (name, document) in std::mem::take(&mut carried.documents) {
@@ -304,12 +306,15 @@ struct Carried {
 }
 
 /// The values of `object` in the new space: each set field; a link to an
-/// object of `moved`, or none; and the documents of its written rich-text
-/// fields.
+/// object of `moved`, or none; a reference to an object of `moved` in the
+/// old space with the new space, and any other reference as written (RFC
+/// 0018, "When the source or the target moves"); and the documents of its
+/// written rich-text fields. `old` and `new` are the move's two spaces.
 fn carried(
     inner: &Inner,
     object: &Object,
     moved: &BTreeSet<CoreObjectId>,
+    (old, new): (SpaceId, SpaceId),
 ) -> Result<Carried, Error> {
     let fields = &inner.model.collections[object.collection()];
     let kept = |value: &Value| match value.0 {
@@ -342,7 +347,13 @@ fn carried(
             _ => &[],
         };
         let written = match field {
-            Field::Basic(_) | Field::Ref(_) => Some(value.clone()),
+            Field::Basic(_) => Some(value.clone()),
+            Field::Ref(_) => Some(match value.0 {
+                Repr::Ref(target) if target.space == old && moved.contains(&target.id.0) => {
+                    Value::from(Reference::new(new, target.id))
+                }
+                _ => value.clone(),
+            }),
             Field::Set(_) => (!elements.is_empty()).then(|| Value::add(elements.to_vec())),
             Field::Link(_) => {
                 let target = kept(value);
