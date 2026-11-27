@@ -19,6 +19,7 @@ mod client_id;
 mod document;
 mod edit;
 mod outcome;
+pub mod read;
 mod state;
 pub mod update;
 
@@ -42,11 +43,20 @@ use update::Run;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct RichText;
 
-/// What the app reads from a rich-text field, until the core's reads of
-/// RFC 0013 step 3b: the document as Yrs writes it as XML, and the
-/// operations that lost.
-#[derive(Clone, Default, PartialEq, Eq)]
+/// What the app reads from a rich-text field (RFC 0013, "Reading"): the
+/// document as Markdown, as plain text, as a tree and as the references
+/// its mentions hold ([`read`]), the document as Yrs writes it as XML, and
+/// the operations that lost.
+#[derive(Clone, PartialEq)]
 pub struct Read {
+    /// The document as Markdown, as [`read::markdown`].
+    pub markdown: String,
+    /// The document as plain text, as [`read::text`].
+    pub text: String,
+    /// The document as ProseMirror JSON, as [`read::tree`].
+    pub tree: ncdb_plugin::Data,
+    /// The references its mentions hold, as [`read::mentions`].
+    pub mentions: Vec<read::Mention>,
     /// The document's root fragment as XML.
     pub xml: String,
     /// The operations whose outcome is lost: `$conflicts` names the field
@@ -57,6 +67,10 @@ pub struct Read {
 impl fmt::Debug for Read {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Read")
+            .field("markdown", &Size(self.markdown.len(), "bytes <redacted>"))
+            .field("text", &Size(self.text.len(), "bytes <redacted>"))
+            .field("tree", &self.tree)
+            .field("mentions", &Size(self.mentions.len(), "<redacted>"))
             .field("xml", &Size(self.xml.len(), "bytes <redacted>"))
             .field("lost", &self.lost)
             .finish()
@@ -146,7 +160,17 @@ impl FieldType for RichText {
     }
 
     fn read(&self, state: &State) -> Read {
+        let read::Reads {
+            markdown,
+            text,
+            tree,
+            mentions,
+        } = read::all(state);
         Read {
+            markdown,
+            text,
+            tree,
+            mentions,
             xml: document::xml(&state.document),
             lost: outcome::lost(state),
         }

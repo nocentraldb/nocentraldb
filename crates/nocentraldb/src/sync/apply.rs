@@ -208,7 +208,7 @@ fn fold(inner: &mut Inner, space: SpaceId, frame: &[u8]) -> Result<bool, ViewErr
         .or_insert_with(|| SpaceState::new(space, member.key()));
     match view.receive(frame, &mut state.checks) {
         Ok(Appended::New(_)) => {
-            state.drop_shredded();
+            state.forget_shredded(view, space)?;
             crate::personal::refresh(view, space, state)?;
             crate::status::note_shreds(view, space, state.checks.resolved())?;
             sync(inner).folds += 1;

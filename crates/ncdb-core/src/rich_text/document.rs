@@ -18,7 +18,7 @@ pub(super) const ROOT: &str = "default";
 pub(super) struct Refused;
 
 /// A document that never writes: the core only applies updates.
-fn load(state: &[u8]) -> Result<(Doc, XmlFragmentRef), Refused> {
+pub(super) fn load(state: &[u8]) -> Result<(Doc, XmlFragmentRef), Refused> {
     let doc = Doc::with_options(Options {
         client_id: ClientID::new(0),
         offset_kind: OffsetKind::Utf16,

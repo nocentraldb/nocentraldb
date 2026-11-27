@@ -36,6 +36,14 @@ pub(crate) fn start(inner: &Arc<Mutex<Inner>>, relay: Relay) {
     {
         let mut inner = lock(inner);
         inner.sync = Some(SyncState::new(wake, pause));
+        // The person-key records no relay took yet, also those of before
+        // a reopen, wait to be put (NOC-547). Records that cannot be read
+        // are left out; the status names their keys as missing elsewhere.
+        if let Ok(puts) = super::person_keys::waiting(&inner.view)
+            && let Some(sync) = inner.sync.as_mut()
+        {
+            sync.puts = puts;
+        }
         // A log that cannot be read leaves nothing to push again; pushing
         // reads it again and ends the session.
         let _ = super::again::load(&mut inner);

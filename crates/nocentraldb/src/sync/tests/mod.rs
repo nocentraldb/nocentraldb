@@ -41,6 +41,7 @@ mod pause;
 // The editor binding (NOC-461), built only with the compiler cfg
 // `ncdb_rich_text`.
 mod person_keys;
+mod person_keys_reopen;
 mod personal;
 mod provisional;
 mod pull;
