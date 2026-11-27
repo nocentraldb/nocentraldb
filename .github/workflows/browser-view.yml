@@ -29,7 +29,10 @@
 # compiled to wasm from crates/nocentraldb-wasm, and a page in the image
 # opens it as an app does. It runs on pull requests that touch the
 # TypeScript SDK or what its core is built from. NOC-344: it runs in
-# Chromium, Firefox and WebKit, one step each.
+# Chromium, Firefox and WebKit, one step each. NOC-461: so does the test of
+# RFC 0013's three measures with @nocentraldb/tiptap
+# (scripts/sdk-browser/tiptap.e2e.test.mjs), on pull requests that touch
+# packages/tiptap too.
 #
 # The example app apps/tasks-ts: the same job runs the browser task list in
 # Chromium on the package built above, as a person uses it, on pull
@@ -55,6 +58,7 @@ on:
       - "crates/nocentraldb/**"
       - "crates/nocentraldb-wasm/**"
       - "packages/sdk/**"
+      - "packages/tiptap/**"
       - "crates/ncdb-relay/**"
       - "crates/ncdb-relay-server/**"
       - "scripts/browser-view/**"
