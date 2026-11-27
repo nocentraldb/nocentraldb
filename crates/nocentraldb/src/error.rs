@@ -89,6 +89,12 @@ pub enum ErrorCode {
     /// into one change; the message names the object, its size and the
     /// limit (NOC-431, B′).
     TooLarge,
+    /// A first document from Markdown, `RichText::from_markdown`, written
+    /// into a rich-text field that holds content in the copy: it would
+    /// overwrite what others may be editing (RFC 0013, "The first
+    /// content").
+    #[cfg(ncdb_rich_text)]
+    RichTextNotEmpty,
 }
 
 impl Error {

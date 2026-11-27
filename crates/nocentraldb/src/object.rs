@@ -213,6 +213,11 @@ pub(crate) fn value(field: &Field, row: &Row, name: &str) -> Option<Value> {
         (Field::Set(set), FieldState::Set(state)) => Some(list(set.read(state), false)),
         (Field::Links(links), FieldState::Set(state)) => Some(list(links.read(state), true)),
         (Field::Plugin(plugin), FieldState::Plugin(state)) => plugin.read(state).map(Value::from),
+        #[cfg(ncdb_rich_text)]
+        (Field::RichText(_), FieldState::RichText(state)) => {
+            crate::rich_text_field::RichText::read(state)
+                .map(crate::rich_text_field::RichText::value)
+        }
         _ => None,
     }
 }

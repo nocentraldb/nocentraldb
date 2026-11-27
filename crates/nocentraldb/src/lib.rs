@@ -72,6 +72,10 @@ mod rich_text;
 // ad-hoc copy (NOC-539).
 #[cfg(ncdb_rich_text)]
 mod rich_text_copy;
+// A rich-text field as the Rust SDK reads and writes it (RFC 0013, "The
+// Rust SDK"; NOC-463), built only with the compiler cfg `ncdb_rich_text`.
+#[cfg(ncdb_rich_text)]
+mod rich_text_field;
 mod space;
 mod split;
 mod status;
@@ -135,6 +139,10 @@ mod personal_write_tests;
 #[cfg(test)]
 mod restore_tests;
 #[cfg(all(test, ncdb_rich_text))]
+mod rich_text_field_tests;
+#[cfg(all(test, ncdb_rich_text))]
+mod rich_text_from_markdown_tests;
+#[cfg(all(test, ncdb_rich_text))]
 mod rich_text_move_tests;
 #[cfg(test)]
 mod shorthand_tests;
@@ -163,6 +171,8 @@ pub use ncdb_plugin::Data;
 pub use object::Object;
 pub use pairing::{Account, PairKind, Paired, PairingAnswer, RecoveryCode};
 pub use query::{Cursor, Page, Query};
+#[cfg(ncdb_rich_text)]
+pub use rich_text_field::RichText;
 pub use space::{Space, Spaces, Written};
 pub use status::{
     ParkReason, ProvisionalErasure, Refused, RejectReason, SpaceStatus, SpaceStatusReport,

@@ -105,6 +105,10 @@ zbus-secret-service-keyring-store = { version = "=1.0.1", default-features = fal
 # The test plugin, test/counter (RFC 0011).
 [dev-dependencies]
 ncdb-test-counter.workspace = true
+# Reads the table of Markdown and the documents it writes, which the core
+# and both SDKs share (crates/ncdb-core/tests/vectors/rich-text/
+# from-markdown.json; NOC-463). The version the core pins.
+serde_json = { version = "=1.0.154", default-features = false, features = ["std"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 ncdb-relay-server.workspace = true
