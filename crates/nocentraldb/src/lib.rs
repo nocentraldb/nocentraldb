@@ -134,6 +134,8 @@ mod personal_write_tests;
 mod restore_tests;
 #[cfg(all(test, ncdb_rich_text))]
 mod rich_text_field_tests;
+#[cfg(all(test, ncdb_rich_text))]
+mod rich_text_from_markdown_tests;
 #[cfg(test)]
 mod shorthand_tests;
 #[cfg(test)]
