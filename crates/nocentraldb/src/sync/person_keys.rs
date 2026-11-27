@@ -11,8 +11,13 @@
 //! and the key matches the commitment in the log. A record that fails is
 //! not held.
 //!
-//! The member holds its person keys in memory only, and fetches them again
-//! on every connection, as the owner decided (NOC-222).
+//! The member keeps each record whose key it holds, as the relay stores
+//! it, in its own database ([`hold`]; NOC-547), and a reopened database
+//! holds those keys again from it ([`restore`]), with no relay: the record
+//! unwraps under a space key the envelopes in the log give the member, so
+//! no person key is on the disk in the clear. A connected member still
+//! fetches the records again on every connection (NOC-222), for the keys
+//! other members drew or re-wrapped.
 //!
 //! A record its writer signed that still fails, because it does not unwrap
 //! under its generation or its key does not match the commitment, is
@@ -25,6 +30,8 @@
 use ncdb_core::ids::{MemberId, SpaceId};
 use ncdb_core::membership::{record_hash, unwrap_person_key, verify_record};
 
+use ncdb_core::view::{PersonKeyRecord, View};
+
 use super::wire::Record;
 use crate::db::{Inner, SpaceState};
 
@@ -32,14 +39,80 @@ use crate::db::{Inner, SpaceState};
 /// key whose record the member accepts, as its writer does. A rotation
 /// that re-wrapped person keys calls it once its batch is folded (NOC-206
 /// part 3).
+/// Without a relay the device keeps the records all the same, so a
+/// reopened database holds the keys again (NOC-547).
 pub(crate) fn put(inner: &mut Inner, space: SpaceId, records: Vec<Record>) {
-    if let Some(state) = inner.spaces.get_mut(&space) {
+    let Inner {
+        view, spaces, sync, ..
+    } = inner;
+    if let Some(state) = spaces.get_mut(&space) {
         for record in &records {
-            accept(state, space, record);
+            // A record that cannot be kept is held for this session all the
+            // same; the status names its key as missing after a reopen.
+            let _ = hold(view, state, space, record);
         }
     }
-    if let Some(sync) = inner.sync.as_mut() {
+    if let Some(sync) = sync.as_mut() {
         sync.puts.entry(space).or_default().extend(records);
+    }
+}
+
+/// [`accept`]s `record` of `space`, and keeps it in the device's database
+/// when the member holds its key (NOC-547). Says what `accept` did.
+pub(crate) fn hold(
+    view: &mut View,
+    state: &mut SpaceState,
+    space: SpaceId,
+    record: &Record,
+) -> Result<Outcome, ncdb_core::view::Error> {
+    let outcome = accept(state, space, record);
+    if outcome == Outcome::Held {
+        view.keep_person_key_record(space, &stored(record))?;
+    }
+    Ok(outcome)
+}
+
+/// Holds again each person key of `space` whose record the device kept,
+/// when the record still holds ([`accept`]), as a reopened database does
+/// (NOC-547), and opens the space's personal fields with them. The record
+/// of a key a shred destroyed meanwhile is forgotten.
+pub(crate) fn restore(
+    view: &mut View,
+    space: SpaceId,
+    state: &mut SpaceState,
+) -> Result<(), ncdb_core::view::Error> {
+    for record in view.person_key_records(space)? {
+        let destroyed = state
+            .checks
+            .resolved()
+            .person_key(record.person_key)
+            .is_some_and(|key| key.destroyed());
+        if destroyed {
+            view.forget_person_key_records(space, record.person_key)?;
+            continue;
+        }
+        accept(state, space, &from_stored(record));
+    }
+    crate::personal::refresh(view, space, state)
+}
+
+fn stored(record: &Record) -> PersonKeyRecord {
+    PersonKeyRecord {
+        person_key: record.person_key,
+        generation: record.generation,
+        writer: record.writer,
+        wrapped: record.wrapped.clone(),
+        signature: record.signature,
+    }
+}
+
+fn from_stored(record: PersonKeyRecord) -> Record {
+    Record {
+        person_key: record.person_key,
+        generation: record.generation,
+        writer: record.writer,
+        wrapped: record.wrapped,
+        signature: record.signature,
     }
 }
 

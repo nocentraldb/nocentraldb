@@ -265,6 +265,11 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
         .iter()
         .map(|account| crate::erasures::of_account_key(resolved, *account))
         .collect();
+    let missing = resolved
+        .person_keys()
+        .filter(|(id, key)| !key.destroyed() && !state.person_keys.contains_key(id))
+        .count();
+    status.missing_person_keys = u32::try_from(missing).unwrap_or(u32::MAX);
     let now = crate::clock::now_millis();
     status.provisional_erasures = pending(resolved)
         .map(|(shred, performer)| {
