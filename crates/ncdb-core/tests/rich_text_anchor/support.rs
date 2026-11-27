@@ -128,6 +128,16 @@ impl Field {
     }
 }
 
+/// Whether `data` holds `needle` as a text or a map key anywhere.
+pub fn holds(data: &Data, needle: &str) -> bool {
+    match data {
+        Data::Text(text) => text == needle,
+        Data::Array(items) => items.iter().any(|item| holds(item, needle)),
+        Data::Map(map) => map.iter().any(|(k, v)| k == needle || holds(v, needle)),
+        _ => false,
+    }
+}
+
 /// An agent with its cache of versions and its one lease.
 pub struct Agent {
     pub versions: Versions,

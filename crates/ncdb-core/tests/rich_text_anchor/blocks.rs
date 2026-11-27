@@ -34,8 +34,8 @@ fn concurrently(
 #[test]
 fn editing_a_headings_text_keeps_the_heading_and_the_persons_typing() {
     let mut field = Field::new(vec![el("heading", &[("level", i(2))], vec![t("Plan")])]);
-    concurrently(&mut field, 0, 4, " ahead", &[replace("Plan", "Plans")]);
-    assert_eq!(field.markdown(), "## Plans ahead");
+    concurrently(&mut field, 0, 0, "Our ", &[replace("Plan", "Plans")]);
+    assert_eq!(field.markdown(), "## Our Plans");
 }
 
 #[test]

@@ -7,10 +7,9 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use ncdb_core::rich_text::anchor::Error;
 use ncdb_core::rich_text::update;
-use ncdb_plugin::Data;
 
 use crate::doc::{el, i, m, ma, p, s, t};
-use crate::support::{Agent, Field, after, append, edited, replace};
+use crate::support::{Agent, Field, after, append, edited, holds, replace};
 
 #[test]
 fn a_word_is_replaced_by_its_characters_and_the_rest_is_kept() {
@@ -31,8 +30,7 @@ fn a_word_is_replaced_by_its_characters_and_the_rest_is_kept() {
     field.agent(&written);
     assert_eq!(field.markdown(), "We ship on Monday.\n\nOutro.");
     // The underline the Markdown does not show stays.
-    let tree = format!("{:?}", field.tree());
-    assert!(tree.contains("underline"), "{tree}");
+    assert!(holds(&field.tree(), "underline"));
 }
 
 #[test]
@@ -86,8 +84,7 @@ fn a_link_keeps_the_attributes_the_markdown_does_not_show() {
         edited(&mut field, &[replace("here.", "there.")]),
         Ok("[docs](https://example.com/a) there.".to_owned())
     );
-    let tree = format!("{:?}", field.tree());
-    assert!(tree.contains("_blank"), "{tree}");
+    assert!(holds(&field.tree(), "_blank"));
 }
 
 #[test]
@@ -161,19 +158,31 @@ fn an_edit_inside_a_list_item_and_a_task_are_made_in_place() {
 fn a_mention_is_written_from_its_markdown_form() {
     let space = "0123456789abcdef0123456789abcdef";
     let id = "fedcba9876543210fedcba9876543210";
-    let mut field = Field::new(vec![p(vec![t("Ask about it.")])]);
     let mention = format!("[@](ncdb:{space}/{id})");
+    let mut field = Field::new(vec![p(vec![t("Ask about it.")])]);
+    assert_eq!(
+        edited(
+            &mut field,
+            &[replace("about it.", &format!("about it. {mention}"))]
+        ),
+        Ok(format!("Ask about it. {mention}"))
+    );
+    assert!(holds(&field.tree(), "mention"));
+    assert!(holds(&field.tree(), id));
+}
+
+#[test]
+fn a_node_inside_a_run_of_text_is_refused() {
+    // It would split the text in two, which the core does not do yet.
+    let mention = "[@](ncdb:0123456789abcdef0123456789abcdef/fedcba9876543210fedcba9876543210)";
+    let mut field = Field::new(vec![p(vec![t("Ask about it.")])]);
     assert_eq!(
         edited(
             &mut field,
             &[replace("Ask about", &format!("Ask {mention} about"))]
         ),
-        Ok(format!("Ask {mention} about it."))
+        Err(Error::Unsupported { edit: 0 })
     );
-    let tree = field.tree();
-    let printed = format!("{tree:?}");
-    assert!(printed.contains("mention"), "{printed}");
-    let _ = Data::Null;
 }
 
 #[test]
