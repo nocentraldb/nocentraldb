@@ -249,3 +249,9 @@ describe("the status (NOC-538, Q2)", () => {
     expect(heard).toEqual([]);
   });
 });
+
+test("a reader's binding is read-only from the start", () => {
+  const { core, port } = fakeCore();
+  const body = bind(opened(core, false), port);
+  expect(body.status).toEqual({ status: "readOnly" });
+});
