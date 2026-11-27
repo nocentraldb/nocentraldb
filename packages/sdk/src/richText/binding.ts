@@ -20,11 +20,11 @@
 // - One UndoManager for the document, which every editor of the binding
 //   uses (Carsten, 2026-11-22, NOC-467).
 import * as Y from "yjs";
+import type { RichTextBinding, RichTextStatus, Vocabulary } from "../editor.ts";
 import { type Known, undeclared, unknownDeleted } from "./guard.ts";
-import type { RichTextBinding, RichTextStatus, Vocabulary } from "./types.ts";
 
+export type { RichTextBinding, RichTextStatus, Vocabulary } from "../editor.ts";
 export type { Known } from "./guard.ts";
-export type { RichTextBinding, RichTextStatus, Vocabulary } from "./types.ts";
 
 /** The pause in typing after which the binding writes (RFC 0013, "An editor: the binding"). */
 export const PAUSE_MS = 500;

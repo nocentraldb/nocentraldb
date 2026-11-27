@@ -9,7 +9,7 @@
 //   format that goes with its text goes with a deletion the editor knows);
 // - an attribute the editor does not declare for its node, removed.
 import * as Y from "yjs";
-import type { Vocabulary } from "./types.ts";
+import type { Vocabulary } from "../editor.ts";
 
 /** The names the editor knows: the field's vocabulary and what the editor declares besides, its placeholders included. */
 export interface Known {

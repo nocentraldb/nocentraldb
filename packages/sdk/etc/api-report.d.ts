@@ -81,7 +81,7 @@ export interface Space {
         subscribe(listener: (status: SpaceStatus) => void): Stop;
     };
     write(record: (tx: Tx) => void): Promise<Written>;
-    richText(collection: AnyCollection, id: Id, field: string): Promise<import("./richText/types.ts").RichTextBinding>;
+    richText(collection: AnyCollection, id: Id, field: string): Promise<import("./editor.ts").RichTextBinding>;
     create<C extends AnyCollection>(collection: C, values: Values<C>): Promise<Written>;
     update<C extends AnyCollection>(collection: C, id: Id, values: Values<C>): Promise<Written>;
     delete(collection: AnyCollection, id: Id): Promise<Written>;
@@ -221,6 +221,31 @@ export interface ViewStatus {
         readonly total: number;
     } | null;
 }
+// file: editor.d.ts
+import type * as Y from "yjs";
+export interface Vocabulary {
+    readonly nodes: readonly string[];
+    readonly marks: readonly string[];
+}
+export type RichTextStatus = {
+    readonly status: "shown";
+} | {
+    readonly status: "notFullyShown";
+    readonly reason: string;
+} | {
+    readonly status: "readOnly";
+};
+export interface RichTextBinding {
+    readonly doc: Y.Doc;
+    onReload(listener: (doc: Y.Doc) => void): () => void;
+    readonly status: RichTextStatus;
+    onStatus(listener: (status: RichTextStatus) => void): () => void;
+    readonly undoManager: Y.UndoManager;
+    readonly writable: boolean;
+    readonly vocabulary: Vocabulary;
+    composing(open: boolean): void;
+    close(): Promise<void>;
+}
 // file: erase.d.ts
 import type { Notice } from "./members.ts";
 type Id = string;
@@ -257,10 +282,10 @@ export declare function name(): string;
 export type { RecoveryCode } from "./account.ts";
 export type { Db, Page, Query, Space, Tx } from "./db.ts";
 export type { Durability } from "./durability.ts";
+export type { RichTextBinding, RichTextStatus, Vocabulary, } from "./editor.ts";
 export type { Erased, ErasureRequest, SignOffs } from "./erase.ts";
 export type { Invitation, Notice } from "./members.ts";
 export * as nc from "./nc.ts";
-export type { RichTextBinding, RichTextStatus, Vocabulary, } from "./richText/types.ts";
 export type { SpaceStatus } from "./status.ts";
 export type { SyncStatus } from "./sync.ts";
 export type PairingAnswer = import("./account.ts").PairingAnswer;
@@ -423,31 +448,6 @@ export { add, open, remove } from "./db.ts";
 export { erasureRequest, signOffs } from "./erase.ts";
 export { NcError as Error } from "./error.ts";
 export { invitation } from "./members.ts";
-// file: richText/types.d.ts
-import type * as Y from "yjs";
-export interface Vocabulary {
-    readonly nodes: readonly string[];
-    readonly marks: readonly string[];
-}
-export type RichTextStatus = {
-    readonly status: "shown";
-} | {
-    readonly status: "notFullyShown";
-    readonly reason: string;
-} | {
-    readonly status: "readOnly";
-};
-export interface RichTextBinding {
-    readonly doc: Y.Doc;
-    onReload(listener: (doc: Y.Doc) => void): () => void;
-    readonly status: RichTextStatus;
-    onStatus(listener: (status: RichTextStatus) => void): () => void;
-    readonly undoManager: Y.UndoManager;
-    readonly writable: boolean;
-    readonly vocabulary: Vocabulary;
-    composing(open: boolean): void;
-    close(): Promise<void>;
-}
 // file: status.d.ts
 export interface SpaceStatus {
     readonly role: "reader" | "writer" | "admin" | "removed";

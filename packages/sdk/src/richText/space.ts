@@ -4,11 +4,12 @@
 // core folded after each fold of the object. A core without rich text
 // answers `notSupported` (Carsten, 2026-11-27, NOC-538, Q5). The binding,
 // which needs Yjs, is loaded only here (Carsten, 2026-11-27, NOC-564).
+
+import type { Vocabulary } from "../editor.ts";
 import { NcError } from "../error.ts";
 import * as texts from "../texts.ts";
 import type { Binding } from "./binding.ts";
 import { openRichText } from "./port.ts";
-import type { Vocabulary } from "./types.ts";
 
 type Ask = (call: string, args: Record<string, unknown>) => Promise<unknown>;
 type Change = {

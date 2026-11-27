@@ -154,7 +154,7 @@ export interface Space {
     collection: AnyCollection,
     id: Id,
     field: string,
-  ): Promise<import("./richText/types.ts").RichTextBinding>;
+  ): Promise<import("./editor.ts").RichTextBinding>;
   /** A write with one create. */
   create<C extends AnyCollection>(
     collection: C,
