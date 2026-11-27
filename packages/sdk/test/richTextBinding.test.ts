@@ -255,3 +255,38 @@ test("a reader's binding is read-only from the start", () => {
   const body = bind(opened(core, false), port);
   expect(body.status).toEqual({ status: "readOnly" });
 });
+
+describe("a pull while a composition is open (NOC-555)", () => {
+  const otherWrites = (core: Y.Doc, words: string) => {
+    const other = new Y.Doc();
+    Y.applyUpdate(other, Y.encodeStateAsUpdate(core));
+    type(other, words);
+    Y.applyUpdate(core, Y.encodeStateAsUpdate(other));
+  };
+
+  test("waits for compositionend, so the editor never meets a new node mid-composition", async () => {
+    const { core, port } = fakeCore();
+    const body = bind(opened(core), port);
+    body.composing(true);
+    otherWrites(core, "From Bob");
+    const pulled = body.folded();
+    await settle();
+    expect(text(body.doc)).toBe("");
+    body.composing(false);
+    await pulled;
+    expect(text(body.doc)).toBe(text(core));
+  });
+
+  test("waits for at most 2 s", async () => {
+    const { core, port } = fakeCore();
+    const body = bind(opened(core), port);
+    body.composing(true);
+    otherWrites(core, "From Bob");
+    const pulled = body.folded();
+    await vi.advanceTimersByTimeAsync(MAX_HOLD_MS - 1);
+    expect(text(body.doc)).toBe("");
+    await vi.advanceTimersByTimeAsync(1);
+    await pulled;
+    expect(text(body.doc)).toBe(text(core));
+  });
+});
