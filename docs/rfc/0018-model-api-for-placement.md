@@ -383,4 +383,4 @@ It adds an index form and through fields to [RFC 0005](0005-schema-and-model-loc
 
 ## History
 
-- 2026-11-27 · First published (NOC-551)
+- 2026-11-27 · First published as a draft (NOC-551)

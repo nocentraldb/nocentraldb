@@ -1,0 +1,21 @@
+# cargo-deny configuration (NOC-544). CI runs only `cargo deny check advisories`;
+# licenses, bans and sources are not configured here and not checked.
+
+[advisories]
+# Report every dependency marked unmaintained, not only workspace crates
+# (cargo-deny's default is "workspace", which hid the advisories below).
+unmaintained = "all"
+
+# Every exception names its ticket and the date it expires. On that date the
+# exception is removed, or renewed by a new decision on its ticket.
+ignore = [
+  # NOC-408, expires 2027-02-21: zbus 5 through zbus-secret-service-keyring-store
+  # 1.0.1 (the Linux keystore of `nocentraldb`). Removed with the move to a store
+  # release on zbus 6.
+  { id = "RUSTSEC-2026-0370", reason = "NOC-408, expires 2027-02-21: zvariant 5 via the Linux keystore" },
+  { id = "RUSTSEC-2026-0371", reason = "NOC-408, expires 2027-02-21: zbus_names 5 via the Linux keystore" },
+  { id = "RUSTSEC-2026-0372", reason = "NOC-408, expires 2027-02-21: zvariant_derive 5 via the Linux keystore" },
+  # NOC-545, expires 2027-03-31: smallstr through yrs 0.28.2 (rich text in
+  # ncdb-core). Removed when a yrs release drops smallstr.
+  { id = "RUSTSEC-2026-0215", reason = "NOC-545, expires 2027-03-31: smallstr via yrs" },
+]
