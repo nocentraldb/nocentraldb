@@ -75,6 +75,7 @@ pub(crate) use finalize::set_finalize_after;
 pub(crate) use merge::set_merge_delay;
 #[cfg_attr(not(test), allow(unused_imports))]
 pub(crate) use person_keys::put as put_person_keys;
+pub(crate) use person_keys::restore as restore_person_keys;
 pub(crate) use run::start;
 pub(crate) use status::{Notify, follow};
 #[cfg(any(test, feature = "bridge"))]

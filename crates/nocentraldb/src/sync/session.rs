@@ -480,9 +480,16 @@ impl<T: Transport> Session<'_, T> {
             Ok(()) => self.ask(req).await,
             Err(end) => Err(end),
         };
+        // Taken, or refused for good: the kept records wait no longer.
+        let done = |records: &[wire::Record]| {
+            with(self.db, |inner| {
+                super::person_keys::put_done(&mut inner.view, space, records)
+            })?
+            .map_err(|_| lost())
+        };
         match answer {
-            Ok(Answer::Other { .. }) => Ok(()),
-            Ok(Answer::Error { code, .. }) if code == "bad_record" => Ok(()),
+            Ok(Answer::Other { .. }) => done(&records),
+            Ok(Answer::Error { code, .. }) if code == "bad_record" => done(&records),
             Ok(answer) => {
                 keep(records)?;
                 self.answer(space, answer)
@@ -513,17 +520,21 @@ impl<T: Transport> Session<'_, T> {
             match self.ask(req).await? {
                 Answer::PersonKeys { records, .. } => {
                     with(self.db, |inner| {
-                        if let Some(state) = inner.spaces.get_mut(&space) {
+                        let crate::db::Inner { view, spaces, .. } = inner;
+                        if let Some(state) = spaces.get_mut(&space) {
                             let mut bad = std::collections::BTreeSet::new();
                             for record in &records {
-                                let outcome = super::person_keys::accept(state, space, record);
+                                let outcome =
+                                    super::person_keys::hold(view, state, space, record, false)?;
                                 if let super::person_keys::Outcome::Bad(account) = outcome {
                                     bad.insert(account);
                                 }
                             }
                             state.bad_person_key_records = bad;
                         }
-                    })?;
+                        Ok(())
+                    })?
+                    .map_err(|_: ncdb_core::view::Error| lost())?;
                 }
                 answer => return self.answer(space, answer),
             }

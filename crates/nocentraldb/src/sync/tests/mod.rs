@@ -39,6 +39,7 @@ mod pairing;
 mod pairing_syncing;
 mod pause;
 mod person_keys;
+mod person_keys_reopen;
 mod personal;
 mod provisional;
 mod pull;
