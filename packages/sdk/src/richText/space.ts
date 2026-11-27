@@ -2,11 +2,13 @@
 // binding"; NOC-461): it opens a binding on the field through the bridge,
 // with the field's vocabulary from the lock (NOC-553), and pulls what the
 // core folded after each fold of the object. A core without rich text
-// answers `notSupported` (Carsten, 2026-11-27, NOC-538, Q5).
+// answers `notSupported` (Carsten, 2026-11-27, NOC-538, Q5). The binding,
+// which needs Yjs, is loaded only here (provisional, NOC-564).
 import { NcError } from "../error.ts";
 import * as texts from "../texts.ts";
-import { type Binding, bind, type Vocabulary } from "./binding.ts";
+import type { Binding } from "./binding.ts";
 import { openRichText } from "./port.ts";
+import type { Vocabulary } from "./types.ts";
 
 type Ask = (call: string, args: Record<string, unknown>) => Promise<unknown>;
 type Change = {
@@ -47,6 +49,10 @@ export const richTextOf =
       throw new NcError("notSupported", texts.RICH_TEXT_NOT_SUPPORTED);
     }
     const name = nameOf(collection);
+    // Only rich text needs Yjs, the app's own, an optional peer of the
+    // SDK: the binding is loaded when the first one opens, so the rest of
+    // the SDK loads without it (provisional, NOC-564).
+    const { bind } = await import("./binding.ts");
     const { opened, port } = await openRichText(ask, {
       space,
       collection: name,
