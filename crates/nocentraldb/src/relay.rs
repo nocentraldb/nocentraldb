@@ -51,3 +51,20 @@ where
         Box::pin(async move { future.await.ok() })
     })
 }
+
+#[cfg(test)]
+thread_local! {
+    /// The bound a test sets for the relay functions given on its thread.
+    static TEST_BOUND: std::cell::Cell<Option<std::time::Duration>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Runs `f` with `bound` in place of the 30 s for each relay function
+/// given meanwhile on this thread: only the tests shorten it.
+#[cfg(test)]
+pub(crate) fn with_bound<T>(bound: std::time::Duration, f: impl FnOnce() -> T) -> T {
+    let before = TEST_BOUND.replace(Some(bound));
+    let output = f();
+    TEST_BOUND.set(before);
+    output
+}

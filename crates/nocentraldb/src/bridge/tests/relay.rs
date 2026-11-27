@@ -103,3 +103,60 @@ fn a_null_answer_is_a_failed_relay_function_and_the_worker_asks_again() {
 
     assert!(asks >= 2, "{asks}");
 }
+
+/// A `relay` ask the SDK does not answer within the bound (NOC-585): the
+/// worker reports `relay_url_failed` and asks again, and the late answer
+/// of the first ask is ignored. A shorter bound than 30 s here.
+#[test]
+fn an_unanswered_ask_runs_out_of_time_and_its_late_answer_is_ignored() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("a runtime");
+    let relay = runtime.block_on(LocalRelay::start());
+    let gate = runtime.block_on(Gate::start(relay.addr, "fresh"));
+    let mut bridge = crate::relay::with_bound(Duration::from_millis(300), open_with_relay_function);
+    let url = |token: &str| text(&format!("{}/prod?token={token}", gate.url()));
+
+    let start = Instant::now();
+    let mut first = None;
+    let mut failed = false;
+    'served: loop {
+        assert!(
+            start.elapsed() < Duration::from_secs(20),
+            "not connected in time"
+        );
+        let events = bridge.events().expect("an open database").take();
+        for event in events.iter().map(|bytes| cbor::decode(bytes).unwrap()) {
+            match field(&event, "event") {
+                Some(Value::Text(kind)) if kind == "relay" => {
+                    let request = field(&event, "request").expect("a request").clone();
+                    let Some(late) = first.replace(request.clone()) else {
+                        // The first ask stays unanswered for now.
+                        continue;
+                    };
+                    for (request, token) in [(late, "late"), (request, "fresh")] {
+                        let answer = map(&[("request", request), ("relay", url(token))]);
+                        assert_eq!(ok(&mut bridge, "relay.answer", answer), Value::Null);
+                    }
+                }
+                Some(Value::Text(kind)) if kind == "sync" => {
+                    let status = field(&event, "status").expect("a status");
+                    failed |= field(status, "error") == Some(&text("relay_url_failed"));
+                    if field(status, "connection") == Some(&text("connected")) {
+                        break 'served;
+                    }
+                }
+                _ => {}
+            }
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    assert!(failed, "the status never named relay_url_failed");
+    let targets = gate.targets();
+    assert!(
+        !targets.iter().any(|target| target.contains("late")),
+        "{targets:?}"
+    );
+}
