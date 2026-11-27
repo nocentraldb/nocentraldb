@@ -16,6 +16,14 @@
 //!   member), `req`, `epoch` (bytes), `expires_at` and `ttl` of its
 //!   connection.
 //!
+//! A store that keeps records (NOC-532) does not delete the items of an
+//! ended connection or subscription: it sets their `ended_at` and
+//! `expires_at` to the time it ended, so every read takes them as gone, and
+//! their `ttl` to the days kept after that. Every `ttl` it writes is the
+//! days kept after `expires_at`, so the TTL keeps what a missed
+//! `$disconnect` leaves behind as long. Ending an item twice keeps its first
+//! `ended_at`.
+//!
 //! A subscription carries its member as `subscriber`, not `member`, so it
 //! never lists in `by_member`. The indexes are read eventually
 //! consistent, as DynamoDB serves them: a subscription made a moment ago
@@ -26,6 +34,8 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use aws_sdk_dynamodb::Client;
+use aws_sdk_dynamodb::error::SdkError;
+use aws_sdk_dynamodb::operation::update_item::UpdateItemError;
 use aws_sdk_dynamodb::primitives::Blob;
 use aws_sdk_dynamodb::types::{
     AttributeDefinition, AttributeValue, BillingMode, DeleteRequest, GlobalSecondaryIndex,
@@ -36,7 +46,7 @@ use ncdb_core::ids::{MemberId, SpaceId};
 use ncdb_relay::store::{Epoch, StoreError};
 use tokio::runtime::Handle;
 
-use crate::connections::{Connection, Connections, Stage, Subscription};
+use crate::connections::{Connection, Connections, DAY, Stage, Subscription};
 
 /// The sort key of a connection's own item.
 const CONNECTION: &str = "#";
@@ -56,12 +66,15 @@ pub struct DynamoConnections {
     db: Client,
     table: String,
     runtime: Handle,
+    /// How long ended items are kept, in milliseconds; 0 deletes them.
+    keep: u64,
 }
 
 impl std::fmt::Debug for DynamoConnections {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DynamoConnections")
             .field("table", &self.table)
+            .field("keep", &self.keep)
             .finish_non_exhaustive()
     }
 }
@@ -138,7 +151,20 @@ impl DynamoConnections {
             db,
             table: table.into(),
             runtime,
+            keep: 0,
         }
+    }
+
+    /// The same store, keeping an ended connection's items for `days`.
+    #[must_use]
+    pub fn keeping(mut self, days: u32) -> DynamoConnections {
+        self.keep = u64::from(days) * DAY;
+        self
+    }
+
+    /// The `ttl` of an item whose record expires or ended at `at`.
+    fn ttl(&self, at: u64) -> AttributeValue {
+        n(at.saturating_add(self.keep) / 1000)
     }
 
     /// Runs `call` on the store's runtime once the returned future is
@@ -216,9 +242,45 @@ async fn index(
     }
 }
 
-/// Whether an item's record is still live at `now`.
+/// Whether an item's record is still live at `now`: not ended, and not
+/// expired. The index `by_member` projects no `ended_at`; an ended item's
+/// `expires_at` takes it out there.
 fn live(item: &Item, now: u64) -> bool {
-    number(item, "expires_at").is_some_and(|at| at > now)
+    !item.contains_key("ended_at") && number(item, "expires_at").is_some_and(|at| at > now)
+}
+
+/// Marks the item `item` of the connection `id` as ended at `now`, to be
+/// deleted at `ttl`, unless it is gone or ended already.
+async fn end(
+    db: &Client,
+    table: &str,
+    id: &str,
+    item: &str,
+    now: u64,
+    ttl: AttributeValue,
+) -> Result<(), StoreError> {
+    let out = db
+        .update_item()
+        .table_name(table)
+        .key("connection", s(id))
+        .key("item", s(item))
+        .update_expression("SET ended_at = :now, expires_at = :now, #ttl = :ttl")
+        .condition_expression("attribute_exists(#c) AND attribute_not_exists(ended_at)")
+        .expression_attribute_names("#c", "connection")
+        .expression_attribute_names("#ttl", "ttl")
+        .expression_attribute_values(":now", n(now))
+        .expression_attribute_values(":ttl", ttl)
+        .send()
+        .await;
+    match out {
+        Ok(_) => Ok(()),
+        Err(SdkError::ServiceError(e))
+            if matches!(e.err(), UpdateItemError::ConditionalCheckFailedException(_)) =>
+        {
+            Ok(())
+        }
+        Err(e) => Err(failed("end an item")(e)),
+    }
 }
 
 impl Connections for DynamoConnections {
@@ -228,6 +290,7 @@ impl Connections for DynamoConnections {
         connection: Connection,
     ) -> impl Future<Output = Result<(), StoreError>> + Send {
         let id = id.to_owned();
+        let ttl = self.ttl(connection.expires_at);
         self.run(move |db, table| async move {
             let mut put = db
                 .put_item()
@@ -236,7 +299,7 @@ impl Connections for DynamoConnections {
                 .item("item", s(CONNECTION))
                 .item("connected_at", n(connection.connected_at))
                 .item("expires_at", n(connection.expires_at))
-                .item("ttl", n(connection.expires_at / 1000));
+                .item("ttl", ttl);
             put = match connection.stage {
                 Stage::Hello => put.item("stage", s("hello")),
                 Stage::Auth { nonce } => put.item("stage", s("auth")).item("nonce", b(&nonce)),
@@ -270,8 +333,19 @@ impl Connections for DynamoConnections {
 
     fn remove(&self, id: &str) -> impl Future<Output = Result<(), StoreError>> + Send {
         let id = id.to_owned();
+        let keep = self.keep;
+        let now = crate::contract::now();
+        let ttl = self.ttl(now);
         self.run(move |db, table| async move {
             let items = items_of(&db, &table, &id).await?;
+            if keep > 0 {
+                for item in &items {
+                    if let Some(sort) = text(item, "item") {
+                        end(&db, &table, &id, sort, now, ttl.clone()).await?;
+                    }
+                }
+                return Ok(());
+            }
             // BatchWriteItem takes at most 25 requests.
             for chunk in items.chunks(25) {
                 let mut requests = Vec::with_capacity(chunk.len());
@@ -317,6 +391,7 @@ impl Connections for DynamoConnections {
         subscription: Subscription,
     ) -> impl Future<Output = Result<(), StoreError>> + Send {
         let id = id.to_owned();
+        let keep = self.keep;
         self.run(move |db, table| async move {
             // A subscription expires with its connection.
             let own = db
@@ -342,7 +417,7 @@ impl Connections for DynamoConnections {
                 .item("req", n(subscription.req))
                 .item("epoch", b(&subscription.epoch.0))
                 .item("expires_at", n(expires_at))
-                .item("ttl", n(expires_at / 1000))
+                .item("ttl", n(expires_at.saturating_add(keep) / 1000))
                 .send()
                 .await
                 .map_err(failed("store a subscription"))?;
@@ -356,7 +431,13 @@ impl Connections for DynamoConnections {
         space: SpaceId,
     ) -> impl Future<Output = Result<(), StoreError>> + Send {
         let id = id.to_owned();
+        let keep = self.keep;
+        let now = crate::contract::now();
+        let ttl = self.ttl(now);
         self.run(move |db, table| async move {
+            if keep > 0 {
+                return end(&db, &table, &id, &hex(&space.0), now, ttl).await;
+            }
             db.delete_item()
                 .table_name(table)
                 .key("connection", s(id))
