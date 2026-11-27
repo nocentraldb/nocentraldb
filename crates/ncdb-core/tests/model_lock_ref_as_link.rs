@@ -9,11 +9,13 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use ncdb_core::model_lock::{Draft, Kind, ModelId, ModelLock, Refusal, build};
 
-/// Tasks with an assignee and a personal note about the assignee; `{type}`
+/// Tasks with an assignee and a personal note about the assignee when `personal`; `assignee`
 /// is the assignee's type in the schema.
 fn schema(assignee: &str, personal: bool) -> Draft {
     let note = match personal {
-        true => r#", "note": { "personal": { "person": "assignee" }, "rule": 1, "type": "ncdb/string" }"#,
+        true => {
+            r#", "note": { "personal": { "person": "assignee" }, "rule": 1, "type": "ncdb/string" }"#
+        }
         false => "",
     };
     let text = format!(
