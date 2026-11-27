@@ -10,10 +10,16 @@
 //! CBOR heads, in any language. `docs/rfc/vectors/0015/` holds vectors to
 //! check an implementation against.
 
-use ed25519_dalek::SigningKey;
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use ed25519_dalek::{Signer, SigningKey};
+use sha2::{Digest, Sha256};
 
 /// The prefix of an admission's text.
 pub const PREFIX: &str = "ncdb-admit-1:";
+
+/// What the admission key signs under (RFC 0003's rule for signed input).
+const CONTEXT: &[u8] = b"nocentraldb/relay-admission";
 
 /// What one admission grants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,8 +35,64 @@ pub struct Grant {
 }
 
 /// The admission's text for `grant`, signed with `key`.
-pub fn sign(_key: &SigningKey, _grant: &Grant) -> String {
-    String::new()
+pub fn sign(key: &SigningKey, grant: &Grant) -> String {
+    let unsigned = map(grant, None);
+    let digest: [u8; 32] = Sha256::new()
+        .chain_update(CONTEXT)
+        .chain_update(&unsigned)
+        .finalize()
+        .into();
+    let signature = key.sign(&digest).to_bytes();
+    format!("{PREFIX}{}", URL_SAFE_NO_PAD.encode(map(grant, Some(&signature))))
+}
+
+/// The canonical map of `grant`, with the signature as key 5 when given.
+fn map(grant: &Grant, signature: Option<&[u8; 64]>) -> Vec<u8> {
+    let mut out = vec![0xa0 + 4 + u8::from(signature.is_some())];
+    out.push(1);
+    bytes(&mut out, &grant.relay_id);
+    out.push(2);
+    bytes(&mut out, &grant.identity);
+    out.push(3);
+    unsigned(&mut out, grant.until);
+    out.push(4);
+    unsigned(&mut out, grant.spaces);
+    if let Some(signature) = signature {
+        out.push(5);
+        bytes(&mut out, signature);
+    }
+    out
+}
+
+/// CBOR's head of a major type, `major` << 5, with the shortest argument.
+fn head(out: &mut Vec<u8>, major: u8, n: u64) {
+    match n {
+        0..24 => out.push(major | n as u8),
+        24..0x100 => out.extend([major | 24, n as u8]),
+        0x100..0x1_0000 => {
+            out.push(major | 25);
+            out.extend((n as u16).to_be_bytes());
+        }
+        0x1_0000..0x1_0000_0000 => {
+            out.push(major | 26);
+            out.extend((n as u32).to_be_bytes());
+        }
+        _ => {
+            out.push(major | 27);
+            out.extend(n.to_be_bytes());
+        }
+    }
+}
+
+/// An unsigned integer.
+fn unsigned(out: &mut Vec<u8>, n: u64) {
+    head(out, 0x00, n);
+}
+
+/// A byte string.
+fn bytes(out: &mut Vec<u8>, value: &[u8]) {
+    head(out, 0x40, value.len() as u64);
+    out.extend_from_slice(value);
 }
 
 /// 32 bytes written as 64 hex digits, as `db.account.identity` gives an
