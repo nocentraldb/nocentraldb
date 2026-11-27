@@ -47,7 +47,10 @@ test("ncEditor rebuilds from the editor's onContentError option and hands each e
   assert.match(text, /onEditor: \(next\) =>/);
   assert.doesNotMatch(text, /body\.rebuild\(editor\)/);
   // F20: the rebuild goes in the option, never in a listener.
-  assert.match(text, /The rebuild goes in the editor's `onContentError` option/);
+  assert.match(
+    text,
+    /The rebuild goes in the editor's `onContentError` option/,
+  );
   assert.doesNotMatch(text, /editor\.on\("contentError"/);
 });
 
