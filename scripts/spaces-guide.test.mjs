@@ -65,10 +65,7 @@ test("the guide points to the example backend, which exists with its journey tes
 });
 
 test("the example backend compiles the guide's Rust snippets as doctests", () => {
-  const lib = readFileSync(
-    join(root, "apps/notes-backend/src/lib.rs"),
-    "utf8",
-  );
+  const lib = readFileSync(join(root, "apps/notes-backend/src/lib.rs"), "utf8");
   assert.match(
     lib,
     /include_str!\("\.\.\/\.\.\/\.\.\/docs\/spaces-and-invitations\.md"\)/,

@@ -73,19 +73,19 @@ async fn create(db: &Db, kind: &str, name: &str) -> Space {
 /// The kind and name of each app space `db` holds, by space: what the
 /// `spaceInfo` objects of its spaces say.
 async fn kinds(db: &Db) -> BTreeMap<SpaceId, (String, String)> {
-    let query = db
-        .index("spaceInfo", "byKind")
-        .expect("the index")
-        .take(100);
-    let page = db.find(query).await.expect("a page");
-    page.items
-        .iter()
-        .map(|info| {
-            let kind = info.get::<&str>("kind").unwrap().unwrap_or("").to_owned();
+    let mut found = BTreeMap::new();
+    for kind in ["personal", "project", "note"] {
+        let index = db.index("spaceInfo", "byKind").expect("the index");
+        let page = db
+            .find(index.equal([kind]).take(100))
+            .await
+            .expect("a page");
+        for info in &page.items {
             let name = info.get::<&str>("name").unwrap().unwrap_or("").to_owned();
-            (info.space(), (kind, name))
-        })
-        .collect()
+            found.insert(info.space(), (kind.to_owned(), name));
+        }
+    }
+    found
 }
 
 /// Waits until `db` lists `space` and holds its `spaceInfo`.

@@ -16,7 +16,7 @@ export const model = nc.model({
     {
       indexes: {
         // The spaces of every kind this device holds, by kind and name.
-        byKind: nc.index(["kind", "name"]),
+        byKind: nc.index(["kind", "name"], { equal: 1 }),
       },
     },
   ),

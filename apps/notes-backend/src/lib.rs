@@ -117,3 +117,8 @@ impl Drop for Backend {
         let _ = TcpStream::connect(&self.address);
     }
 }
+
+/// The guide this backend belongs to, whose Rust snippets compile here as
+/// doctests.
+#[doc = include_str!("../../../docs/spaces-and-invitations.md")]
+mod guide {}
