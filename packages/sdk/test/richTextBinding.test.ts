@@ -302,10 +302,10 @@ test("a lease used before keeps its client id, though the state holds its items"
   type(body.doc, " and now");
   await body.hidden();
   expect(writes).toHaveLength(1);
-  // The write continues the client id's clocks, so it is read by its
-  // range, not as a state vector from clock 0.
   const clients = [
-    ...Y.parseUpdateMeta(writes[0] ?? new Uint8Array()).from.keys(),
+    ...Y.decodeStateVector(
+      Y.encodeStateVectorFromUpdate(writes[0] ?? new Uint8Array()),
+    ).keys(),
   ];
   expect(clients).toEqual([CLIENT]);
 });
