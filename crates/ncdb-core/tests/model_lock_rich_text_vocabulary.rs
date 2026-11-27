@@ -55,7 +55,8 @@ fn vocabulary(lock: &ModelLock) -> &Vocabulary {
     &lock.field("notes", "body").unwrap().vocabulary
 }
 
-const CALLOUT: &str = r#"{ "marks": ["link", "bold"], "nodes": ["paragraph", "callout", "heading"] }"#;
+const CALLOUT: &str =
+    r#"{ "marks": ["link", "bold"], "nodes": ["paragraph", "callout", "heading"] }"#;
 
 #[test]
 fn reads_the_nodes_and_marks_as_sorted_sets() {
@@ -119,7 +120,10 @@ fn the_model_hash_covers_the_vocabulary() {
 #[test]
 fn a_vocabulary_of_the_wrong_shape_names_its_path() {
     for (vocabulary, path) in [
-        (r#"["paragraph"]"#, "collections.notes.fields.body.vocabulary"),
+        (
+            r#"["paragraph"]"#,
+            "collections.notes.fields.body.vocabulary",
+        ),
         (
             r#"{ "nodes": "paragraph" }"#,
             "collections.notes.fields.body.vocabulary.nodes",
@@ -154,7 +158,10 @@ fn adding_nodes_and_marks_is_accepted() {
 
 #[test]
 fn declaring_a_vocabulary_where_there_was_none_is_accepted() {
-    assert_eq!(check::successor(&lock(1, None), &lock(2, Some(CALLOUT))), vec![]);
+    assert_eq!(
+        check::successor(&lock(1, None), &lock(2, Some(CALLOUT))),
+        vec![]
+    );
 }
 
 #[test]
@@ -195,10 +202,11 @@ fn removing_a_mark_is_refused() {
 fn dropping_the_vocabulary_refuses_each_name() {
     let refusals = check::successor(&lock(1, Some(CALLOUT)), &lock(2, None));
     assert_eq!(refusals.len(), 5, "{refusals:?}");
-    assert!(refusals.iter().all(|r| matches!(
-        r,
-        Refusal::NodeRemoved { .. } | Refusal::MarkRemoved { .. }
-    )));
+    assert!(
+        refusals
+            .iter()
+            .all(|r| matches!(r, Refusal::NodeRemoved { .. } | Refusal::MarkRemoved { .. }))
+    );
 }
 
 #[test]
@@ -275,7 +283,9 @@ fn model_build_keeps_the_version_when_only_the_order_changes() {
 fn model_build_refuses_a_removed_name_and_builds_nothing() {
     let first = build(&draft(Some(CALLOUT)), None, || ID).unwrap().lock;
     let refusals = build(
-        &draft(Some(r#"{ "marks": ["bold", "link"], "nodes": ["paragraph"] }"#)),
+        &draft(Some(
+            r#"{ "marks": ["bold", "link"], "nodes": ["paragraph"] }"#,
+        )),
         Some(&first),
         || unreachable!(),
     )
