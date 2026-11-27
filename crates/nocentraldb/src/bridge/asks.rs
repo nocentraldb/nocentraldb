@@ -2,7 +2,9 @@
 //! other side of the worker, so the database's function asks the SDK and
 //! waits. Each ask gets a request number and goes out as an event; the
 //! SDK's answer gives the waiting sync a text, or nothing when the app's
-//! function failed. An answer to a request nobody waits for is ignored.
+//! function failed. An answer to a request nobody waits for is ignored,
+//! such as the late answer to a relay ask the sync stopped waiting for
+//! after 30 s (NOC-572).
 //!
 //! - RFC 0015's admission ("In the SDK"): `{"event": "admission",
 //!   "request": n, "identity": hex}`, answered by `admission.answer`

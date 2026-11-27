@@ -122,7 +122,8 @@ pub struct SyncStatus {
     /// connection with HTTP 401 or 403, as an authorizer on `$connect`
     /// refuses a token that expired, it is `connect_refused`; while the
     /// app's function of [`OpenOptions::relay_with`](crate::OpenOptions::relay_with)
-    /// fails or gives no relay URL, `relay_url_failed`. Both keep the SDK
+    /// fails, gives no relay URL or gives none within 30 s,
+    /// `relay_url_failed`. Both keep the SDK
     /// retrying with backoff, and a connection that goes through clears
     /// them (NOC-496). A code the relay sent that
     /// RFC 0007 does not list shows as `unknown_error`, so the relay's own
