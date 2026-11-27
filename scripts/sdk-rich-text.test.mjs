@@ -62,7 +62,7 @@ test("the SDK takes yjs as an optional, exactly pinned peer, never as its own de
 // entry reaches through static imports imports no `yjs` at run time
 // (`import type` is erased), so `nc.open` and everything else load without
 // it, also unbundled; `space.richText` loads the binding with a dynamic
-// import (provisional, NOC-564).
+// import (Carsten, 2026-11-27, NOC-564).
 test("nothing the SDK's entry imports statically imports yjs at run time", () => {
   const seen = new Set();
   const runtime = [];

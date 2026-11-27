@@ -3,7 +3,7 @@
 // with the field's vocabulary from the lock (NOC-553), and pulls what the
 // core folded after each fold of the object. A core without rich text
 // answers `notSupported` (Carsten, 2026-11-27, NOC-538, Q5). The binding,
-// which needs Yjs, is loaded only here (provisional, NOC-564).
+// which needs Yjs, is loaded only here (Carsten, 2026-11-27, NOC-564).
 import { NcError } from "../error.ts";
 import * as texts from "../texts.ts";
 import type { Binding } from "./binding.ts";
@@ -51,7 +51,7 @@ export const richTextOf =
     const name = nameOf(collection);
     // Only rich text needs Yjs, the app's own, an optional peer of the
     // SDK: the binding is loaded when the first one opens, so the rest of
-    // the SDK loads without it (provisional, NOC-564).
+    // the SDK loads without it (Carsten, 2026-11-27, NOC-564).
     const { bind } = await import("./binding.ts");
     const { opened, port } = await openRichText(ask, {
       space,
