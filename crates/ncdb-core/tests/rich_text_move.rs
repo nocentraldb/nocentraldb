@@ -105,13 +105,13 @@ fn view_of(space: SpaceId, changes: &[&Change]) -> View {
     view
 }
 
-/// The body's stored state and its XML, or `None` while the view keeps
+/// The body's stored state and its Markdown, or `None` while the view keeps
 /// none.
 fn body(view: &View, space: SpaceId) -> Option<(Vec<u8>, String)> {
     let row = view.get(space, TASK, T).unwrap().expect("the task");
     match row.fields.get(BODY) {
         Some(FieldState::RichText(state)) => {
-            Some((RichText.state_bytes(state), RichText.read(state).xml))
+            Some((RichText.state_bytes(state), RichText.read(state).markdown))
         }
         _ => None,
     }
@@ -193,8 +193,11 @@ fn a_revived_rich_text_field_that_displaces_an_operation_converges_in_every_orde
             }],
         })
     );
-    let (_, xml) = body.as_ref().expect("the revived body");
-    assert!(xml.contains('P') && !xml.contains('Q'), "{xml}");
+    let (_, markdown) = body.as_ref().expect("the revived body");
+    assert!(
+        markdown.contains('P') && !markdown.contains('Q'),
+        "{markdown}"
+    );
 }
 
 #[test]

@@ -6,8 +6,7 @@
 
 use yrs::updates::decoder::Decode;
 use yrs::{
-    ClientID, Doc, GetString, OffsetKind, Options, ReadTxn, StateVector, Transact, Update,
-    XmlFragmentRef,
+    ClientID, Doc, OffsetKind, Options, ReadTxn, StateVector, Transact, Update, XmlFragmentRef,
 };
 
 use super::update;
@@ -54,13 +53,4 @@ pub(super) fn apply(state: &[u8], update: &[u8]) -> Result<Vec<u8>, Refused> {
 fn encode(doc: &Doc) -> Vec<u8> {
     doc.transact()
         .encode_state_as_update_v1(&StateVector::default())
-}
-
-/// The root fragment of `state` as XML; empty for a state Yrs cannot load,
-/// which only the core's own bytes are.
-pub(super) fn xml(state: &[u8]) -> String {
-    match load(state) {
-        Ok((doc, root)) => root.get_string(&doc.transact()),
-        Err(Refused) => String::new(),
-    }
 }

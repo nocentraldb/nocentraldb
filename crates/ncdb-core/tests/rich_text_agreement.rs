@@ -1,8 +1,9 @@
 //! Yjs and Yrs agree (RFC 0013, "How rich text meets the plugin contract",
 //! C3): the updates Yjs 13.6.33 wrote for two members, applied by the core
 //! with Yrs in any order, reach the document a Yjs document reaches, and
-//! the same XML, because the editor shows Yjs's result while every member
-//! folds with Yrs. The same document: the same items with the same
+//! read as the XML Yjs writes of it, in Markdown and as plain text,
+//! because the editor shows Yjs's result while every member folds with
+//! Yrs. The same document: the same items with the same
 //! content, as the core's own reading of the encoding sees them, and the
 //! same deletions. Not the same bytes: Yjs writes the delete set's clients
 //! from the largest id down, Yrs from the smallest up. tests/vectors/rich-text/generate.mjs wrote
@@ -25,7 +26,26 @@ const UPDATES: &str = include_str!("vectors/rich-text/updates.txt");
 const STATE: &str = include_str!("vectors/rich-text/state.hex");
 const XML: &str = include_str!("vectors/rich-text/document.xml");
 
+/// `document.xml`, the document Yjs reaches, as the core reads it in
+/// Markdown: the heading's level is text, so the heading reads as a tag.
+const MARKDOWN: &str = "<heading level=\"2\">Notes</heading>\n\nship on **Friday**.";
+
 const NONCE: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
+
+/// The characters of `xml`, without its tags.
+fn characters(xml: &str) -> String {
+    let mut out = String::new();
+    let mut in_tag = false;
+    for c in xml.trim().chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            c if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    out
+}
 
 fn hex(text: &str) -> Vec<u8> {
     let text = text.trim();
@@ -83,7 +103,7 @@ fn edits() -> Vec<ncdb_core::rich_text::Edit> {
 }
 
 #[test]
-fn yrs_reaches_yjss_state_and_xml_in_every_order() {
+fn yrs_reaches_yjss_state_and_reads_as_its_xml_in_every_order() {
     let edits = edits();
     assert_eq!(edits.len(), 10);
     let n = edits.len();
@@ -100,6 +120,12 @@ fn yrs_reaches_yjss_state_and_xml_in_every_order() {
         let ours = update::read(state.document()).unwrap();
         let yjs = update::read(&hex(STATE)).unwrap();
         assert_eq!(ours, yjs, "order {order:?}");
-        assert_eq!(RichText.read(&state).xml, XML.trim(), "order {order:?}");
+        let read = RichText.read(&state);
+        assert_eq!(read.markdown, MARKDOWN, "order {order:?}");
+        assert_eq!(
+            read.text.replace('\n', ""),
+            characters(XML),
+            "order {order:?}"
+        );
     }
 }
