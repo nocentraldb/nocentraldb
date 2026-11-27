@@ -4,9 +4,12 @@
 //! and it merges by the code of basic values. It has no merge rule of its
 //! own.
 //!
-//! What is new is resolution: whether the member's own copies hold the
-//! target, worked out when the app reads, never kept in the state. It
-//! differs from member to member, so nothing stored depends on it.
+//! What is new is resolution, worked out when the app reads, never kept in
+//! the state. A reference into the space of the object that holds it
+//! resolves as a link does, from that space's copy alone, so every member
+//! of the space reads the same (RFC 0018, "One function, two cases"). A
+//! reference into another space resolves against the member's own copies,
+//! which differ from member to member, so nothing stored depends on it.
 
 use crate::basic::{self, Values, Write};
 use crate::cbor::Value;
@@ -56,10 +59,11 @@ pub fn target(value: &Value) -> Option<Target> {
     }
 }
 
-/// What a member's copies hold of a reference's target (RFC 0004,
-/// "How a reference resolves"). RFC 0005's "References into another space"
-/// names the states for the app
-/// `"ok"`, `"notAccessible"` and `"missing"`.
+/// What a member's copies hold of a reference's target. A cross-space
+/// reference reads ok, not accessible or missing (RFC 0004, "How a
+/// reference resolves"); an in-space one reads a link's statuses: ok,
+/// deleted, missing, wrong collection or moved (RFC 0018, "One function,
+/// two cases").
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Status {
     /// The member holds a copy of the target's space, and it holds the
@@ -69,10 +73,20 @@ pub enum Status {
     /// reference resolves").
     NotAccessible,
     /// The member holds a copy of the target's space, but not the target,
-    /// or holds it deleted, or in a collection the field does not list
-    /// (RFC 0004, "How a reference resolves"). A value that names no
-    /// target reads missing too (RFC 0004, "The value and its encoding").
+    /// or, for a cross-space reference, holds it deleted, or in a
+    /// collection the field does not list (RFC 0004, "How a reference
+    /// resolves"). A value that names no target reads missing too (RFC
+    /// 0004, "The value and its encoding").
     Missing,
+    /// An in-space reference only: the space holds the target, deleted.
+    Deleted,
+    /// An in-space reference only: the space holds the target in a
+    /// collection the field does not list.
+    WrongCollection,
+    /// An in-space reference only: the space holds the trace of the
+    /// target's move to this space (RFC 0016, "Links to the moved
+    /// object"). It is not followed, as a link's is not.
+    Moved(SpaceId),
 }
 
 /// The copies of the spaces a member holds, which references resolve
@@ -119,11 +133,13 @@ pub struct Resolved {
 pub const MAX_TRACES: usize = 8;
 
 /// The status of the target `value` names, in a field that lists
-/// `collections`, and the space whose copy holds it when it is ok. Within
-/// a space it reads as a link does: a trace leads to the space its object
-/// moved to, up to [`MAX_TRACES`] in a row, and everything but ok is
-/// missing.
+/// `collections` and is held by an object in `space`, and the space whose
+/// copy holds the target when it is ok. A reference into `space` reads as a
+/// link does, from that copy alone. One into another space follows a trace
+/// to the space its object moved to, up to [`MAX_TRACES`] in a row, and
+/// everything but ok is missing.
 fn status(
+    space: SpaceId,
     collections: &BTreeSet<String>,
     value: &Value,
     copies: &impl Copies,
@@ -131,14 +147,27 @@ fn status(
     let Some(target) = target(value) else {
         return (Status::Missing, None);
     };
-    let mut space = target.space;
-    for _ in 0..=MAX_TRACES {
+    let object = link::value(target.object);
+    if target.space == space {
         let Some(objects) = copies.copy(&space) else {
             return (Status::NotAccessible, None);
         };
-        match link::status(collections, &link::value(target.object), objects) {
-            link::Status::Ok => return (Status::Ok, Some(space)),
-            link::Status::Moved(to) => space = to,
+        return match link::status(collections, &object, objects) {
+            link::Status::Ok => (Status::Ok, Some(space)),
+            link::Status::Deleted => (Status::Deleted, None),
+            link::Status::Missing => (Status::Missing, None),
+            link::Status::WrongCollection => (Status::WrongCollection, None),
+            link::Status::Moved(to) => (Status::Moved(to), None),
+        };
+    }
+    let mut at = target.space;
+    for _ in 0..=MAX_TRACES {
+        let Some(objects) = copies.copy(&at) else {
+            return (Status::NotAccessible, None);
+        };
+        match link::status(collections, &object, objects) {
+            link::Status::Ok => return (Status::Ok, Some(at)),
+            link::Status::Moved(to) => at = to,
             _ => return (Status::Missing, None),
         }
     }
@@ -164,11 +193,12 @@ impl Reference {
             .expect("a reference or the empty value is a reference's value")
     }
 
-    /// The read value, with each target's status in the member's `copies`.
-    pub fn resolve(&self, state: &basic::State, copies: &impl Copies) -> Resolved {
+    /// The read value of the field held by an object in `space`, with each
+    /// target's status in the member's `copies`.
+    pub fn resolve(&self, space: SpaceId, state: &basic::State, copies: &impl Copies) -> Resolved {
         let read = Values::References.read(state);
         let resolve = |entry: basic::Entry| {
-            let (status, found) = status(&self.collections, &entry.value, copies);
+            let (status, found) = status(space, &self.collections, &entry.value, copies);
             Resolution {
                 status,
                 found,
