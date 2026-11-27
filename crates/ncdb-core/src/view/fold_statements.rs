@@ -1,10 +1,18 @@
 //! The SQL statements a [`SqlFold`](super::fold::SqlFold) runs against the
 //! view's tables, and what they cost (NOC-542). Every statement of the fold
 //! goes through [`Statements`], so [`FoldWork`] counts them all.
+//!
+//! A fold runs the same few statements for every operation of a change,
+//! and parsing one is about as dear as running it, so [`Statements`]
+//! prepares each SQL text once per fold and keeps it until the fold ends.
+//! The fold creates and drops no table while it runs, so a kept statement
+//! never outlives what it names; SQLite prepares one again by itself if
+//! the schema changes all the same.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 
-use rusqlite::{Connection, Params, Row};
+use rusqlite::{Connection, Params, Row, Statement};
 
 use super::Error;
 
@@ -31,6 +39,8 @@ impl FoldWork {
 /// The statements of one fold, on the connection of its transaction.
 pub(super) struct Statements<'a> {
     conn: &'a Connection,
+    /// Each statement prepared so far, by its SQL text.
+    kept: RefCell<HashMap<String, Statement<'a>>>,
     prepared: Cell<usize>,
     object_reads: Cell<usize>,
 }
@@ -39,15 +49,29 @@ impl<'a> Statements<'a> {
     pub(super) fn new(conn: &'a Connection) -> Statements<'a> {
         Statements {
             conn,
+            kept: RefCell::new(HashMap::new()),
             prepared: Cell::new(0),
             object_reads: Cell::new(0),
         }
     }
 
+    /// Runs `f` on the statement of `sql`, prepared on its first use.
+    fn with<T>(
+        &self,
+        sql: &str,
+        f: impl FnOnce(&mut Statement<'a>) -> Result<T, Error>,
+    ) -> Result<T, Error> {
+        let mut kept = self.kept.borrow_mut();
+        if !kept.contains_key(sql) {
+            self.prepared.set(self.prepared.get() + 1);
+            kept.insert(sql.to_owned(), self.conn.prepare(sql)?);
+        }
+        f(kept.get_mut(sql).expect("prepared above"))
+    }
+
     /// Runs `sql` with `params`; gives the rows it changed.
     pub(super) fn execute(&self, sql: &str, params: impl Params) -> Result<usize, Error> {
-        self.prepared.set(self.prepared.get() + 1);
-        Ok(self.conn.prepare(sql)?.execute(params)?)
+        self.with(sql, |statement| Ok(statement.execute(params)?))
     }
 
     /// Runs the query `sql` with `params`; gives `f` of its first row, or
@@ -58,12 +82,12 @@ impl<'a> Statements<'a> {
         params: impl Params,
         f: impl FnOnce(&Row<'_>) -> rusqlite::Result<T>,
     ) -> Result<Option<T>, Error> {
-        self.prepared.set(self.prepared.get() + 1);
-        let mut statement = self.conn.prepare(sql)?;
-        let mut rows = statement.query(params)?;
-        Ok(match rows.next()? {
-            Some(row) => Some(f(row)?),
-            None => None,
+        self.with(sql, |statement| {
+            let mut rows = statement.query(params)?;
+            Ok(match rows.next()? {
+                Some(row) => Some(f(row)?),
+                None => None,
+            })
         })
     }
 
