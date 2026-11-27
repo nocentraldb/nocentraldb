@@ -9,11 +9,12 @@
 //! object's first (`super::clear`).
 
 use rusqlite::types::Value as Sql;
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, params};
 
 use super::Error;
 pub(super) use super::columns::open_personal;
 use super::columns::{column_value, personal_column, reference_column};
+use super::fold_statements::{FoldWork, Statements};
 use super::model::{Field, FieldState, Model, RESERVED, reserved_name};
 use super::plugin;
 use super::schema::{STAGING, column, objects_in, rows_in, states_in};
@@ -40,6 +41,15 @@ pub(super) static NO_KEYS: PersonKeys = BTreeMap::new();
 /// collections, on the connection of the transaction that appends it.
 pub(super) struct SqlFold<'a> {
     pub(super) conn: &'a Connection,
+    /// Every statement the fold runs on the view's tables.
+    pub(super) statements: Statements<'a>,
+    /// Whether each object the fold read or wrote is a trace and out of
+    /// the indexes, as the `objects` table holds it now: every operation
+    /// of a field asks the first, every new row the second, and the table
+    /// changes only through [`SqlFold::keep_object`] (NOC-542). Two flags,
+    /// not the state, so that a change of many objects does not hold all
+    /// their states at once.
+    objects: std::cell::RefCell<BTreeMap<ObjectId, Flags>>,
     pub(super) model: &'a Model,
     pub(super) space: SpaceId,
     /// The prefix of the tables it folds into: empty for the view's own,
@@ -81,6 +91,8 @@ impl<'a> SqlFold<'a> {
     pub(super) fn new(conn: &'a Connection, model: &'a Model, space: SpaceId) -> SqlFold<'a> {
         SqlFold {
             conn,
+            statements: Statements::new(conn),
+            objects: std::cell::RefCell::new(BTreeMap::new()),
             model,
             space,
             prefix: "",
@@ -144,6 +156,11 @@ impl<'a> SqlFold<'a> {
         self.error.map_or(Ok(self.touched), Err)
     }
 
+    /// What the fold did to the view's tables.
+    pub(super) fn work(&self) -> FoldWork {
+        self.statements.work()
+    }
+
     /// The view's name of the collection `object` is created in, when the
     /// fold holds a create of it.
     fn collection_of(&self, object: ObjectId) -> Option<String> {
@@ -172,7 +189,7 @@ impl<'a> SqlFold<'a> {
         bytes: Vec<u8>,
         read: Option<Sql>,
     ) -> Result<(), Error> {
-        self.conn.execute(
+        self.statements.execute(
             &format!(
                 "INSERT INTO {} (space_id, object_id, field, state) VALUES (?1, ?2, ?3, ?4)
                  ON CONFLICT DO UPDATE SET state = excluded.state",
@@ -182,7 +199,7 @@ impl<'a> SqlFold<'a> {
         )?;
         self.row(collection, object)?;
         if let Some(read) = read {
-            self.conn.execute(
+            self.statements.execute(
                 &format!(
                     "UPDATE {} SET {} = ?3 WHERE space_id = ?1 AND object_id = ?2",
                     self.rows(collection),
@@ -197,14 +214,14 @@ impl<'a> SqlFold<'a> {
     /// Makes sure `c_<collection>` has a row for the object; a new row
     /// takes whether the object is out of the indexes.
     fn row(&self, collection: &str, object: ObjectId) -> Result<(), Error> {
-        let inserted = self.conn.execute(
+        let inserted = self.statements.execute(
             &format!(
                 "INSERT INTO {} (space_id, object_id) VALUES (?1, ?2) ON CONFLICT DO NOTHING",
                 self.rows(collection)
             ),
             params![self.space.0, object.0],
         )?;
-        if inserted == 1 && out_of_indexes(&self.object(object)?) {
+        if inserted == 1 && self.flags(object)?.out {
             self.mark_deleted(collection, object, true)?;
         }
         Ok(())
@@ -212,21 +229,60 @@ impl<'a> SqlFold<'a> {
 
     /// The object's creates, deletes and moves, empty when it has none.
     pub(super) fn object(&self, object: ObjectId) -> Result<ObjectState, Error> {
-        let bytes: Option<Vec<u8>> = self
-            .conn
-            .query_row(
+        self.statements.count_object_read();
+        let bytes: Option<Vec<u8>> = self.statements.query_row(
+            &format!(
+                "SELECT state FROM {} WHERE space_id = ?1 AND object_id = ?2",
+                objects_in(self.prefix)
+            ),
+            params![self.space.0, object.0],
+            |r| r.get(0),
+        )?;
+        let state = match bytes {
+            Some(bytes) => ObjectState::read(&bytes)?,
+            None => ObjectState::default(),
+        };
+        self.objects.borrow_mut().insert(object, Flags::of(&state));
+        Ok(state)
+    }
+
+    /// Whether the object is a trace and out of the indexes, read once.
+    fn flags(&self, object: ObjectId) -> Result<Flags, Error> {
+        if let Some(flags) = self.objects.borrow().get(&object) {
+            return Ok(*flags);
+        }
+        Ok(Flags::of(&self.object(object)?))
+    }
+
+    /// Writes the object's state into `objects`, or removes its row when
+    /// `state` is `None`, and remembers its flags. The only way the fold
+    /// changes the table, so that what it remembers stays what the table
+    /// holds.
+    pub(super) fn keep_object(
+        &self,
+        object: ObjectId,
+        state: Option<&ObjectState>,
+    ) -> Result<(), Error> {
+        match state {
+            Some(state) => self.statements.execute(
                 &format!(
-                    "SELECT state FROM {} WHERE space_id = ?1 AND object_id = ?2",
+                    "INSERT INTO {} (space_id, object_id, state) VALUES (?1, ?2, ?3)
+                     ON CONFLICT DO UPDATE SET state = excluded.state",
+                    objects_in(self.prefix)
+                ),
+                params![self.space.0, object.0, state.bytes()],
+            )?,
+            None => self.statements.execute(
+                &format!(
+                    "DELETE FROM {} WHERE space_id = ?1 AND object_id = ?2",
                     objects_in(self.prefix)
                 ),
                 params![self.space.0, object.0],
-                |r| r.get(0),
-            )
-            .optional()?;
-        match bytes {
-            Some(bytes) => ObjectState::read(&bytes),
-            None => Ok(ObjectState::default()),
-        }
+            )?,
+        };
+        let flags = state.map_or_else(Flags::default, Flags::of);
+        self.objects.borrow_mut().insert(object, flags);
+        Ok(())
     }
 
     /// Records in the object's row of `c_<collection>`, if it has one,
@@ -241,7 +297,7 @@ impl<'a> SqlFold<'a> {
         object: ObjectId,
         deleted: bool,
     ) -> Result<(), Error> {
-        self.conn.execute(
+        self.statements.execute(
             &format!(
                 "UPDATE {} SET deleted = ?3 WHERE space_id = ?1 AND object_id = ?2",
                 self.rows(collection)
@@ -261,7 +317,7 @@ impl<'a> SqlFold<'a> {
         let name = operation.field.as_deref().expect("a field operation");
         let field = self.model.field(collection, name).expect("a known field");
         let state = load(
-            self.conn,
+            &self.statements,
             self.prefix,
             self.space,
             collection,
@@ -316,7 +372,7 @@ impl<'a> SqlFold<'a> {
         // view keeps nothing of it (RFC 0016). Whether a rich-text
         // operation parks depends on the field's state, so a refold in
         // stamp order decides it, keeping the state while it runs.
-        let trace = self.object(operation.object)?.object().moved_to().is_some()
+        let trace = self.flags(operation.object)?.moved
             && self.refolding != Some((operation.object, name.to_owned()));
         #[cfg(ncdb_rich_text)]
         if trace && matches!(field, Field::RichText(_)) {
@@ -341,14 +397,7 @@ impl<'a> SqlFold<'a> {
         let was_out = out_of_indexes(&state);
         let was_moved = state.object().moved_to().is_some();
         state.insert(operation.clone());
-        self.conn.execute(
-            &format!(
-                "INSERT INTO {} (space_id, object_id, state) VALUES (?1, ?2, ?3)
-                 ON CONFLICT DO UPDATE SET state = excluded.state",
-                objects_in(self.prefix)
-            ),
-            params![self.space.0, object.0, state.bytes()],
-        )?;
+        self.keep_object(object, Some(&state))?;
         // A delete, a move, a restore or a take-back takes the object's
         // rows out of the declared indexes or puts them back, in whichever
         // collection's table the object has one.
@@ -378,9 +427,27 @@ impl<'a> SqlFold<'a> {
     }
 }
 
+/// What the fold asks of an object's state for every operation.
+#[derive(Clone, Copy, Default)]
+struct Flags {
+    /// The object moved to another space: it is a trace.
+    moved: bool,
+    /// The object is out of the declared indexes: deleted or moved.
+    out: bool,
+}
+
+impl Flags {
+    fn of(state: &ObjectState) -> Flags {
+        Flags {
+            moved: state.object().moved_to().is_some(),
+            out: out_of_indexes(state),
+        }
+    }
+}
+
 /// The merge state of a field, empty when nobody wrote it.
 pub(super) fn load(
-    conn: &Connection,
+    statements: &Statements<'_>,
     prefix: &str,
     space: SpaceId,
     collection: &str,
@@ -388,16 +455,14 @@ pub(super) fn load(
     object: ObjectId,
     field: &Field,
 ) -> Result<FieldState, Error> {
-    let bytes: Option<Vec<u8>> = conn
-        .query_row(
-            &format!(
-                "SELECT state FROM {} WHERE space_id = ?1 AND object_id = ?2 AND field = ?3",
-                states_in(prefix, collection)
-            ),
-            params![space.0, object.0, field_name],
-            |r| r.get(0),
-        )
-        .optional()?;
+    let bytes: Option<Vec<u8>> = statements.query_row(
+        &format!(
+            "SELECT state FROM {} WHERE space_id = ?1 AND object_id = ?2 AND field = ?3",
+            states_in(prefix, collection)
+        ),
+        params![space.0, object.0, field_name],
+        |r| r.get(0),
+    )?;
     Ok(match (bytes, field.empty()) {
         (None, empty) => empty,
         (Some(bytes), FieldState::Basic(_)) => FieldState::Basic(state::basic(&bytes)?),

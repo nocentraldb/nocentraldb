@@ -1,0 +1,6 @@
+{
+  "id": "core.refusalNodeRemoved",
+  "kind": "core",
+  "text": "{collection}.{field}: node {node} removed from the vocabulary.\nContent written with {node} would hold a node the app no longer declares, and the editor binding would refuse an editor that still has it.\nKeep {node} in the vocabulary.",
+  "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a node is removed from a rich-text field's vocabulary."
+}
