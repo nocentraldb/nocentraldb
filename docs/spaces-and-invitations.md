@@ -96,6 +96,7 @@ console.log((await db.spaces.list()).length, typeof stop);
 ```
 
 - **The account space is the SDK's.** It holds the account's devices and agents, its account key statements and which spaces each device belongs to, in a model the SDK ships ([RFC 0010, "The account space"](rfc/0010-accounts.md#the-account-space)). `db.spaces.list()` does not list it, your app cannot write into it, and your queries never return its objects. Your personal space is a space of your own, not the account space.
+- **Create the personal space once, on the device that creates the account.** A device your app opens with `pairing: "request"` joins the account instead: pairing adds it to every space where a device of the account is an admin, the personal space included, so it waits for that space to arrive rather than creating another ([RFC 0010, "Adding a device or an agent to an account"](rfc/0010-accounts.md#adding-a-device-or-an-agent-to-an-account)).
 - **A space can arrive before its `spaceInfo`.** A device lists a space once it holds the space's first change and its key; the objects follow as they sync. Show such a space as arriving, not as one without a kind.
 - **`spaceInfo` is an object like any other.** Every writer of the space can change it, and a member of the space reads it. Whoever may not rename a project is a reader of its space.
 - **A space of another model** shows in the list with `model: "another"`; its objects are not read, and `db.spaces.get` on it fails with `spaceOfAnotherModel`.
@@ -187,7 +188,7 @@ Ben's agents are not in the list: an agent gets only the spaces its task needs, 
 
 ## Invite someone who has no account yet
 
-When Ben has no account, nobody can add him: a member is a key pair on his device, and it does not exist yet. The invitation is a promise your app keeps, not a change in any space:
+When Ben has no account, nobody can add him: a member is a key pair on a device, and Ben has no device with your app yet. The invitation is a promise your app keeps, not a change in any space:
 
 1. Ana invites ben@example.com. The backend stores a pending invite (the project's space and the role) and sends Ben a link to the app.
 2. Ben signs up and opens the app. His device creates his account, and its first space brings his identity to the backend; his device sends its invitation.
