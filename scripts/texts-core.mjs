@@ -120,7 +120,7 @@ export const CONCERNS = {
   ],
   value: [
     "The texts of a field's value, and of the plugins that define one.",
-    ["link", "plugin", "value"],
+    ["anchor", "link", "plugin", "value"],
   ],
   view: [
     "The texts of the local view, and what it could not read.",

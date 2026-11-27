@@ -22,6 +22,7 @@
 //! placeholders that give one id different content, the earlier in stamp
 //! order keeps it ([`RichText::fit_placeholder`]).
 
+pub mod anchor;
 mod client_id;
 mod document;
 mod edit;
