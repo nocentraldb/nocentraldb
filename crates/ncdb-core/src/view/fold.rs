@@ -361,7 +361,8 @@ impl<'a> SqlFold<'a> {
             }
             #[cfg(ncdb_rich_text)]
             (Field::RichText(t), FieldState::RichText(s)) => {
-                let (folded, displaces) = rich_text(t, s, operation, origin, self.placing);
+                let (folded, displaces) =
+                    super::rich_text_fold::rich_text(t, s, operation, origin, self.placing);
                 self.displaces.set(displaces);
                 folded.map(|bytes| (bytes, None))
             }
@@ -471,36 +472,6 @@ pub(super) fn load(
         #[cfg(ncdb_rich_text)]
         (Some(bytes), FieldState::RichText(_)) => FieldState::RichText(state::rich_text(&bytes)?),
     })
-}
-
-/// Folds a rich-text operation into `state`, or places it there as a
-/// rejected change's (`placing`): the new state's bytes, or why it parks,
-/// and whether it displaces operations or placeholders the state holds,
-/// which park or give way when the field is folded again in stamp order.
-#[cfg(ncdb_rich_text)]
-fn rich_text(
-    field_type: &crate::rich_text::RichText,
-    mut state: crate::rich_text::State,
-    operation: &Operation,
-    origin: Origin,
-    placing: bool,
-) -> (Result<Vec<u8>, OperationParkReason>, bool) {
-    use crate::field::FieldType;
-    use crate::rich_text::Fit;
-    let edit = match field_type.decode(operation, origin) {
-        Ok(edit) => edit,
-        Err(reason) => return (Err(reason), false),
-    };
-    if placing {
-        let displaces = matches!(field_type.fit_placeholder(&state, &edit), Fit::Displaces(_));
-        field_type.place(&mut state, &edit);
-        return (Ok(field_type.state_bytes(&state)), displaces);
-    }
-    let displaces = matches!(field_type.fit(&state, &edit), Fit::Displaces(_));
-    let folded = field_type
-        .try_apply(&mut state, &edit)
-        .map(|()| field_type.state_bytes(&state));
-    (folded, displaces)
 }
 
 /// Decodes `operation` with its field type, applies it to `state`, and
