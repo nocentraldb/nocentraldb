@@ -30,6 +30,7 @@ import { membersOf, ownInvitation } from "./membership.ts";
 import { Cursor, queryState } from "./query.ts";
 import { relayAskOf } from "./relayAsk.ts";
 import { notify, spaceStatusOf, syncStatusOf } from "./reports.ts";
+import { richTextOf } from "./richText/space.ts";
 import { spaceListOf } from "./spaceList.ts";
 import { recordOps } from "./spaceTx.ts";
 import type { SpaceStatus } from "./status.ts";
@@ -166,6 +167,8 @@ export const connect = async (
   let relay =
     (opened as { relay?: string } | null)?.relay ??
     (typeof options.relay === "string" ? options.relay : undefined);
+  // Whether this core holds rich text (NOC-538, Q5).
+  const richText = (opened as { richText?: boolean } | null)?.richText === true;
   let rawSync = (opened as { sync?: unknown } | null)?.sync;
   let sync = syncStatusOf(rawSync, relay);
   const reports = reportsOf(
@@ -509,6 +512,17 @@ export const connect = async (
       restore: (collection, object) =>
         write((tx) => tx.restore(collection, object)),
       members: membersOf(ask, id),
+      richText: richTextOf(
+        ask,
+        id,
+        nameOf,
+        options.lock,
+        () => richText,
+        (l) => {
+          changeListeners.add(l);
+          return () => changeListeners.delete(l);
+        },
+      ),
       ...lookupsOf(ask, id),
       leave: async () =>
         (await ask("space.leave", { space: id })) as unknown as {

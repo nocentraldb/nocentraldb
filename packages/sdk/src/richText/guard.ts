@@ -9,6 +9,7 @@
 //   format that goes with its text goes with a deletion the editor knows);
 // - an attribute the editor does not declare for its node, removed.
 import * as Y from "yjs";
+import type { Vocabulary } from "./types.ts";
 
 /** The names the editor knows: the field's vocabulary and what the editor declares besides, its placeholders included. */
 export interface Known {
@@ -62,12 +63,6 @@ export const unknownDeleted = (
   }
   return [...found];
 };
-
-/** A rich-text field's vocabulary from the lock (NOC-553): its nodes and marks, without ProseMirror's `doc` and `text`. */
-export interface Vocabulary {
-  readonly nodes: readonly string[];
-  readonly marks: readonly string[];
-}
 
 /** The node and mark names `root` holds that `vocabulary` does not declare, sorted. */
 export const undeclared = (

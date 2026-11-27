@@ -16,6 +16,12 @@ export type { Erased, ErasureRequest, SignOffs } from "./erase.ts";
 export type { Invitation, Notice } from "./members.ts";
 /** The schema functions of RFC 0005: `nc.model`, `nc.collection`, the field types and `nc.index`, and the types `nc.Infer` and `nc.Unknown`. */
 export * as nc from "./nc.ts";
+/** A rich-text field's binding, its status and its vocabulary (RFC 0013, "An editor: the binding"; NOC-461; the status as the owner decided on NOC-538, Q2). */
+export type {
+  RichTextBinding,
+  RichTextStatus,
+  Vocabulary,
+} from "./richText/types.ts";
 /** A space's status (RFC 0009, "Sync and status"; NOC-176 slice 4). */
 export type { SpaceStatus } from "./status.ts";
 /** The sync report (RFC 0009, "Sync and status"; NOC-176 slice 4). */

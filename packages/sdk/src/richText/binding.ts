@@ -20,14 +20,11 @@
 // - One UndoManager for the document, which every editor of the binding
 //   uses (Carsten, 2026-11-22, NOC-467).
 import * as Y from "yjs";
-import {
-  type Known,
-  undeclared,
-  unknownDeleted,
-  type Vocabulary,
-} from "./guard.ts";
+import { type Known, undeclared, unknownDeleted } from "./guard.ts";
+import type { RichTextBinding, RichTextStatus, Vocabulary } from "./types.ts";
 
-export type { Known, Vocabulary } from "./guard.ts";
+export type { Known } from "./guard.ts";
+export type { RichTextBinding, RichTextStatus, Vocabulary } from "./types.ts";
 
 /** The pause in typing after which the binding writes (RFC 0013, "An editor: the binding"). */
 export const PAUSE_MS = 500;
@@ -54,37 +51,12 @@ export interface Opened {
   readonly writable: boolean;
 }
 
-/**
- * Whether the editor shows the whole field and may change it (NOC-538,
- * Q2): `shown`; or `notFullyShown`, with its reason, which the guard
- * reports; or `readOnly`, when the member may only read the field or the
- * binding writes nothing more. A reader's binding whose document the
- * editor does not fully show also reports `readOnly`.
- */
-export type RichTextStatus =
-  | { readonly status: "shown" }
-  | { readonly status: "notFullyShown"; readonly reason: string }
-  | { readonly status: "readOnly" };
-
-export interface Binding {
-  /** The document the editor binds; a reload replaces it (`onReload`). */
-  readonly doc: Y.Doc;
-  /** Calls `listener` with the new document after a reload; answers a function that stops it. */
-  onReload(listener: (doc: Y.Doc) => void): () => void;
-  /** The status now. */
-  readonly status: RichTextStatus;
-  /** Calls `listener` with each new status; answers a function that stops it. */
-  onStatus(listener: (status: RichTextStatus) => void): () => void;
-  readonly undoManager: Y.UndoManager;
-  readonly writable: boolean;
-  /** Pulls what the core folded since; call it after a fold of the field's collection. While a composition is open, the pull waits for its end, for at most 2 s. */
+/** The binding as the SDK holds it: the public one, and what the SDK itself calls. */
+export interface Binding extends RichTextBinding {
+  /** Pulls what the core folded since; call it after a fold of the field's object. While a composition is open, the pull waits for its end, for at most 2 s. */
   folded(): Promise<void>;
-  /** Whether an IME composition is open in the editor. */
-  composing(open: boolean): void;
   /** Writes at once: the page is hidden. */
   hidden(): Promise<void>;
-  /** Writes what is left and gives the client id back. */
-  close(): Promise<void>;
 }
 
 /** The origin under which the binding applies what the core folded. */
@@ -280,6 +252,7 @@ export const bind = (
       return () => reloadListeners.delete(listener);
     },
     writable: opened.writable,
+    vocabulary: options.vocabulary ?? { nodes: [], marks: [] },
     get status() {
       return status;
     },
