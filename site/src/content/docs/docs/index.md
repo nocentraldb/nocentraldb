@@ -54,7 +54,7 @@ export const model = nc.model({
     },
     {
       indexes: {
-        byStatusPriority: nc.index(["status", "priority"], { equal: 1 }),
+        byStatusPriority: nc.index({ where: ["status"], orderBy: ["priority"] }),
       },
     },
   ),

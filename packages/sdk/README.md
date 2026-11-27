@@ -27,7 +27,7 @@ export const model = nc.model({
     },
     {
       indexes: {
-        byStatus: nc.index(["status", "title"], { equal: 1 }),
+        byStatus: nc.index({ where: ["status"], orderBy: ["title"] }),
       },
     },
   ),
@@ -45,7 +45,7 @@ await space.write((tx) => {
   tx.create(model.tasks, { title: "Write the README", status: "open" });
 });
 
-const open = model.tasks.indexes.byStatus.equal("open").take(20);
+const open = model.tasks.indexes.byStatus.where("open").take(20);
 const stop = db.subscribe(open, (page) => console.log(page.items));
 ```
 
