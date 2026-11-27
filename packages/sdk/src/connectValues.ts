@@ -4,12 +4,14 @@
 // written `nc.ref` sends `{ space, id }` whichever form the app wrote, and
 // reads as `{ space, id }` even where the lock keeps it as `ncdb/link`,
 // whose value the core reads as an object id (RFC 0018, "One function, two
-// cases" and "Existing link fields read as references"). Internal, split
-// from connect.ts.
+// cases" and "Existing link fields read as references"). A first document
+// from Markdown sends `{ $markdown }` (RFC 0013, "The first content").
+// Internal, split from connect.ts.
 
 import { fromCore, toCore } from "./dates.ts";
 import { SetElements } from "./elements.ts";
 import { NcError } from "./error.ts";
+import { Markdown } from "./firstDocument.ts";
 import * as texts from "./texts.ts";
 
 /** The model's collections as `nc.model` describes them: each field's type, and a set's element type. */
@@ -44,6 +46,9 @@ export const valuesOf = (described: Described) => {
     if (described[collection]?.fields[field]?.type === REF) {
       return reference(written, space);
     }
+    // Sent as written, without the NFC of a string, as the Rust SDK sends
+    // it, so the same Markdown gives the same document (NOC-578).
+    if (written instanceof Markdown) return { $markdown: written.markdown };
     if (written instanceof SetElements) {
       const elements = written.elements.map((e) =>
         element(collection, field, e, true),

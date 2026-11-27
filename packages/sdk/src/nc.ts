@@ -14,6 +14,7 @@
 // what `Infer` reads.
 
 import type { Query } from "./db.ts";
+import { fromMarkdown } from "./firstDocument.ts";
 import { makeQuery } from "./query.ts";
 import * as texts from "./texts.ts";
 
@@ -43,6 +44,7 @@ interface Ref<D extends boolean = false> extends Value<Target, D> {
 
 /** A rich-text field, deprecated when `D` is true: it reads as its Markdown, takes `describe` and `deprecated`, and cannot be personal (RFC 0013, "The field in the schema and the lock"). */
 interface RichText<D extends boolean = false> extends Value<string, D> {
+  readonly "nc.richText": true;
   /** Adds a description, which is copied into the lock. */
   describe(text: string): RichText<D>;
   /** Hides the field from the app, and keeps it in the model and the data. */
@@ -335,23 +337,31 @@ export const ref = (target: string | readonly string[]): Ref =>
     spec: { kind: "link", type: "ncdb/ref", targets: targets(target) },
   });
 /** Rich text: a shared document, which reads as its Markdown. `vocabulary` names the nodes and marks its editor uses; a later model may add names, never remove one (RFC 0013, "The field in the schema and the lock"). */
-export const richText = (options?: {
-  vocabulary?: { nodes?: readonly string[]; marks?: readonly string[] };
-}): RichText => {
-  const vocabulary = options?.vocabulary;
-  return unpersonal({
-    spec:
-      vocabulary === undefined
-        ? { kind: "richText" }
-        : {
-            kind: "richText",
-            vocabulary: {
-              nodes: [...(vocabulary.nodes ?? [])],
-              marks: [...(vocabulary.marks ?? [])],
+export const richText = Object.assign(
+  (options?: {
+    vocabulary?: { nodes?: readonly string[]; marks?: readonly string[] };
+  }): RichText => {
+    const vocabulary = options?.vocabulary;
+    return unpersonal({
+      spec:
+        vocabulary === undefined
+          ? { kind: "richText" }
+          : {
+              kind: "richText",
+              vocabulary: {
+                nodes: [...(vocabulary.nodes ?? [])],
+                marks: [...(vocabulary.marks ?? [])],
+              },
             },
-          },
-  });
-};
+    });
+  },
+  {
+    /**
+     * A first document from `markdown`, which a create or an update writes into a rich-text field: CommonMark with GitHub's tables, strikethrough and task lists, read by the core into TipTap's standard vocabulary, as the Rust SDK's `RichText::from_markdown` is (RFC 0013, "The first content"). It writes the whole document, and only into a field that holds no content in the copy, on `create` or on a field nothing was written to or whose every block was deleted; on a field with content the write is refused with `richTextNotEmpty`, as replacing a document others may be editing would overwrite their edits. Markdown the core does not write a document from, such as HTML or an image, is refused with `invalidValue`. An app that imports a document writes it once this way and edits it from then on.
+     */
+    fromMarkdown,
+  },
+);
 /** A stream: reserved, its field type belongs to a later RFC. */
 export const stream = (): Field<never> =>
   field({ spec: { kind: "reserved", name: "nc.stream" } });
