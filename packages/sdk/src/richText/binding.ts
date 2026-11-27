@@ -87,9 +87,12 @@ export const bind = (
   /** A document under the leased client id, loaded from `state`. */
   const load = (state: Uint8Array) => {
     const next = new Y.Doc();
-    next.clientID = opened.client;
     const root = next.getXmlFragment(ROOT);
+    // The state may hold items of the leased client id, written before
+    // under the same lease. Applied under that id, Yjs would draw a new one
+    // ("another client seems to be using it"), so the id is set after.
     Y.applyUpdate(next, state, FROM_CORE);
+    next.clientID = opened.client;
     // It tracks the edits made without an origin; an editor adds its own
     // (TipTap's sync plugin key, with @nocentraldb/tiptap). It never tracks
     // FROM_CORE, so what another member wrote is never taken back.
