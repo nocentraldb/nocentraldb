@@ -17,10 +17,10 @@ import {
   randomId,
   type Subscription,
 } from "./connectParts.ts";
-import { equalToCore, fromCore, toCore } from "./dates.ts";
+import { type Described, valuesOf } from "./connectValues.ts";
+import { equalToCore } from "./dates.ts";
 import type { Db, open, Page, Space, Tx } from "./db.ts";
 import { reportsOf } from "./durabilityReport.ts";
-import { SetElements } from "./elements.ts";
 import { erasureCallsOf, signOffOf, takeBackOf } from "./eraseCalls.ts";
 import { NcError } from "./error.ts";
 import { lockOutOfDate } from "./lockCheck.ts";
@@ -92,11 +92,6 @@ const checkName = (name: string | undefined) => {
 };
 
 /** What the lock says of the model's collections: each field's type. */
-type Described = Record<
-  string,
-  { fields: Record<string, { type: string; of?: { type: string } }> }
->;
-
 /** Opens the database through `core`. Internal: `open` passes the worker, a test a fake. */
 export const connect = async (
   core: Core,
@@ -116,6 +111,7 @@ export const connect = async (
     options.model as { [DESCRIBE]?: () => { collections: Described } }
   )[DESCRIBE];
   const described: Described = describe ? describe().collections : {};
+  const { values, dated } = valuesOf(described);
 
   let next = 0;
   let closed = false;
@@ -440,54 +436,6 @@ export const connect = async (
       throw new NcError("notFound", texts.NO_SUCH_COLLECTION);
     }
     return name;
-  };
-
-  const value = (
-    collection: string,
-    field: string,
-    written: unknown,
-  ): unknown => {
-    if (written === null) return null;
-    if (written instanceof SetElements) {
-      const elements = written.elements.map((e) =>
-        element(collection, field, e, true),
-      );
-      return written.add ? { $add: elements } : { $remove: elements };
-    }
-    return element(collection, field, written, false);
-  };
-
-  const element = (
-    collection: string,
-    field: string,
-    written: unknown,
-    inSet: boolean,
-  ): unknown => {
-    const type = described[collection]?.fields[field];
-    const kind = inSet ? (type?.of?.type ?? type?.type) : type?.type;
-    if (
-      kind === "ncdb/int" &&
-      !(typeof written === "number" && Number.isSafeInteger(written))
-    ) {
-      throw new NcError(
-        "invalidValue",
-        texts.notASafeInteger(collection, field),
-      );
-    }
-    const sent = toCore(kind, collection, field, written);
-    return typeof sent === "string" ? sent.normalize("NFC") : sent;
-  };
-
-  /** `object`, read from `collection`, with each point in time as a Date. */
-  const dated = (collection: string, object: Record<string, unknown>) =>
-    fromCore(described[collection]?.fields, object);
-
-  const values = (collection: string, written: Record<string, unknown>) => {
-    const out: Record<string, unknown> = {};
-    for (const [field, v] of Object.entries(written)) {
-      if (v !== undefined) out[field] = value(collection, field, v);
-    }
-    return out;
   };
 
   const space = (id: Id): Space => {
