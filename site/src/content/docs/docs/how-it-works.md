@@ -37,9 +37,9 @@ export const model = nc.model({
     {
       indexes: {
         // The tasks of one project, by status: a query reads one space.
-        byStatus: nc.index(["status", "title"], { equal: 1, scope: "space" }),
+        byStatus: nc.index({ where: ["status"], orderBy: ["title"], scope: "space" }),
         // Every task of one person, in every project this member holds.
-        byAssignee: nc.index(["assignee"], { equal: 1 }),
+        byAssignee: nc.index({ where: ["assignee"] }),
       },
     },
   ),

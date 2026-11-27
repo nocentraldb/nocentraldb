@@ -17,14 +17,14 @@ export const model = nc.model({
     {
       indexes: {
         // The first lock's index, which the lock keeps.
-        byStatus: nc.index(["status", "title"], { equal: 1 }),
+        byStatus: nc.index({ where: ["status"], orderBy: ["title"] }),
         // The tasks of one status, newest first. A task made before the
         // creation time existed has none, which sorts last descending; the
         // title orders those among themselves.
-        byStatusNewest: nc.index(
-          ["status", { field: "createdAt", direction: "desc" }, "title"],
-          { equal: 1 },
-        ),
+        byStatusNewest: nc.index({
+          where: ["status"],
+          orderBy: ["-createdAt", "title"],
+        }),
       },
     },
   ),

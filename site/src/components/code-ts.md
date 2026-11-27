@@ -27,7 +27,7 @@ export const model = nc.model({
     },
     {
       indexes: {
-        byStatusPriority: nc.index(["status", "priority"], { equal: 1 }),
+        byStatusPriority: nc.index({ where: ["status"], orderBy: ["priority"] }),
       },
     },
   ),
@@ -85,7 +85,7 @@ await project.write((tx) => {
 # import { model } from "./model";
 # import lock from "./model.lock.json";
 # const db = await nc.open({ model, lock });
-const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
+const query = model.tasks.indexes.byStatusPriority.where("open").take(50);
 
 const page = await db.find(query);
 for (const task of page.items) console.log(task.title);
@@ -99,7 +99,7 @@ for (const task of page.items) console.log(task.title);
 # import lock from "./model.lock.json";
 # declare function render(page: unknown): void;
 # const db = await nc.open({ model, lock });
-const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
+const query = model.tasks.indexes.byStatusPriority.where("open").take(50);
 
 const stop = db.subscribe(query, (fresh) => render(fresh));
 ```

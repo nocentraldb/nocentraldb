@@ -64,8 +64,8 @@ export const model = nc.model({
       computed: { blocked: nc.reach("dependsOn", { status: ["open", "in_progress"] }) },
       views: { ready: nc.view("tasks", { where: { blocked: false }, sort: ["priority"] }) },
       indexes: {
-        byStatusPriority: nc.index(["status", "priority"], { equal: 1 }),
-        byPriorityDesc: nc.index([{ field: "priority", direction: "desc" }]),
+        byStatusPriority: nc.index({ where: ["status"], orderBy: ["priority"] }),
+        byPriorityDesc: nc.index({ orderBy: ["-priority"] }),
       },
     },
   ),
@@ -156,7 +156,7 @@ export const model = nc.model({
       customer: nc.ref("customers"),
       total: nc.float(),
     },
-    { indexes: { byCustomer: nc.index(["customer"], { equal: 1 }) } },
+    { indexes: { byCustomer: nc.index({ where: ["customer"] }) } },
   ),
 });
 ```
@@ -196,7 +196,7 @@ export const model = nc.model({
       occurredAt: nc.timestamp(),
       doneOn: nc.date(),
     },
-    { indexes: { byOccurredAt: nc.index([{ field: "occurredAt", direction: "desc" }]) } },
+    { indexes: { byOccurredAt: nc.index({ orderBy: ["-occurredAt"] }) } },
   ),
 });
 ```
@@ -250,8 +250,8 @@ The second argument of `nc.collection` has two places, `computed` and `views`, a
 
 GENESIS.md's principle 6 says queries run only through declared indexes. The schema declares them in the `indexes` place of `nc.collection`, by name:
 
-- `nc.index(fields, options)` takes the fields in index order. Each is a field name, which sorts ascending, or `{ field, direction }` with `direction` `"asc"` or `"desc"`.
-- The option `equal` is the number of leading fields a query must fix with equality, 0 by default. `byStatusPriority` above has `equal: 1`: a query on it names one status and pages through that status's tasks by priority.
+- `nc.index({ where, orderBy })` names the fields a query fixes with equality, `where`, and the fields that order the result, `orderBy`, each in index order ([RFC 0018, R3](0018-model-api-for-placement.md#r3-named-equality-and-order-in-an-index)). An `orderBy` name sorts ascending; a name with a leading `-` sorts descending. `byStatusPriority` above names `status` in `where`: a query on it names one status and pages through that status's tasks by priority. Either list may be left out, but not both, and no field is named twice.
+- `nc.index(fields, options)` is a second spelling of the same index, and stays valid. It takes the fields in index order, each a field name, which sorts ascending, or `{ field, direction }` with `direction` `"asc"` or `"desc"`; its option `equal` is the number of leading fields a query must fix with equality, 0 by default. `nc.index({ where: ["status"], orderBy: ["priority"] })` and `nc.index(["status", "priority"], { equal: 1 })` build the same lock entry, byte for byte: the lock writes the `where` fields first, each ascending, then the `orderBy` fields with their directions, and `equal` is the number of `where` fields.
 - The option `scope: "space"` puts the space id before the index's fields, so that a query on it runs in one space, through `space.find` ([RFC 0009, "Queries and indexes"](0009-sdk-api.md#queries-and-indexes)). Without it, an index spans every space of the member. Where the space id goes among the index's columns is RFC 0006's.
 - An index can use basic values (`nc.string`, `nc.int`, `nc.float`, `nc.boolean`, `nc.oneOf`, `nc.date`, `nc.timestamp`), single links (`nc.link`) and references (`nc.ref`). A reference indexes as one column, the target's space id followed by its object id, as stored and whatever its state, so the index is the same on every member of the space ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)). Sets, many links, rich text, streams and plugin types cannot be indexed in v1: a field with many values, or with no order of its own, needs its own rule for which rows it puts in an index. Computed fields in indexes belong to the computed-fields RFC.
 - A personal field can be indexed. The view holds it in plaintext on the device anyway, and erases it from the view and its indexes after a shred (RFC 0006).
