@@ -569,3 +569,20 @@ fn a_folded_event_names_the_ids_a_write_touched_as_local() {
     );
     assert_eq!(field(&changes[0], "origin"), Some(&text("local")));
 }
+
+/// `open` says whether this core holds rich text, which only a build with
+/// the compiler cfg `ncdb_rich_text` does (NOC-468), so the TypeScript SDK
+/// answers `space.richText` with `notSupported` without it (NOC-538, Q5).
+#[test]
+fn open_says_whether_the_core_holds_rich_text() {
+    let mut bridge = Bridge::new();
+    let answer = ok(
+        &mut bridge,
+        "open",
+        map(&[("lock", text(LOCK)), ("inMemory", Value::Bool(true))]),
+    );
+    assert_eq!(
+        field(&answer, "richText"),
+        Some(&Value::Bool(cfg!(ncdb_rich_text)))
+    );
+}

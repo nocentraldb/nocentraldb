@@ -10,6 +10,12 @@ export type { RecoveryCode } from "./account.ts";
 export type { Db, Page, Query, Space, Tx } from "./db.ts";
 /** The durability of the copy (RFC 0006, "What the SDK reports"; RFC 0009, "Public names"; NOC-315). */
 export type { Durability } from "./durability.ts";
+/** A rich-text field's binding, its status and its vocabulary (RFC 0013, "An editor: the binding"; NOC-461; the status as the owner decided on NOC-538, Q2). */
+export type {
+  RichTextBinding,
+  RichTextStatus,
+  Vocabulary,
+} from "./editor.ts";
 /** An erasure request, its sign-offs and what `db.erase` did (RFC 0009, "Erasing a person"; NOC-406). */
 export type { Erased, ErasureRequest, SignOffs } from "./erase.ts";
 /** An invitation, and the notice a membership call returns (RFC 0009, "Invitations and members"; NOC-176 slice 4b). */

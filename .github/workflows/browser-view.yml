@@ -142,6 +142,15 @@ jobs:
         if: ${{ !cancelled() }}
         run: node scripts/sdk-browser/trap.mjs
 
+      # A copy of that package whose core holds rich text, built with the
+      # compiler cfg ncdb_rich_text in target/rich-text, in
+      # target/sdk-browser/rich-text-dist (scripts/sdk-browser/richTextCopy.mjs),
+      # for the test of space.richText through the real worker (NOC-461).
+      # Another release build of the core: about one to two minutes.
+      - name: The TypeScript SDK with a rich-text core, built on the runner
+        if: ${{ !cancelled() }}
+        run: node scripts/sdk-browser/richTextCopy.mjs
+
       # The Rust device of the test with a browser (NOC-178), the example
       # crates/nocentraldb/examples/browser_peer.rs, in
       # target/sdk-browser/browser_peer (scripts/sdk-browser/peer.mjs),

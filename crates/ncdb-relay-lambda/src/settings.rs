@@ -16,7 +16,10 @@
 //!   `connections` table;
 //! - `NCDB_BUCKET`: the bucket of frames above 8 KiB and of uploads;
 //! - `NCDB_CONNECTIONS_URL`: the stage URL of the connection API,
-//!   `https://<api id>.execute-api.<region>.amazonaws.com/<stage>`.
+//!   `https://<api id>.execute-api.<region>.amazonaws.com/<stage>`;
+//! - `NCDB_KEEP_CONNECTIONS_DAYS`: how many days the relay keeps a
+//!   connection's records after it ends, a whole number, at least 1 (RFC
+//!   0007, "What the relay sees"; NOC-532); missing, it keeps none.
 //!
 //! A missing or malformed variable is refused by its name; its value never
 //! appears in the error.
@@ -41,6 +44,9 @@ pub struct Settings {
     pub connections: String,
     /// The stage URL of the connection API.
     pub connections_url: String,
+    /// How many days the relay keeps a connection's records after it ends;
+    /// `None` keeps none.
+    pub keep_connections_days: Option<u32>,
 }
 
 /// A variable that is missing or malformed.
@@ -106,6 +112,16 @@ impl Settings {
         if !connections_url.starts_with("https://") {
             return Err(Refused("NCDB_CONNECTIONS_URL"));
         }
+        let keep_connections_days = match var("NCDB_KEEP_CONNECTIONS_DAYS") {
+            None => None,
+            Some(days) => Some(
+                days.trim()
+                    .parse::<u32>()
+                    .ok()
+                    .filter(|days| *days >= 1)
+                    .ok_or(Refused("NCDB_KEEP_CONNECTIONS_DAYS"))?,
+            ),
+        };
         Ok(Settings {
             relay_id,
             allowed_accounts,
@@ -113,6 +129,7 @@ impl Settings {
             names,
             connections,
             connections_url,
+            keep_connections_days,
         })
     }
 }
@@ -188,6 +205,22 @@ mod tests {
         let refused = Settings::from_vars(vars(&pairs)).unwrap_err();
         assert_eq!(refused, Refused("NCDB_ADMISSION_KEYS"));
         assert!(!refused.to_string().contains("not-a-key"));
+    }
+
+    #[test]
+    fn connection_records_are_kept_for_the_days_set_and_by_default_not() {
+        let settings = Settings::from_vars(vars(&FULL)).unwrap();
+        assert_eq!(settings.keep_connections_days, None);
+        let mut pairs = FULL.to_vec();
+        pairs.push(("NCDB_KEEP_CONNECTIONS_DAYS", "30"));
+        let settings = Settings::from_vars(vars(&pairs)).unwrap();
+        assert_eq!(settings.keep_connections_days, Some(30));
+        for bad in ["0", "-1", "1.5", "thirty"] {
+            let mut pairs = FULL.to_vec();
+            pairs.push(("NCDB_KEEP_CONNECTIONS_DAYS", bad));
+            let refused = Settings::from_vars(vars(&pairs)).unwrap_err();
+            assert_eq!(refused, Refused("NCDB_KEEP_CONNECTIONS_DAYS"));
+        }
     }
 
     #[test]

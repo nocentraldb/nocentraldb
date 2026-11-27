@@ -623,6 +623,9 @@ The SDK throws one error class, `nc.Error`, with a string `code`, the ids it con
 | `alreadyMember` | `members.add` | The invitation's member is a member of the space already. |
 | `cursorOfAnotherModel` | `db.find` | The cursor was made under another model or index. |
 | `moved` | writes | The object was moved to another space; names the new space, where the write goes instead ([Moving an object](#moving-an-object)). |
+| `notSupported` | `space.richText` | This build of the SDK's core does not hold rich text yet: no release carries it until its guard is complete ([RFC 0013](0013-rich-text.md#an-editor-the-binding); 2026-11-27, NOC-538). |
+| `contentCheckMissing` | `ncEditor` of `@nocentraldb/tiptap`, `NcKeepUnknown` | The editor for a rich-text field leaves out `enableContentCheck`, without which it would delete what its schema does not know ([RFC 0013](0013-rich-text.md#an-editor-that-cannot-show-a-node); 2026-11-27, NOC-538). |
+| `vocabularyMismatch` | `ncEditor` of `@nocentraldb/tiptap`, `NcKeepUnknown` | The editor's nodes or marks differ from the field's vocabulary in the lock, in either direction; names the names on each side ([RFC 0013](0013-rich-text.md#an-editor-the-binding); 2026-11-27, NOC-553, NOC-538). |
 
 What syncing finds is never thrown, because no call of the app caused it: a relay refusal, a rejected or parked change, a lost grant or a gap arrives in a report. They arrive while no app call runs, and they are states of the copy, not failures of a call, so reports keep them readable at any time.
 
@@ -914,6 +917,8 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 
 - **2026-11-23 · A space's status says `onlyMember` when this member is the space's only member.** ([decision](../../factory/decisions/2026-11-23-NOC-494-a-spaces-status-says-onlymember-when-this-member-is-its-only-member.md))
 - **2026-11-27 · In Rust, `Reference::from(&Object)` makes a reference of an object the SDK read.** ([decision](../../factory/decisions/2026-11-27-NOC-573-in-rust-reference-from-object-makes-a-reference-of-an-object-the-sdk-read.md))
+- **2026-11-27 · `space.richText` answers `notSupported` until a release carries rich text.** ([decision](../../factory/decisions/2026-11-27-NOC-538-space-richtext-is-notsupported-until-a-release-carries-rich-text.md))
+- **2026-11-27 · An editor without the content check is `contentCheckMissing`, one that differs from the field's vocabulary `vocabularyMismatch`.** ([decision](../../factory/decisions/2026-11-27-NOC-538-an-editor-without-the-content-check-is-contentcheckmissing-and-one-that-differs-from-the-vocabulary-is-vocabularymismatch.md))
 - **2026-11-27 · `nc.ref` is the one function for a reference, and a reference into its own space resolves as a link does.** ([decision](../../factory/decisions/2026-11-27-NOC-552-nc-ref-is-the-one-function-for-a-reference-and-a-reference-into-its-own-space-resolves-as-a-link-does.md))
 
 ## History
@@ -977,6 +982,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - 2026-11-23 · Confirming the recovery code takes two of its words back: RecoveryCode gains challenge(), and confirm takes the answers (NOC-502, #484)
 - 2026-11-23 · A write above the relay's change limit is split between objects; one object above it is refused with `tooLarge` (NOC-421, #468)
 - 2026-11-27 · `.where(...)` and `Query::where_eq`, the same call as `.equal(...)`; `null` and `Value::clear()` fix a field to unset (NOC-563, #516)
+- 2026-11-27 · The errors `notSupported`, `contentCheckMissing` and `vocabularyMismatch` of rich text (NOC-538, NOC-461)
 - 2026-11-27 · A reference field takes `{ space, id }`, a read object or a bare object id; an in-space reference has a link's statuses; a field written `nc.ref` over `ncdb/link` takes and reads `{ space, id }` in its own space (NOC-568)
 - 2026-11-27 · A move writes references among the moved objects with the new space (NOC-568)
 - 2026-11-27 · `Reference::from(&Object)` in Rust (NOC-573, NOC-568)

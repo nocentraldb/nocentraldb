@@ -57,3 +57,28 @@ test("the SDK takes yjs as an optional, exactly pinned peer, never as its own de
   assert.match(pkg.peerDependencies?.yjs ?? "", /^\d+\.\d+\.\d+$/);
   assert.equal(pkg.peerDependenciesMeta?.yjs?.optional, true);
 });
+
+// Only an app that opens a rich-text binding needs Yjs: what the SDK's
+// entry reaches through static imports imports no `yjs` at run time
+// (`import type` is erased), so `nc.open` and everything else load without
+// it, also unbundled; `space.richText` loads the binding with a dynamic
+// import (Carsten, 2026-11-27, NOC-564).
+test("nothing the SDK's entry imports statically imports yjs at run time", () => {
+  const seen = new Set();
+  const runtime = [];
+  const visit = (path) => {
+    if (seen.has(path)) return;
+    seen.add(path);
+    const source = read(path);
+    for (const [, specifier] of source.matchAll(
+      /^\s*(?:import|export)\s+(?!type\b)[^;]*?\bfrom\s+"([^"]+)";/gms,
+    )) {
+      if (specifier === "yjs") runtime.push(path);
+      if (specifier.startsWith(".")) {
+        visit(join(path, "..", specifier).replaceAll("\\", "/"));
+      }
+    }
+  };
+  visit("packages/sdk/src/index.ts");
+  assert.deepEqual(runtime, []);
+});
