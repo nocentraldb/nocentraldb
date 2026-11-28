@@ -31,6 +31,7 @@
 mod apply;
 mod diff;
 mod first;
+mod kept;
 mod lookup;
 mod parse;
 mod view;

@@ -3,13 +3,16 @@
 //! into TipTap's standard vocabulary, the names the core's rendering
 //! writes. A mention's link form `[@](ncdb:<space id>/<object id>)` reads
 //! as a mention; for a first document, any other `ncdb:` link is refused
-//! (NOC-536). HTML, images and anything else the rendering never writes
-//! read as nothing: the edit is refused.
+//! (NOC-536). A tag the edit keeps reads as the sentinel of
+//! [`super::kept`], and as that tag's atoms or block; any other HTML,
+//! images and anything else the rendering never writes read as nothing:
+//! the edit is refused.
 
 use std::collections::BTreeMap;
 
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 
+use super::kept::{SENTINEL, Unit};
 use super::view::{Atom, Block, Content, Mark, drops_empty, is_id};
 
 /// The Markdown extensions the rendering writes.
@@ -20,7 +23,7 @@ pub(super) fn options() -> Options {
 /// The blocks `markdown` reads as, or `None` when it holds something the
 /// core does not write from Markdown.
 pub(super) fn parse(markdown: &str) -> Option<Vec<Block>> {
-    read(markdown, false)
+    read(markdown, &[], false)
 }
 
 /// The blocks of a first document `markdown` reads as: as [`parse`], and
@@ -28,21 +31,33 @@ pub(super) fn parse(markdown: &str) -> Option<Vec<Block>> {
 /// as one without both ids, so that a malformed mention is refused instead
 /// of written as a plain link.
 pub(super) fn parse_first(markdown: &str) -> Option<Vec<Block>> {
-    read(markdown, true)
+    read(markdown, &[], true)
 }
 
-fn read(markdown: &str, refuse_ncdb_links: bool) -> Option<Vec<Block>> {
+/// The blocks `markdown` reads as, each sentinel in it the next of the
+/// kept tags `units`, or `None` when it holds something the core does not
+/// write from Markdown, or not one sentinel for each tag.
+pub(super) fn parse_kept(markdown: &str, units: &[Unit]) -> Option<Vec<Block>> {
+    read(markdown, units, false)
+}
+
+fn read(markdown: &str, units: &[Unit], refuse_ncdb_links: bool) -> Option<Vec<Block>> {
     let mut reader = Reader {
         frames: vec![Frame::blocks("doc", BTreeMap::new())],
         marks: Vec::new(),
         links: Vec::new(),
         header: false,
         refuse_ncdb_links,
+        units: units.to_vec(),
+        next: 0,
     };
     for event in Parser::new_ext(markdown, options()) {
         reader.event(event)?;
     }
     reader.close_implicit();
+    if reader.next != units.len() {
+        return None;
+    }
     let root = reader.frames.pop()?;
     match (reader.frames.is_empty(), root.kind) {
         (true, Kind::Blocks(blocks)) => Some(blocks),
@@ -115,6 +130,9 @@ struct Reader {
     /// Whether an `ncdb:` link that reads as no mention refuses the
     /// Markdown.
     refuse_ncdb_links: bool,
+    /// The kept tags, and how many of them the sentinels read so far.
+    units: Vec<Unit>,
+    next: usize,
 }
 
 impl Reader {
@@ -124,11 +142,18 @@ impl Reader {
             Event::End(tag) => self.end(tag)?,
             Event::Text(text) => {
                 let code = self.top().name == "codeBlock";
+                if code && text.contains(SENTINEL) {
+                    return None;
+                }
                 let marks = if code { Vec::new() } else { self.marks.clone() };
                 for c in text.chars() {
-                    self.push_atom(Atom::Char(c, marks.iter().cloned().collect()));
+                    match c {
+                        SENTINEL => self.kept()?,
+                        c => self.push_atom(Atom::Char(c, marks.iter().cloned().collect())),
+                    }
                 }
             }
+            Event::Code(text) if text.contains(SENTINEL) => return None,
             Event::Code(text) => {
                 let mut marks: super::view::Marks = self.marks.iter().cloned().collect();
                 marks.insert(Mark::Code);
@@ -277,6 +302,21 @@ impl Reader {
         false
     }
 
+    /// The next kept tag: its atoms, or one atom that its paragraph
+    /// turns into the tag's block.
+    fn kept(&mut self) -> Option<()> {
+        let k = self.next;
+        let n = match self.units.get(k)? {
+            Unit::Inline(n) => *n,
+            Unit::Block => 1,
+        };
+        self.next += 1;
+        for _ in 0..n {
+            self.push_atom(Atom::Kept(k));
+        }
+        Some(())
+    }
+
     fn top(&self) -> &Frame {
         self.frames.last().expect("the root frame stays")
     }
@@ -311,6 +351,7 @@ impl Reader {
 
     fn push_block(&mut self, block: Block) {
         self.close_implicit();
+        let block = self.kept_block(block);
         let top = self.frames.last_mut().expect("the root frame stays");
         let drops = drops_empty(&top.name);
         match &mut top.kind {
@@ -340,6 +381,25 @@ impl Reader {
 fn is_ncdb(href: &str) -> bool {
     href.get(..5)
         .is_some_and(|scheme| scheme.eq_ignore_ascii_case("ncdb:"))
+}
+
+impl Reader {
+    /// A paragraph that holds only a kept tag that is a whole block reads
+    /// as that block.
+    fn kept_block(&self, block: Block) -> Block {
+        if block.name == "paragraph"
+            && let Content::Inline(atoms) = &block.content
+            && let [Atom::Kept(k)] = atoms.as_slice()
+            && self.units.get(*k) == Some(&Unit::Block)
+        {
+            return Block {
+                name: String::new(),
+                attrs: BTreeMap::new(),
+                content: Content::Kept(*k),
+            };
+        }
+        block
+    }
 }
 
 fn leaf(name: &str, attrs: BTreeMap<&'static str, String>) -> Block {

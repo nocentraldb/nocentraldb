@@ -13,6 +13,7 @@
 //! other than its address.
 
 use std::collections::HashMap;
+use std::ops::Range;
 use std::sync::Arc;
 
 use yrs::types::Attrs;
@@ -27,9 +28,66 @@ use super::view::{At, Atom, Block, Content, Mark, Marks, Old, block_eq, shown};
 #[derive(Debug)]
 pub(super) struct Refused;
 
+/// The places of the kept tags among `items`, and which tag each is.
+fn kept<T>(items: &[T], id: impl Fn(&T) -> Option<usize>) -> Vec<(usize, usize)> {
+    items
+        .iter()
+        .enumerate()
+        .filter_map(|(k, item)| id(item).map(|tag| (k, tag)))
+        .collect()
+}
+
+/// The stretches of `old` and of `new` between their kept tags, which both
+/// hold in the same order, or `None` when they do not.
+fn stretches(
+    old: &[(usize, usize)],
+    new: &[(usize, usize)],
+    old_len: usize,
+    new_len: usize,
+) -> Option<Vec<(Range<usize>, Range<usize>)>> {
+    if old.len() != new.len() || old.iter().zip(new).any(|(o, n)| o.1 != n.1) {
+        return None;
+    }
+    let mut out = Vec::with_capacity(old.len() + 1);
+    let (mut o, mut n) = (0, 0);
+    for (&(ok, _), &(nk, _)) in old.iter().zip(new) {
+        out.push((o..ok, n..nk));
+        (o, n) = (ok + 1, nk + 1);
+    }
+    out.push((o..old_len, n..new_len));
+    Some(out)
+}
+
 /// Turns the blocks `old`, children of `parent`, into `new`. An empty
-/// `old` gets `new` at `start`.
+/// `old` gets `new` at `start`. Kept tags stay where they are; the blocks
+/// between them are turned one stretch at a time, from the last, so that
+/// a stretch's changes never move the blocks of the ones before it.
 pub(super) fn blocks(
+    txn: &mut TransactionMut,
+    parent: &impl XmlFragment,
+    old: &[Old],
+    new: &[Block],
+    start: u32,
+) -> Result<(), Refused> {
+    let id = |content: &Content| match content {
+        Content::Kept(k) => Some(*k),
+        _ => None,
+    };
+    let old_kept = kept(old, |o| id(&o.block.content));
+    let new_kept = kept(new, |b| id(&b.content));
+    let parts = stretches(&old_kept, &new_kept, old.len(), new.len()).ok_or(Refused)?;
+    for (j, (o, n)) in parts.into_iter().enumerate().rev() {
+        let start = match j.checked_sub(1) {
+            Some(before) => old[old_kept[before].0].index + 1,
+            None => old_kept.first().map_or(start, |&(k, _)| old[k].index),
+        };
+        stretch(txn, parent, &old[o], &new[n], start)?;
+    }
+    Ok(())
+}
+
+/// Turns the blocks `old`, which hold no kept tag, into `new`.
+fn stretch(
     txn: &mut TransactionMut,
     parent: &impl XmlFragment,
     old: &[Old],
@@ -84,10 +142,12 @@ pub(super) fn blocks(
 /// show, so an edit never drops a tag.
 fn deletable(block: &Block) -> bool {
     match &block.content {
-        Content::Opaque => false,
+        Content::Opaque | Content::Kept(_) => false,
         Content::Leaf => true,
         Content::Blocks(blocks) => blocks.iter().all(deletable),
-        Content::Inline(atoms) => atoms.iter().all(|a| !matches!(a, Atom::Opaque)),
+        Content::Inline(atoms) => atoms
+            .iter()
+            .all(|a| !matches!(a, Atom::Opaque | Atom::Kept(_))),
     }
 }
 
@@ -106,7 +166,7 @@ fn pair(txn: &mut TransactionMut, old: &Old, new: &Block) -> Result<(), Refused>
     match &new.content {
         Content::Blocks(children) => blocks(txn, &old.element, &old.children, children, 0),
         Content::Inline(atoms) => inline(txn, old, atoms),
-        Content::Leaf => Ok(()),
+        Content::Leaf | Content::Kept(_) => Ok(()),
         Content::Opaque => Err(Refused),
     }
 }
@@ -125,15 +185,64 @@ fn same(a: &Atom, b: &Atom) -> bool {
     match (a, b) {
         (Atom::Char(x, _), Atom::Char(y, _)) => x == y,
         (Atom::Node(x), Atom::Node(y)) => block_eq(x, y),
+        (Atom::Kept(x), Atom::Kept(y)) => x == y,
         _ => false,
     }
 }
 
-/// Turns the inline content of `old` into `new`.
+/// Turns the inline content of `old` into `new`. Kept tags stay where
+/// they are; the content between them is turned one stretch at a time,
+/// from the last, so that a stretch's changes never move the characters
+/// and children of the ones before it.
 fn inline(txn: &mut TransactionMut, old: &Old, new: &[Atom]) -> Result<(), Refused> {
     let Content::Inline(atoms) = &old.block.content else {
         return Err(Refused);
     };
+    // A kept tag of several atoms is one place.
+    let runs = |atoms: &[Atom]| -> Vec<(usize, usize, usize)> {
+        let mut out: Vec<(usize, usize, usize)> = Vec::new();
+        for (k, atom) in atoms.iter().enumerate() {
+            if let Atom::Kept(tag) = atom {
+                match out.last_mut() {
+                    Some((_, end, last)) if *end == k && last == tag => *end = k + 1,
+                    _ => out.push((k, k + 1, *tag)),
+                }
+            }
+        }
+        out
+    };
+    let (old_runs, new_runs) = (runs(atoms), runs(new));
+    if old_runs.len() != new_runs.len()
+        || old_runs
+            .iter()
+            .zip(&new_runs)
+            .any(|(o, n)| o.2 != n.2 || o.1 - o.0 != n.1 - n.0)
+    {
+        return Err(Refused);
+    }
+    let mut parts = Vec::with_capacity(old_runs.len() + 1);
+    let (mut o, mut n) = (0, 0);
+    for (run, new_run) in old_runs.iter().zip(&new_runs) {
+        parts.push((o..run.0, n..new_run.0));
+        (o, n) = (run.1, new_run.1);
+    }
+    parts.push((o..atoms.len(), n..new.len()));
+    for (o, n) in parts.into_iter().rev() {
+        inline_stretch(txn, old, atoms, o, &new[n])?;
+    }
+    Ok(())
+}
+
+/// Turns the atoms `range` of `old`, which hold no kept tag, into `new`.
+fn inline_stretch(
+    txn: &mut TransactionMut,
+    old: &Old,
+    all: &[Atom],
+    range: Range<usize>,
+    new: &[Atom],
+) -> Result<(), Refused> {
+    let base = range.start;
+    let atoms = &all[range];
     let n = atoms.len().min(new.len());
     let mut pre = 0;
     while pre < n && same(&atoms[pre], &new[pre]) {
@@ -144,28 +253,34 @@ fn inline(txn: &mut TransactionMut, old: &Old, new: &[Atom]) -> Result<(), Refus
         suf += 1;
     }
     let middle = pre..atoms.len() - suf;
-    if middle.clone().any(|k| matches!(atoms[k], Atom::Opaque)) {
+    if middle
+        .clone()
+        .any(|k| matches!(atoms[k], Atom::Opaque | Atom::Kept(_)))
+    {
         return Err(Refused);
     }
+    // From here on, places in the block.
+    let (pre, middle) = (base + pre, base + middle.start..base + middle.end);
     // Marks of kept characters, before any text moves.
-    let pairs: Vec<(usize, usize)> = (0..pre)
-        .chain(atoms.len() - suf..atoms.len())
+    let pairs: Vec<(usize, usize)> = (base..pre)
+        .chain(middle.end..base + atoms.len())
         .map(|k| {
             (
                 k,
                 if k < pre {
-                    k
+                    k - base
                 } else {
-                    k + new.len() - atoms.len()
+                    k - base + new.len() - atoms.len()
                 },
             )
         })
         .collect();
-    format(txn, &old.atoms, atoms, new, &pairs)?;
+    format(txn, &old.atoms, all, new, &pairs)?;
     // The replacement's characters and nodes come right after the kept
     // start, before the characters they replace go, so that text a person
     // typed next to the replaced characters meanwhile stays after the new
     // ones.
+    let new = &new[pre - base..new.len() - suf];
     let source = pre
         .checked_sub(1)
         .and_then(|k| raw(&old.atoms[k]))
@@ -181,13 +296,7 @@ fn inline(txn: &mut TransactionMut, old: &Old, new: &[Atom]) -> Result<(), Refus
         Some(At::Node { child } | At::Opaque { child }) => Cursor::Before(child + 1),
         None => Cursor::Before(0),
     };
-    let moved = insert(
-        txn,
-        &old.element,
-        cursor,
-        &new[pre..new.len() - suf],
-        source,
-    )?;
+    let moved = insert(txn, &old.element, cursor, new, source)?;
     // The characters and nodes between go, from the end.
     for k in middle.rev() {
         match &old.atoms[k] {
@@ -423,7 +532,7 @@ fn insert(
                 };
                 k += 1;
             }
-            Atom::Opaque => return Err(Refused),
+            Atom::Opaque | Atom::Kept(_) => return Err(Refused),
         }
     }
     Ok(moved)
@@ -459,6 +568,6 @@ fn write_block(
             Ok(())
         }
         Content::Leaf => Ok(()),
-        Content::Opaque => Err(Refused),
+        Content::Opaque | Content::Kept(_) => Err(Refused),
     }
 }

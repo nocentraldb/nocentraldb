@@ -10,8 +10,8 @@
 //! which Markdown reads as their text, are no part of it, and neither is an
 //! attribute the rendering does not show: the diff never touches them. A
 //! node or mark outside the vocabulary, which the rendering shows as an
-//! HTML tag, reads as opaque: the core does not edit it from Markdown yet,
-//! so a quote whose blocks hold one is refused.
+//! HTML tag, reads as opaque; in the blocks a quote touches, it reads as
+//! kept ([`super::kept`]) when the replacement keeps its tag as it is.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -57,6 +57,9 @@ pub(super) enum Atom {
     Node(Block),
     /// Something the view does not show as itself; equal to nothing.
     Opaque,
+    /// One atom of the `k`th tag an edit keeps as it is ([`super::kept`]);
+    /// equal to the same tag's atoms only.
+    Kept(usize),
 }
 
 /// What a block holds.
@@ -70,6 +73,9 @@ pub(super) enum Content {
     Leaf,
     /// Something the view does not show as itself; equal to nothing.
     Opaque,
+    /// The `k`th tag an edit keeps as it is ([`super::kept`]), a whole
+    /// block; equal to the same tag only.
+    Kept(usize),
 }
 
 /// A block or an inline node, with the attributes Markdown shows, each as
@@ -115,6 +121,7 @@ impl Block {
                     | (Content::Inline(_), Content::Inline(_))
                     | (Content::Leaf, Content::Leaf)
             )
+            || kept_eq(&self.content, &other.content)
     }
 }
 
@@ -131,8 +138,14 @@ pub(super) fn atom_eq(a: &Atom, b: &Atom) -> bool {
     match (a, b) {
         (Atom::Char(x, m), Atom::Char(y, n)) => x == y && shown(*x, m) == shown(*y, n),
         (Atom::Node(x), Atom::Node(y)) => block_eq(x, y),
+        (Atom::Kept(x), Atom::Kept(y)) => x == y,
         _ => false,
     }
+}
+
+/// Whether both are the same kept tag, a whole block.
+fn kept_eq(a: &Content, b: &Content) -> bool {
+    matches!((a, b), (Content::Kept(x), Content::Kept(y)) if x == y)
 }
 
 /// The marks of `c` that the Markdown shows.
@@ -148,6 +161,11 @@ pub(super) fn shown(c: char, marks: &Marks) -> Marks {
 }
 
 pub(super) fn block_eq(a: &Block, b: &Block) -> bool {
+    // A kept tag is compared by its place among the tags alone: the view
+    // and the Markdown name it differently.
+    if kept_eq(&a.content, &b.content) {
+        return true;
+    }
     a.name == b.name
         && a.attrs == b.attrs
         && match (&a.content, &b.content) {

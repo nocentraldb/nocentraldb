@@ -89,7 +89,10 @@ fn a_quote_may_end_where_a_tag_ends() {
     assert_eq!(
         edited(
             &mut field,
-            &[replace(&format!("Go {ROCKET}"), &format!("Now go {ROCKET}"))]
+            &[replace(
+                &format!("Go {ROCKET}"),
+                &format!("Now go {ROCKET}")
+            )]
         ),
         Ok(format!("Now go {ROCKET}"))
     );
@@ -104,8 +107,7 @@ fn a_replacement_that_drops_changes_or_adds_a_tag_is_refused() {
         format!("Monday {ROCKET} {ROCKET} soon."),
         format!("Monday {ROCKET} <b>soon</b>."),
     ] {
-        let mut field =
-            Field::new(vec![p(vec![t("Ship on Friday "), rocket(), t(" soon.")])]);
+        let mut field = Field::new(vec![p(vec![t("Ship on Friday "), rocket(), t(" soon.")])]);
         assert_eq!(
             edited(&mut field, &[replace(&quote, &replacement)]),
             Err(Error::Unsupported { edit: 0 })

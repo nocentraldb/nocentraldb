@@ -3,9 +3,10 @@
 //! ends on text, never inside markup.
 //!
 //! An end falls on text when it sits between two characters of text, or
-//! where a block or a whole inline construct, such as `**Friday**`, starts
-//! or ends; never between a backslash and the character it escapes, inside
-//! a delimiter such as `**`, or inside a link's destination. And the
+//! where a block, an HTML tag or a whole inline construct, such as
+//! `**Friday**`, starts or ends; never between a backslash and the
+//! character it escapes, inside a delimiter such as `**`, or inside a
+//! link's destination. And the
 //! inline constructs open at the quote's start are the ones open at its
 //! end, so that a quote such as `on **Fri` that opens a mark without
 //! closing it is no match. An occurrence that breaks either is not
@@ -148,6 +149,12 @@ fn layout(markdown: &str) -> (BTreeSet<usize>, Vec<Range<usize>>) {
             }
             Event::HardBreak | Event::SoftBreak | Event::Rule => {
                 bounds.insert(range.start);
+            }
+            // A tag starts and ends a whole construct; an end that cuts
+            // an element in two changes its tag, which the edit refuses.
+            Event::Html(_) | Event::InlineHtml(_) => {
+                bounds.insert(range.start);
+                bounds.insert(range.end);
             }
             _ => {}
         }

@@ -5,17 +5,20 @@
 //!
 //! Only the blocks a quote touches take part, so a part elsewhere in the
 //! document that the core does not read back from Markdown, such as a node
-//! outside the vocabulary, does not stop the edit. When the touched blocks
-//! do not read back as what the document holds, the edit is refused: the
-//! core would otherwise write more than the agent changed.
+//! outside the vocabulary, does not stop the edit. In the touched blocks,
+//! a tag the replacement keeps as it is stays untouched ([`kept`]). When
+//! the touched blocks do not read back as what the document holds, or the
+//! replacement does not keep their tags, the edit is refused: the core
+//! would otherwise write more than the agent changed.
 
 use yrs::types::xml::XmlFragment;
 use yrs::{Doc, ReadTxn, StateVector, Transact, XmlFragmentRef};
 
 use super::super::read;
 use super::diff::{self, write_blocks};
+use super::kept;
 use super::lookup::{self, Match, Parts};
-use super::parse::parse;
+use super::parse::{parse, parse_kept};
 use super::view::{self, Block, Old, blocks_eq};
 use super::{Anchored, Error};
 
@@ -46,17 +49,24 @@ pub(super) fn one(
                 &markdown[..found.range.start - region.start],
                 &markdown[found.range.end - region.start..]
             );
-            let touched: Vec<Old> = old[found.first..=found.last]
+            let mut touched: Vec<Old> = old[found.first..=found.last]
                 .iter()
                 .filter(|o| !o.block.invisible())
                 .cloned()
                 .collect();
+            let units = kept::keep(&mut touched);
             let held: Vec<Block> = touched.iter().map(|o| o.block.clone()).collect();
-            let read_back = parse(markdown).ok_or(unsupported)?;
+            let old_tags = kept::tags(markdown).ok_or(unsupported)?;
+            let new_tags = kept::tags(&replaced).ok_or(unsupported)?;
+            if !kept::same(markdown, &old_tags, &replaced, &new_tags) {
+                return Err(unsupported);
+            }
+            let read_back =
+                parse_kept(&kept::mask(markdown, &old_tags), &units).ok_or(unsupported)?;
             if !blocks_eq(&held, &read_back) {
                 return Err(unsupported);
             }
-            let new = parse(&replaced).ok_or(unsupported)?;
+            let new = parse_kept(&kept::mask(&replaced, &new_tags), &units).ok_or(unsupported)?;
             diff::blocks(&mut txn, root, &touched, &new, old[found.first].index)
                 .map_err(|_| unsupported)?;
         }
