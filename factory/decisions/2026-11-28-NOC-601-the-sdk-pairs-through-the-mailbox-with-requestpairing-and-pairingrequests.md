@@ -1,0 +1,7 @@
+# 2026-11-28 · NOC-601 · The SDK pairs through the mailbox with requestPairing and pairingRequests, and shows the words as fingerprintWords and Fingerprint::words()
+
+- Decided by: Carsten, 2026-11-28, on NOC-601 (option A, with NOC-607's changes)
+- Why: on the new device, `db.account.requestPairing({ identity })` returns a `PairingRequest` with `fingerprint`, `fingerprintWords`, `until`, `completed` and `withdraw()`. On a device of the account, `db.account.pairingRequests()` returns a report with `current()` and `subscribe(listener)`, and each request has `kind`, `fingerprint`, `fingerprintWords`, `postedAt`, `until`, `challenge()`, `accept(answers)` and `decline()`; there is no accept without answers (NOC-607). The errors are `pairingDeclined`, `pairingExpired` and `unknownMailbox`. The words are `Fingerprint::words()` in Rust, and `invitation.fingerprintWords` and `db.account.pairingFingerprintWords(invitation)` in TypeScript. Rust uses the same names in Rust form. Each name says what it does on the device that calls it, beside `pair` and `completePairing`.
+- Instead of: one `pair` call per side chosen by a mode, so that `pair` would mean two things on two devices (B); or the words as an option of `pairingFingerprint`, whose return type would then depend on an option (C).
+- What this does not cover: the names of the one-scan way's two calls, which are put to the owner on their own.
+- Topics: pairing, sdk, sdk-ts, sdk-rust, fingerprint, rfc-0019, rfc-0009
