@@ -1,0 +1,467 @@
+{
+  "about": "Markdown read into a first rich-text document (RFC 0013, \"The first content\" and \"The Rust SDK\"; NOC-463), shared by the core, the Rust SDK's RichText::from_markdown and the TypeScript SDK's nc.richText.fromMarkdown (NOC-578), so that every SDK writes the same document for the same Markdown. Each case gives the document as its tree, the ProseMirror JSON the core reads (RFC 0013, \"Reading\"), and the Markdown the field then reads as. Each refused case is Markdown the core does not write a document from: the write is refused and nothing is written.",
+  "cases": [
+    {
+      "name": "no Markdown writes an empty document",
+      "markdown": "",
+      "tree": { "type": "doc", "content": [] },
+      "reads": ""
+    },
+    {
+      "name": "a paragraph",
+      "markdown": "Hello, world.",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [{ "type": "text", "text": "Hello, world." }]
+          }
+        ]
+      },
+      "reads": "Hello, world."
+    },
+    {
+      "name": "two paragraphs, a soft break reading as a space",
+      "markdown": "First line\nsame paragraph.\n\nSecond.",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              { "type": "text", "text": "First line same paragraph." }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": [{ "type": "text", "text": "Second." }]
+          }
+        ]
+      },
+      "reads": "First line same paragraph.\n\nSecond."
+    },
+    {
+      "name": "a heading with its level",
+      "markdown": "## Plan",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "heading",
+            "attrs": { "level": 2 },
+            "content": [{ "type": "text", "text": "Plan" }]
+          }
+        ]
+      },
+      "reads": "## Plan"
+    },
+    {
+      "name": "bold, italic, strike and code",
+      "markdown": "We **ship** *soon*, ~~never~~ `today`.",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              { "type": "text", "text": "We " },
+              { "type": "text", "text": "ship", "marks": [{ "type": "bold" }] },
+              { "type": "text", "text": " " },
+              {
+                "type": "text",
+                "text": "soon",
+                "marks": [{ "type": "italic" }]
+              },
+              { "type": "text", "text": ", " },
+              {
+                "type": "text",
+                "text": "never",
+                "marks": [{ "type": "strike" }]
+              },
+              { "type": "text", "text": " " },
+              {
+                "type": "text",
+                "text": "today",
+                "marks": [{ "type": "code" }]
+              },
+              { "type": "text", "text": "." }
+            ]
+          }
+        ]
+      },
+      "reads": "We **ship** *soon*, ~~never~~ `today`."
+    },
+    {
+      "name": "marks that overlap",
+      "markdown": "***both*** and **bold *italic***",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "both",
+                "marks": [{ "type": "bold" }, { "type": "italic" }]
+              },
+              { "type": "text", "text": " and " },
+              {
+                "type": "text",
+                "text": "bold ",
+                "marks": [{ "type": "bold" }]
+              },
+              {
+                "type": "text",
+                "text": "italic",
+                "marks": [{ "type": "bold" }, { "type": "italic" }]
+              }
+            ]
+          }
+        ]
+      },
+      "reads": "***both*** and **bold *italic***"
+    },
+    {
+      "name": "a link",
+      "markdown": "See [the docs](https://example.com/docs).",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              { "type": "text", "text": "See " },
+              {
+                "type": "text",
+                "text": "the docs",
+                "marks": [
+                  {
+                    "type": "link",
+                    "attrs": { "href": "https://example.com/docs" }
+                  }
+                ]
+              },
+              { "type": "text", "text": "." }
+            ]
+          }
+        ]
+      },
+      "reads": "See [the docs](https://example.com/docs)."
+    },
+    {
+      "name": "a hard break",
+      "markdown": "one\\\ntwo",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              { "type": "text", "text": "one" },
+              { "type": "hardBreak" },
+              { "type": "text", "text": "two" }
+            ]
+          }
+        ]
+      },
+      "reads": "one\\\ntwo"
+    },
+    {
+      "name": "a bullet list",
+      "markdown": "- one\n- two",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "bulletList",
+            "content": [
+              {
+                "type": "listItem",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [{ "type": "text", "text": "one" }]
+                  }
+                ]
+              },
+              {
+                "type": "listItem",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [{ "type": "text", "text": "two" }]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "reads": "- one\n- two"
+    },
+    {
+      "name": "an ordered list with its start",
+      "markdown": "3. three\n4. four",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "orderedList",
+            "attrs": { "start": 3 },
+            "content": [
+              {
+                "type": "listItem",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [{ "type": "text", "text": "three" }]
+                  }
+                ]
+              },
+              {
+                "type": "listItem",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [{ "type": "text", "text": "four" }]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "reads": "3. three\n4. four"
+    },
+    {
+      "name": "a nested list",
+      "markdown": "- outer\n  - inner",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "bulletList",
+            "content": [
+              {
+                "type": "listItem",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [{ "type": "text", "text": "outer" }]
+                  },
+                  {
+                    "type": "bulletList",
+                    "content": [
+                      {
+                        "type": "listItem",
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "content": [{ "type": "text", "text": "inner" }]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "reads": "- outer\n  - inner"
+    },
+    {
+      "name": "a task list",
+      "markdown": "- [ ] open\n- [x] done",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "taskList",
+            "content": [
+              {
+                "type": "taskItem",
+                "attrs": { "checked": false },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [{ "type": "text", "text": "open" }]
+                  }
+                ]
+              },
+              {
+                "type": "taskItem",
+                "attrs": { "checked": true },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [{ "type": "text", "text": "done" }]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "reads": "- [ ] open\n- [x] done"
+    },
+    {
+      "name": "a quote",
+      "markdown": "> Quoted.",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "blockquote",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [{ "type": "text", "text": "Quoted." }]
+              }
+            ]
+          }
+        ]
+      },
+      "reads": "> Quoted."
+    },
+    {
+      "name": "a code block with its language, whose text is not read as Markdown",
+      "markdown": "```rust\nlet a = *b;\n```",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "codeBlock",
+            "attrs": { "language": "rust" },
+            "content": [{ "type": "text", "text": "let a = *b;" }]
+          }
+        ]
+      },
+      "reads": "```rust\nlet a = *b;\n```"
+    },
+    {
+      "name": "a horizontal rule between paragraphs",
+      "markdown": "Above.\n\n---\n\nBelow.",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [{ "type": "text", "text": "Above." }]
+          },
+          { "type": "horizontalRule" },
+          {
+            "type": "paragraph",
+            "content": [{ "type": "text", "text": "Below." }]
+          }
+        ]
+      },
+      "reads": "Above.\n\n---\n\nBelow."
+    },
+    {
+      "name": "a table whose first row is its header",
+      "markdown": "| a | b |\n| --- | --- |\n| 1 | 2 |",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "table",
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableHeader",
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "content": [{ "type": "text", "text": "a" }]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableHeader",
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "content": [{ "type": "text", "text": "b" }]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "content": [{ "type": "text", "text": "1" }]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "content": [{ "type": "text", "text": "2" }]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "reads": "| a | b |\n| --- | --- |\n| 1 | 2 |"
+    },
+    {
+      "name": "escaped characters read as text",
+      "markdown": "1\\. not a list, \\*not italic\\*, \\[not a link\\]",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "1. not a list, *not italic*, [not a link]"
+              }
+            ]
+          }
+        ]
+      },
+      "reads": "1\\. not a list, \\*not italic\\*, \\[not a link\\]"
+    },
+    {
+      "name": "text outside the Basic Multilingual Plane",
+      "markdown": "Größe 😀 **fett**",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              { "type": "text", "text": "Größe 😀 " },
+              { "type": "text", "text": "fett", "marks": [{ "type": "bold" }] }
+            ]
+          }
+        ]
+      },
+      "reads": "Größe 😀 **fett**"
+    }
+  ],
+  "refused": [
+    { "name": "an HTML block", "markdown": "<div>x</div>" },
+    { "name": "inline HTML", "markdown": "a <b>x</b>" },
+    { "name": "an image", "markdown": "![alt](https://example.com/a.png)" }
+  ]
+}

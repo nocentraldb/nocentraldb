@@ -50,6 +50,11 @@ pub(crate) const KEY_RECORD_UNSEALABLE: &str =
 pub(crate) const INVITATION_KIND: &str =
     "its kind is neither a device nor an agent";
 
+/// `kindRichText`: What the read asked for, in fieldDoesNotHold: a rich-text
+/// field's document, read with get::<RichText>.
+pub(crate) const KIND_RICH_TEXT: &str =
+    "rich text";
+
 /// `doingWrite`: What the member does, in roleRequired: a write.
 pub(crate) const DOING_WRITE: &str =
     "writes content";
