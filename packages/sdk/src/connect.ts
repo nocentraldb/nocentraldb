@@ -113,7 +113,9 @@ export const connect = async (
     options.model as { [DESCRIBE]?: () => { collections: Described } }
   )[DESCRIBE];
   const described: Described = describe ? describe().collections : {};
-  const { values, dated } = valuesOf(described);
+  // Whether the core holds rich text, as `open` answers below.
+  let richText = false;
+  const { values, dated } = valuesOf(described, () => richText);
 
   let next = 0;
   let closed = false;
@@ -164,7 +166,7 @@ export const connect = async (
     (opened as { relay?: string } | null)?.relay ??
     (typeof options.relay === "string" ? options.relay : undefined);
   // Whether this core holds rich text (NOC-538, Q5).
-  const richText = (opened as { richText?: boolean } | null)?.richText === true;
+  richText = (opened as { richText?: boolean } | null)?.richText === true;
   let rawSync = (opened as { sync?: unknown } | null)?.sync;
   let sync = syncStatusOf(rawSync, relay);
   const reports = reportsOf(

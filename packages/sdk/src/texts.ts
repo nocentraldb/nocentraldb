@@ -125,7 +125,7 @@ export const DATABASE_CLOSED = "the database is closed";
 export const reservedFieldType = (path: unknown, type: unknown): string =>
   `${path}: ${type} is reserved; its field type comes after 0.1 (RFC 0005).`;
 
-/** `richTextNotSupported` (notSupported): space.richText, on a core built without rich text, which every release is until the guard of NOC-468 is complete (NOC-538, Q5). */
+/** `richTextNotSupported` (notSupported): space.richText, and a create or an update that carries nc.richText.fromMarkdown (NOC-590 2a), on a core built without rich text, which every release is until the guard of NOC-468 is complete (NOC-538, Q5). */
 export const RICH_TEXT_NOT_SUPPORTED = "this build of the SDK's core does not hold rich text yet; no release carries it until its guard is complete";
 
 /** `notAPairingAnswer` (invalidValue): nc.pairingAnswer, given a text that does not start with ncdb-pair-1: or is not unpadded base64url. */
