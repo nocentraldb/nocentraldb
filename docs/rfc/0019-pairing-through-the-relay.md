@@ -341,9 +341,11 @@ It carries [RFC 0010](0010-accounts.md)'s invitation and pairing answer through 
 
 - **2026-11-28 · A pairing request is sealed to one mailbox key per account, derived from the account key and signed by it.** ([decision](../../factory/decisions/2026-11-28-NOC-596-a-pairing-request-is-sealed-to-one-mailbox-key-per-account-derived-from-the-account-key.md))
 - **2026-11-28 · Devices and agents pair through the mailbox, and a device's answer carries the account key past the relay, sealed.** ([decision](../../factory/decisions/2026-11-28-NOC-597-devices-and-agents-pair-through-the-mailbox-and-a-device-s-answer-carries-the-account-key-past-the-relay-sealed.md))
+- **2026-11-28 · A fingerprint shows as 32 words of the PGP word list, one per byte of its full digest, beside its 60 digits.** ([decision](../../factory/decisions/2026-11-28-NOC-600-a-fingerprint-shows-as-32-words-of-the-pgp-word-list-beside-its-60-digits.md))
 
 ## History
 
 - 2026-11-28 · First published as a draft (NOC-593)
 - 2026-11-28 · The mailbox key is decided: one per account, derived from the account key (NOC-596, #534)
 - 2026-11-28 · Devices and agents pair through the mailbox, and the account key crosses the relay sealed (NOC-597, #534)
+- 2026-11-28 · The fingerprint's second form is decided: 32 words of the PGP word list (NOC-600, #534)
