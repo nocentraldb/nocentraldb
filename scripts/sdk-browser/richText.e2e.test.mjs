@@ -7,7 +7,8 @@
 // it back; a read of the object gives the field's Markdown (NOC-589);
 // `nc.richText.fromMarkdown` writes the shared table's first documents
 // (NOC-578); the package's own core, without rich text, answers
-// `notSupported`. Run as sdk.e2e.test.mjs is: by the task
+// `notSupported`, to `space.richText` and to a write of a first document
+// (NOC-590 2a). Run as sdk.e2e.test.mjs is: by the task
 // `repo:sdk-browser`, not by `pnpm gates`.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -319,6 +320,32 @@ test("the package's own core, without rich text, answers notSupported", async ()
       try {
         await space.richText(model.tasks, ids[0], "body");
         return "opened";
+      } catch (error) {
+        return error instanceof nc.Error ? error.code : String(error);
+      } finally {
+        await db.close();
+      }
+    },
+    { lock, MODEL },
+  );
+  assert.deepEqual(errors, []);
+  assert.equal(code, "notSupported");
+});
+
+test("the package's own core, without rich text, refuses a first document with notSupported", async () => {
+  const { tab, errors } = await open(plainServer);
+  const code = await tab.evaluate(
+    async ({ lock, MODEL }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      const db = await nc.open({ model, lock, name: "plain-first" });
+      const space = await db.spaces.create();
+      try {
+        await space.create(model.tasks, {
+          title: "Note",
+          body: nc.richText.fromMarkdown("First."),
+        });
+        return "written";
       } catch (error) {
         return error instanceof nc.Error ? error.code : String(error);
       } finally {
