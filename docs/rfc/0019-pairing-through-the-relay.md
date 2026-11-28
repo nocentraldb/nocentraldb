@@ -337,6 +337,11 @@ The RFC tests in `scripts/` check this file's form: its status and what 0.1 buil
 
 It carries [RFC 0010](0010-accounts.md)'s invitation and pairing answer through the relay of [RFC 0007](0007-relay.md), adding messages, checks and a table to it; it derives and seals with [RFC 0003](0003-keys-and-cryptography.md)'s primitives and adds formats to it; it serves only the accounts a relay admits under [RFC 0015](0015-relay-admission.md); it adds calls to [RFC 0009](0009-sdk-api.md); and it shows the fingerprints of RFC 0010 in a second form.
 
+## Decisions
+
+- **2026-11-28 · A pairing request is sealed to one mailbox key per account, derived from the account key and signed by it.** ([decision](../../factory/decisions/2026-11-28-NOC-596-a-pairing-request-is-sealed-to-one-mailbox-key-per-account-derived-from-the-account-key.md))
+
 ## History
 
 - 2026-11-28 · First published as a draft (NOC-593)
+- 2026-11-28 · The mailbox key is decided: one per account, derived from the account key (NOC-596, #534)
