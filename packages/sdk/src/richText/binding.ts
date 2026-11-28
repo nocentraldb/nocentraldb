@@ -21,6 +21,7 @@
 //   uses (Carsten, 2026-11-22, NOC-467).
 import * as Y from "yjs";
 import type { RichTextBinding, RichTextStatus, Vocabulary } from "../editor.ts";
+import type { KnownNames } from "../known.ts";
 import { type Known, undeclared, unknownDeleted } from "./guard.ts";
 
 export type { RichTextBinding, RichTextStatus, Vocabulary } from "../editor.ts";
@@ -84,6 +85,23 @@ export const bind = (
   let trips = 0;
   const reloadListeners = new Set<(doc: Y.Doc) => void>();
 
+  let declared: KnownNames = { nodes: [], marks: [] };
+  /** What the guard knows: the binding's names and what the editor declared. */
+  const knownNow = (): Known => {
+    const base = options.known?.() ?? { nodes: [], marks: [] };
+    const attributes: Record<string, string[]> = {};
+    for (const source of [base.attributes, declared.attributes]) {
+      for (const [node, keys] of Object.entries(source ?? {})) {
+        attributes[node] = [...(attributes[node] ?? []), ...keys];
+      }
+    }
+    return {
+      nodes: [...base.nodes, ...declared.nodes],
+      marks: [...base.marks, ...declared.marks],
+      attributes,
+    };
+  };
+
   /** A document under the leased client id, loaded from `state`. */
   const load = (state: Uint8Array) => {
     const next = new Y.Doc();
@@ -100,7 +118,8 @@ export const bind = (
     undoManager = new Y.UndoManager(root, { trackedOrigins: new Set(origins) });
     root.observeDeep((events, tr) => {
       if (next !== doc || tr.origin === FROM_CORE || !options.known) return;
-      const names = unknownDeleted(events, options.known());
+      // The editor's own names, its placeholders, count as known too.
+      const names = unknownDeleted(events, knownNow());
       deletes = [...new Set([...deletes, ...names])];
     });
     next.on("update", (update: Uint8Array, origin: unknown) => {
@@ -269,6 +288,9 @@ export const bind = (
         waiting.push({ resolve, reject });
         pullCap ??= setTimeout(pullWaiting, MAX_HOLD_MS);
       });
+    },
+    known: (names) => {
+      declared = names;
     },
     composing: (open) => {
       composing = open;

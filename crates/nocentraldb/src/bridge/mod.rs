@@ -135,7 +135,10 @@
 //! answers `{"change": id}`; `richText.close` `{"lease": n}` gives the
 //! client id back with the clock it reached. `close` gives back every
 //! lease still open. A binding learns that a field may have changed from
-//! the `folded` event of its collection.
+//! the `folded` event of its collection. A read gives a rich-text field as
+//! its Markdown, a text, or `null` while nothing was written to it; a
+//! write of `{"$markdown": text}` to one writes a first document (RFC
+//! 0013, "Reading" and "The first content").
 //!
 //! A sync status is `{"connection": "connected" | "connecting" |
 //! "offline" | "paused" | "none", "unconfirmed": u64, "refused": u64,

@@ -1,0 +1,39 @@
+{
+  "name": "@nocentraldb/tiptap",
+  "version": "0.2.0",
+  "private": true,
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nocentraldb/nocentraldb.git",
+    "directory": "packages/tiptap"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "devDependencies": {
+    "@nocentraldb/sdk": "workspace:*",
+    "@tiptap/core": "3.35.0",
+    "@tiptap/extension-collaboration": "3.35.0",
+    "@tiptap/pm": "3.35.0",
+    "@tiptap/starter-kit": "3.35.0",
+    "@tiptap/y-tiptap": "3.3.1",
+    "happy-dom": "21.0.4",
+    "yjs": "13.6.33"
+  },
+  "peerDependencies": {
+    "@nocentraldb/sdk": "0.2.0",
+    "@tiptap/core": "3.35.0",
+    "@tiptap/extension-collaboration": "3.35.0",
+    "@tiptap/pm": "3.35.0",
+    "@tiptap/y-tiptap": "3.3.1",
+    "yjs": "13.6.33"
+  }
+}
