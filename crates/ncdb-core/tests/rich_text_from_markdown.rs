@@ -16,7 +16,7 @@ mod rich_text_support;
 mod doc;
 
 use ncdb_core::rich_text::anchor::from_markdown;
-use ncdb_core::rich_text::read::{markdown, tree};
+use ncdb_core::rich_text::read::{Mention, markdown, mentions, tree};
 use ncdb_plugin::Data;
 use serde_json::Value as Json;
 
@@ -59,7 +59,32 @@ fn every_case_of_the_table_reads_as_its_document() {
             case["reads"].as_str().expect("reads"),
             "{name}"
         );
+        if let Some(listed) = case.get("mentions") {
+            assert_eq!(hexes(&mentions(&state)), refs(listed), "{name}");
+        }
     }
+}
+
+/// A case's `mentions`, as pairs of space id and object id.
+fn refs(listed: &Json) -> Vec<(String, String)> {
+    let listed = listed.as_array().expect("a list of mentions");
+    listed
+        .iter()
+        .map(|m| {
+            (
+                m["space"].as_str().unwrap().into(),
+                m["id"].as_str().unwrap().into(),
+            )
+        })
+        .collect()
+}
+
+fn hexes(mentions: &[Mention]) -> Vec<(String, String)> {
+    let hex = |bytes: &[u8; 16]| bytes.iter().map(|b| format!("{b:02x}")).collect();
+    mentions
+        .iter()
+        .map(|m| (hex(&m.space.0), hex(&m.id.0)))
+        .collect()
 }
 
 #[test]
