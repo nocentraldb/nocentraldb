@@ -99,3 +99,28 @@ test("an edit the app makes right after the editor opens, in the same task, is w
   editor?.commands.insertContentAt(1, "Oh, ");
   expect(body.doc.getXmlFragment("default").toString()).toContain("Oh, Hello");
 });
+
+// NOC-580: y-tiptap 3.3.1 writes a change only once the document has
+// differed from an empty one, and its own first render does not count. A
+// first edit that empties the document was therefore never written.
+test("a first edit that empties the document is written", () => {
+  const body = fakeBinding(vocabulary, (root) =>
+    root.insert(0, [paragraph("Hello"), paragraph("World")]),
+  );
+  const element = document.createElement("div");
+  document.body.append(element);
+  let editor: import("@tiptap/core").Editor | undefined;
+  mounted.push(
+    ncEditor(body, {
+      element,
+      extensions: kit,
+      onEditor: (e) => {
+        editor = e;
+      },
+    }),
+  );
+  editor?.chain().selectAll().deleteSelection().run();
+  const stored = body.doc.getXmlFragment("default").toString();
+  expect(stored).not.toContain("Hello");
+  expect(stored).not.toContain("World");
+});

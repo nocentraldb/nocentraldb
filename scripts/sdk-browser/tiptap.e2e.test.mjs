@@ -268,3 +268,43 @@ test("guard: an editor without the measures deletes the unknown node, and that i
   assert.doesNotMatch(result.afterDeletion, /callout/);
   assert.match(result.afterDeletion, /Kept\./);
 });
+
+test("a first edit that empties the document is written, and another binding sees it (NOC-580)", async () => {
+  const { tab, errors } = await open();
+  await setUp(tab, "empty-first");
+  const result = await tab.evaluate(async () => {
+    const { ncEditor } = window.tt;
+    const { kit, open, xml, paragraph, until, db } = window.scene;
+    const writer = await open();
+    writer.doc
+      .getXmlFragment("default")
+      .insert(0, [paragraph("Hello"), paragraph("World")]);
+    await writer.close();
+    // Another binding on the field stands in for another member's view.
+    const other = await open();
+    const text = () => other.doc.getXmlFragment("default").toString();
+    const before = text();
+    const body = await open();
+    let editor;
+    const mounted = ncEditor(body, {
+      element: document.getElementById("older"),
+      extensions: kit,
+      onEditor: (e) => {
+        editor = e;
+      },
+    });
+    // The person's first edit: select all and delete.
+    editor.chain().selectAll().deleteSelection().run();
+    await body.close();
+    mounted.destroy();
+    const seen = await until(() => !text().includes("Hello"));
+    const after = await xml();
+    await other.close();
+    await db.close();
+    return { before, seen, after };
+  });
+  assert.deepEqual(errors, []);
+  assert.match(result.before, /Hello/);
+  assert.equal(result.seen, true);
+  assert.doesNotMatch(result.after, /Hello|World/);
+});
