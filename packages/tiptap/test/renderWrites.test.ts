@@ -124,3 +124,25 @@ test("a first edit that empties the document is written", () => {
   expect(stored).not.toContain("Hello");
   expect(stored).not.toContain("World");
 });
+
+test("the binding's UndoManager takes back a first edit that emptied the document", () => {
+  const body = fakeBinding(vocabulary, (root) =>
+    root.insert(0, [paragraph("Hello")]),
+  );
+  const element = document.createElement("div");
+  document.body.append(element);
+  let editor: import("@tiptap/core").Editor | undefined;
+  mounted.push(
+    ncEditor(body, {
+      element,
+      extensions: kit,
+      onEditor: (e) => {
+        editor = e;
+      },
+    }),
+  );
+  editor?.chain().selectAll().deleteSelection().run();
+  expect(body.doc.getXmlFragment("default").toString()).not.toContain("Hello");
+  body.undoManager.undo();
+  expect(body.doc.getXmlFragment("default").toString()).toContain("Hello");
+});

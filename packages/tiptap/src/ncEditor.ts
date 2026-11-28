@@ -27,7 +27,7 @@ import {
   getSchema,
 } from "@tiptap/core";
 import Collaboration from "@tiptap/extension-collaboration";
-import { Plugin, TextSelection } from "@tiptap/pm/state";
+import { type EditorState, Plugin, TextSelection } from "@tiptap/pm/state";
 import {
   absolutePositionToRelativePosition,
   relativePositionToAbsolutePosition,
@@ -63,6 +63,31 @@ export interface NcEditorOptions {
 /** Marks the transaction that restores the selection after a rebuild, which, like a render, nobody made. */
 const RESTORE = "ncRestoreSelection";
 
+/**
+ * A first edit that empties the document is written (NOC-580). y-tiptap
+ * 3.3.1 writes a change only once the document has differed from an empty
+ * one, and its own first render, dispatched before its view's update hook
+ * exists, does not count: an edit that leaves the document empty before any
+ * other was never written. When an edit, not a render, leaves the document
+ * empty, it is handed to y-sync's binding as y-sync's own update hook hands
+ * it: inside the binding's mutex, in a transaction under y-sync's origin,
+ * so the binding's UndoManager tracks it. If y-sync wrote it already, the
+ * Y.Doc holds it and nothing more is written. y-tiptap is pinned exactly,
+ * since this reads its binding.
+ */
+const writeEmptied = (state: EditorState) => {
+  const empty = state.doc.type.createAndFill();
+  if (!empty || !state.doc.eq(empty)) return;
+  const binding = ySyncPluginKey.getState(state)?.binding;
+  if (!binding) return;
+  binding.mux(() => {
+    binding.doc.transact((tr) => {
+      tr.meta.set("addToHistory", true);
+      binding._prosemirrorChanged(state.doc);
+    }, ySyncPluginKey);
+  });
+};
+
 const noWriteOnRender = () => {
   let rendering = false;
   return Extension.create({
@@ -86,11 +111,15 @@ const noWriteOnRender = () => {
           }
           return !(rendering && tr.docChanged);
         },
-        // The view takes the render, and what was appended to it, in at
-        // once: from then on, transactions are no longer appended to it.
         view: () => ({
-          update: () => {
+          update: (view, previous) => {
+            const rendered = rendering;
+            // The view takes the render, and what was appended to it, in at
+            // once: from then on, transactions are no longer appended to it.
             rendering = false;
+            if (!rendered && !view.state.doc.eq(previous.doc)) {
+              writeEmptied(view.state);
+            }
           },
         }),
       }),
