@@ -5,8 +5,9 @@
 // reads as `{ space, id }` even where the lock keeps it as `ncdb/link`,
 // whose value the core reads as an object id (RFC 0018, "One function, two
 // cases" and "Existing link fields read as references"). A first document
-// from Markdown sends `{ $markdown }` (RFC 0013, "The first content").
-// Internal, split from connect.ts.
+// from Markdown sends `{ $markdown }` (RFC 0013, "The first content"); a
+// core without rich text refuses it with `notSupported`, as `space.richText`
+// is (Carsten, 2026-11-28, NOC-590 2a). Internal, split from connect.ts.
 
 import { fromCore, toCore } from "./dates.ts";
 import { SetElements } from "./elements.ts";
@@ -34,8 +35,8 @@ const reference = (written: unknown, space: string): unknown => {
   return written;
 };
 
-/** The conversions of field values for the model `described`. */
-export const valuesOf = (described: Described) => {
+/** The conversions of field values for the model `described`, on a core that holds rich text when `richText` says so. */
+export const valuesOf = (described: Described, richText: () => boolean) => {
   const value = (
     collection: string,
     field: string,
@@ -48,7 +49,12 @@ export const valuesOf = (described: Described) => {
     }
     // Sent as written, without the NFC of a string, as the Rust SDK sends
     // it, so the same Markdown gives the same document (NOC-578).
-    if (written instanceof Markdown) return { $markdown: written.markdown };
+    if (written instanceof Markdown) {
+      if (!richText()) {
+        throw new NcError("notSupported", texts.RICH_TEXT_NOT_SUPPORTED);
+      }
+      return { $markdown: written.markdown };
+    }
     if (written instanceof SetElements) {
       const elements = written.elements.map((e) =>
         element(collection, field, e, true),

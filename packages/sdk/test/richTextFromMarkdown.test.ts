@@ -3,7 +3,9 @@
 // rich-text field, on create or update; the SDK sends it to the core as
 // `{ $markdown }`, and the core reads it into a document as it does for the
 // Rust SDK's `RichText::from_markdown`, so the Markdown goes as written. A
-// read gives the field's Markdown, a string (NOC-589). Against a fake core;
+// read gives the field's Markdown, a string (NOC-589). On a core without
+// rich text, a write that carries one is refused with `notSupported`, as
+// `space.richText` is (Carsten, 2026-11-28, NOC-590 2a). Against a fake core;
 // scripts/sdk-browser/richText.e2e.test.mjs runs the shared table of cases
 // through the real core in Chromium.
 import { describe, expect, expectTypeOf, test } from "vitest";
@@ -20,7 +22,7 @@ const NOTE = "fedcba9876543210fedcba9876543210";
 
 type Request = { id: number; call: string; args: Record<string, unknown> };
 
-const fake = () => {
+const fake = (richText = true) => {
   const requests: Request[] = [];
   const core: Core = {
     call: async (bytes) => {
@@ -28,6 +30,8 @@ const fake = () => {
       requests.push(request);
       const ok = (() => {
         switch (request.call) {
+          case "open":
+            return { sync: null, richText };
           case "spaces.create":
           case "spaces.get":
             return SPACE;
@@ -99,6 +103,27 @@ describe("nc.richText.fromMarkdown", () => {
     const note = await space.get(model.notes, NOTE);
     expect(note?.body).toBe("## Plan\n\nShip **it**.");
     expectTypeOf(note?.body).toEqualTypeOf<string | undefined>();
+  });
+
+  test("a core without rich text refuses a create or an update that carries one with notSupported, as space.richText does", async () => {
+    const { core, writes } = fake(false);
+    const db = await connect(core, { model, lock });
+    const space = await db.spaces.create();
+    await expect(
+      space.create(model.notes, {
+        title: "Plan",
+        body: nc.richText.fromMarkdown("Plan."),
+      }),
+    ).rejects.toMatchObject({ code: "notSupported" });
+    await expect(
+      space.update(model.notes, NOTE, {
+        body: nc.richText.fromMarkdown("Plan."),
+      }),
+    ).rejects.toMatchObject({ code: "notSupported" });
+    await expect(
+      space.richText(model.notes, NOTE, "body"),
+    ).rejects.toMatchObject({ code: "notSupported" });
+    expect(writes()).toEqual([]);
   });
 
   test("a rich-text field takes a first document, and a string field does not", async () => {
