@@ -250,7 +250,7 @@ The tags show an agent a part the rendering does not know, so it can quote aroun
 
 ### Mentions
 
-A mention of a person should store only a reference to the person's object, never the name. It is a recommendation, in this RFC and in the docs, not a rule the core enforces: the core cannot tell a name from other text. The SDK's mention is an inline node named `mention` with two attributes, `space` and `id`, the target's space id and object id as RFC 0009 writes them. It holds no name. An editor shows the name by reading the target from the member's copy when it renders, and the SDK's TipTap extension does that. After an erasure, the person's personal fields are erased and the mention shows a placeholder, and no name was ever stored in the text: this is [RFC 0005's pattern for free text](0005-schema-and-model-lock.md#personal-data-in-free-text), made concrete. TipTap's own Mention extension stores a `label`, the name as typed, in the document; an app that uses it puts the name into the text, where erasure does not reach it, and the SDK's documentation says so.
+A mention of a person should store only a reference to the person's object, never the name. It is a recommendation, in this RFC and in the docs, not a rule the core enforces: the core cannot tell a name from other text. The SDK's mention is an inline node named `mention` with two attributes, `space` and `id`, the target's space id and object id as RFC 0009 writes them. It holds no name. An editor shows the name by reading the target from the member's copy when it renders. The SDK's TipTap extension, `NcMention`, leaves that read to the app, which knows its collections: `NcMention.configure({ label: ({ space, id }) => name })` gives the name to show, a string or a promise of one, and the extension shows a neutral placeholder until it has one and whenever `label` gives none. After an erasure, the person's personal fields are erased and the mention shows a placeholder, and no name was ever stored in the text: this is [RFC 0005's pattern for free text](0005-schema-and-model-lock.md#personal-data-in-free-text), made concrete. TipTap's own Mention extension stores a `label`, the name as typed, in the document; an app that uses it puts the name into the text, where erasure does not reach it, and the SDK's documentation says so.
 
 ## Writing
 
@@ -270,7 +270,8 @@ const mounted = ncEditor(body, {
   element: document.querySelector("#body")!,
   extensions: [
     StarterKit.configure({ undoRedo: false }),
-    NcMention.configure({ db }),
+    // The app reads the target and gives its name; the node stores none.
+    NcMention.configure({ label: ({ space, id }) => personName(space, id) }),
   ],
   // Called with the first editor and with each one a rebuild makes.
   onEditor: (next) => {
@@ -540,6 +541,7 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 - **2026-11-27 · The binding reports `"shown"`, `"notFullyShown"` with a reason, or `"readOnly"`, through `body.status` and `body.onStatus`.** ([decision](../../factory/decisions/2026-11-27-NOC-538-a-rich-text-binding-reports-shown-notfullyshown-or-readonly-through-status-and-onstatus.md))
 - **2026-11-27 · The SDK returns an editor-agnostic binding, and `@nocentraldb/tiptap`'s `ncEditor` builds and rebuilds the editor and hands each one to `onEditor`.** ([decision](../../factory/decisions/2026-11-27-NOC-461-the-sdk-returns-an-editor-agnostic-rich-text-binding-and-nocentraldb-tiptap-builds-and-rebuilds-the-editor.md))
 - **2026-11-27 · The codes are `vocabularyMismatch` and `contentCheckMissing`, and the binding's members `composing`, `onReload`, `vocabulary` and `known`.** ([decision](../../factory/decisions/2026-11-27-NOC-575-the-rich-text-api-names-its-codes-vocabularymismatch-and-contentcheckmissing-and-the-binding-s-composing-onreload-vocabulary-and-known.md))
+- **2026-11-27 · `NcMention` takes a `label` that resolves the target's space and id, and no `db` option.** ([decision](../../factory/decisions/2026-11-27-NOC-579-ncmention-takes-a-label-that-resolves-the-target-s-space-and-id-and-no-db-option.md))
 - **2026-11-27 · A rich-text field declares its vocabulary in the schema and the lock, which may only grow, and the binding refuses an editor that differs from it.** ([decision](../../factory/decisions/2026-11-27-NOC-553-a-rich-text-field-declares-its-vocabulary-in-the-schema-and-the-lock-which-may-only-grow.md))
 - **2026-11-27 · A move or an ad-hoc copy re-creates the document from its tree under a client id of the member that moves or copies it; carrying it as it is comes later, as an option per move.** ([decision](../../factory/decisions/2026-11-27-NOC-543-a-move-or-ad-hoc-copy-re-creates-a-rich-text-document-under-a-client-id-of-the-mover.md))
 - **2026-11-27 · A move back of a written document is refused until a move back writes only the difference (NOC-581).** ([decision](../../factory/decisions/2026-11-27-NOC-560-a-move-back-of-a-written-rich-text-document-is-refused-until-it-writes-only-the-difference.md))
@@ -554,4 +556,5 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 - 2026-11-27 · The binding defers its pull while a composition is open instead of a rebuild waiting for `compositionend`, as the owner decided after the spike on NOC-555 (NOC-556, NOC-461)
 - 2026-11-27 · The binding reports its status through `body.status` and `body.onStatus`, and `space.richText` answers `notSupported` without rich text in the core (NOC-538, NOC-461)
 - 2026-11-27 · `ncEditor` builds and rebuilds the editor and hands each one to `onEditor`, instead of `body.rebuild(editor)`; it tells the guard its placeholders through `body.known` (NOC-538, NOC-575, NOC-461)
+- 2026-11-27 · `NcMention` shows the name its `label` gives for the target, and a placeholder until then (NOC-579, NOC-461)
 - 2026-11-27 · A move and an ad-hoc copy re-create the document under the mover's client id, and a move back of a written one is refused for now (NOC-539, NOC-543, NOC-560, #520)
