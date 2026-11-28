@@ -340,8 +340,10 @@ It carries [RFC 0010](0010-accounts.md)'s invitation and pairing answer through 
 ## Decisions
 
 - **2026-11-28 · A pairing request is sealed to one mailbox key per account, derived from the account key and signed by it.** ([decision](../../factory/decisions/2026-11-28-NOC-596-a-pairing-request-is-sealed-to-one-mailbox-key-per-account-derived-from-the-account-key.md))
+- **2026-11-28 · Devices and agents pair through the mailbox, and a device's answer carries the account key past the relay, sealed.** ([decision](../../factory/decisions/2026-11-28-NOC-597-devices-and-agents-pair-through-the-mailbox-and-a-device-s-answer-carries-the-account-key-past-the-relay-sealed.md))
 
 ## History
 
 - 2026-11-28 · First published as a draft (NOC-593)
 - 2026-11-28 · The mailbox key is decided: one per account, derived from the account key (NOC-596, #534)
+- 2026-11-28 · Devices and agents pair through the mailbox, and the account key crosses the relay sealed (NOC-597, #534)
