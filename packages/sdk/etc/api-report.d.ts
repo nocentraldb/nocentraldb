@@ -238,6 +238,7 @@ export interface ViewStatus {
 }
 // file: editor.d.ts
 import type * as Y from "yjs";
+import type { KnownNames } from "./known.ts";
 export interface Vocabulary {
     readonly nodes: readonly string[];
     readonly marks: readonly string[];
@@ -259,6 +260,7 @@ export interface RichTextBinding {
     readonly writable: boolean;
     readonly vocabulary: Vocabulary;
     composing(open: boolean): void;
+    known(names: KnownNames): void;
     close(): Promise<void>;
 }
 // file: erase.d.ts
@@ -299,11 +301,18 @@ export type { Db, Page, Query, Space, Tx } from "./db.ts";
 export type { Durability } from "./durability.ts";
 export type { RichTextBinding, RichTextStatus, Vocabulary, } from "./editor.ts";
 export type { Erased, ErasureRequest, SignOffs } from "./erase.ts";
+export type { KnownNames } from "./known.ts";
 export type { Invitation, Notice } from "./members.ts";
 export * as nc from "./nc.ts";
 export type { SpaceStatus } from "./status.ts";
 export type { SyncStatus } from "./sync.ts";
 export type PairingAnswer = import("./account.ts").PairingAnswer;
+// file: known.d.ts
+export interface KnownNames {
+    readonly nodes: readonly string[];
+    readonly marks: readonly string[];
+    readonly attributes?: Readonly<Record<string, readonly string[]>>;
+}
 // file: markdown.d.ts
 export interface FirstDocument {
     readonly "nc.firstDocument": true;

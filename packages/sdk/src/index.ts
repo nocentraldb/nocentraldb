@@ -18,6 +18,8 @@ export type {
 } from "./editor.ts";
 /** An erasure request, its sign-offs and what `db.erase` did (RFC 0009, "Erasing a person"; NOC-406). */
 export type { Erased, ErasureRequest, SignOffs } from "./erase.ts";
+/** The names an editor declares beyond a rich-text field's vocabulary, its placeholders (NOC-461). */
+export type { KnownNames } from "./known.ts";
 /** An invitation, and the notice a membership call returns (RFC 0009, "Invitations and members"; NOC-176 slice 4b). */
 export type { Invitation, Notice } from "./members.ts";
 /** The schema functions of RFC 0005: `nc.model`, `nc.collection`, the field types and `nc.index`, and the types `nc.Infer` and `nc.Unknown`. */

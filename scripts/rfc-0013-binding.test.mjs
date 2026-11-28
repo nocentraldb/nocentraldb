@@ -40,9 +40,17 @@ test("History and Decisions record the change after publication", () => {
   }
 });
 
-test("the example rebuilds from the editor's onContentError option", () => {
+test("ncEditor rebuilds from the editor's onContentError option and hands each editor to onEditor", () => {
   const text = binding();
-  assert.match(text, /onContentError: \(\) => body\.rebuild\(editor\)/);
+  // NOC-538 Q4: the app gets each new editor through onEditor.
+  assert.match(text, /ncEditor\(body, \{/);
+  assert.match(text, /onEditor: \(next\) =>/);
+  assert.doesNotMatch(text, /body\.rebuild\(editor\)/);
+  // F20: the rebuild goes in the option, never in a listener.
+  assert.match(
+    text,
+    /The rebuild goes in the editor's `onContentError` option/,
+  );
   assert.doesNotMatch(text, /editor\.on\("contentError"/);
 });
 

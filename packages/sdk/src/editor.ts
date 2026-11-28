@@ -2,6 +2,7 @@
 // the binding"; NOC-461). They import only Yjs's types, so the SDK's API
 // report shows them and nothing of the binding's internals.
 import type * as Y from "yjs";
+import type { KnownNames } from "./known.ts";
 
 /** A rich-text field's vocabulary from the lock (NOC-553): its nodes and marks, without ProseMirror's `doc` and `text`. */
 export interface Vocabulary {
@@ -39,6 +40,8 @@ export interface RichTextBinding {
   readonly vocabulary: Vocabulary;
   /** Whether an IME composition is open in the editor: the binding holds its writes and pulls meanwhile, for at most 2 s. */
   composing(open: boolean): void;
+  /** The names the editor knows beyond the vocabulary, its placeholders: the guard lets a deliberate deletion of them through. Each call replaces the names of the call before. */
+  known(names: KnownNames): void;
   /** Writes what is left and gives the client id back. */
   close(): Promise<void>;
 }
