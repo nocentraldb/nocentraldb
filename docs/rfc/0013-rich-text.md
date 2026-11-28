@@ -23,6 +23,7 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operations carry a
 | What is a rich-text field? | One Yjs document per object and field, whose root is the `XmlFragment` named `default`, the shape TipTap's collaboration extension edits. Its type id is `ncdb/richText`, rule 1. It declares its vocabulary, the nodes and marks its editor uses, in the schema and the lock, and the vocabulary may only grow. |
 | How does an edit travel? | As one operation, number 5, "rich-text update": a Yjs update in encoding v1, and for each Yjs client id whose items it adds, the nonce that binds that id to the change's author. One change carries at most one such operation per field. |
 | How does it fold? | The core applies the update to the field's Yrs document, in any order of arrival. Yjs keeps content whose dependencies have not arrived as pending, so a gap delays content and never reorders it. |
+| Who folds into it, for now? | Until a dependency update, only members of the account that created the space. A rich-text update by a member of another account is parked, not dropped, and folds once the rule is lifted; that member's SDK reads the field and refuses to write it ([Authors of another account, until a dependency update](#authors-of-another-account-until-a-dependency-update)). |
 | What can lose? | Text typed into a block that a concurrent change deleted, and a block attribute, such as a heading's level, set at the same time by two members. Both stay identifiable: the outcome is `lost`, and `space.inspect` gives what was lost and who wrote it. |
 | How does TipTap bind? | `space.richText(collection, id, field)` returns a binding with a `Y.Doc`; the app passes it to TipTap's `Collaboration` extension. The SDK collects the editor's updates, writes one change per pause in typing, and applies what other members write. |
 | What does an agent do? | It reads the field as Markdown, with a version. It edits by quoting the Markdown it read and giving the Markdown that replaces it; the core looks the quote up in the version the agent read and writes the smallest Yjs update made at that version, which Yjs merges with whatever a person typed since ([An agent: anchored edits](#an-agent-anchored-edits)). |
@@ -187,9 +188,10 @@ The update's argument 2 lists, for every client id whose items it adds, the nonc
 
 The core folds an operation 5 with Yrs, natively and in WebAssembly alike, so every member folds by the same code (C3):
 
-1. **Decode.** It decodes the update and checks the client ids. An update Yrs cannot decode, or whose ids do not match, is parked as "malformed arguments".
-2. **Apply.** It applies the update to the field's document. Items whose dependencies have not arrived stay pending in the document (F4); they appear once the change that holds their dependencies is folded, whatever the order.
-3. **Record.** It records which item ids the operation added and which its delete set named, so that outcomes and un-folding can be computed ([Outcomes](#outcomes-applied-replaced-and-lost)).
+1. **The author's account.** Until a dependency update, it parks the operation when the change's author belongs to another account than the space's creating account ([Authors of another account, until a dependency update](#authors-of-another-account-until-a-dependency-update)).
+2. **Decode.** It decodes the update and checks the client ids. An update Yrs cannot decode, or whose ids do not match, is parked as "malformed arguments".
+3. **Apply.** It applies the update to the field's document. Items whose dependencies have not arrived stay pending in the document (F4); they appear once the change that holds their dependencies is folded, whatever the order.
+4. **Record.** It records which item ids the operation added and which its delete set named, so that outcomes and un-folding can be computed ([Outcomes](#outcomes-applied-replaced-and-lost)).
 
 **The state.** `fs_<collection>` holds the field's state as one canonical CBOR map: the document as a Yjs update of its whole state, encoded v1 with garbage collection and every map in key order, which holds pending items too; the items each operation added and the deletions it named, as id ranges; and the client ids and their nonces. Yrs keeps a value's maps, such as a link mark's attributes, in hash maps and writes them in the order each hash map gives, so the core writes every map of the encoded document in key order; then the document's bytes are equal for every order of arrival, as F8 found for text without such maps, and the harness checks it for every generated case. Garbage collection keeps deleted text out of the view's state, but not out of the log ([What erasure reaches](#deleted-text-stays-in-the-log)).
 
@@ -220,6 +222,32 @@ So the core recomputes the document from the remaining operations plus the rejec
 **What this does not do.** An attribute the rejected change set, such as a heading's level, does not come back to the value it overwrote: Yjs deleted the older value when the newer one arrived, and the rejected change's value, now deleted too, leaves the attribute unset. The SDK reports the field as un-folded, as it reports every un-folded change ([RFC 0009, "Subscribe"](0009-sdk-api.md#subscribe)).
 
 **Option not taken: leaving the rejected update out**, as every other field type does: recompute without it. It is the simplest rule, but Bob's text would then have nothing to be placed after. Yjs keeps it waiting for Carol's characters, which never come, so Bob's text would disappear for good, although Bob did nothing wrong (F5). The SDK could only report it.
+
+### Authors of another account, until a dependency update
+
+As hardening, and until a dependency update, the fold of a rich-text field takes operations only from members of the account that created the space. This rule is temporary: a later core lifts it with that update.
+
+**The rule.** An operation 5 whose change's author belongs to another account than the space's creating account is parked, with a reason of its own, before it is decoded. It is not dropped and not rejected: the change stays in the log, its other operations fold as usual, and `space.status` counts the parked operation with its reason, as it counts every parked operation ([RFC 0004, "Operations a member does not understand"](0004-merge-rules-basic-types.md#operations-a-member-does-not-understand)). Every device, agent and sub-agent of the creating account folds as before.
+
+**Where the fold reads the account.** The fold reads only what [RFC 0008, "What the fold may read"](0008-membership.md#what-the-fold-may-read) allows: the control state and the change's header, never a payload.
+
+- **The creating account** is the account of the certificate in the space's genesis ([RFC 0008, "Genesis"](0008-membership.md#genesis), key 11). The genesis is fixed, so the creating account never changes.
+- **The author's account** is the account of the certificate in the entry that admitted the author under the generation the change is sealed under: the genesis when the author is the creator; otherwise the accepted add of the author ([RFC 0008, "Membership entry"](0008-membership.md#membership-entry), key 13) whose from generation is the change's generation or one it descends from, and of several such adds, the last in RFC 0008's order. A certificate stays fixed in the entry that admitted its member ([RFC 0010, "What a member certificate means for RFC 0008"](0010-accounts.md#what-a-member-certificate-means-for-rfc-0008)), so this reads the account at the change's own position in the log, not a later one.
+- **One account** means: both certificates name the same account key (key 1), or each carries an account key statement (key 6) whose signature verifies under its recovery key and that names its own certificate's account key, and the two statements name the same recovery key ([RFC 0010, "The account's identity"](0010-accounts.md#the-accounts-identity)). So a new account key after a lost device stays the creating account. A sub-agent's certificate names its parent's account key ([RFC 0003, "Member certificate"](0003-keys-and-cryptography.md#member-certificate)), so a sub-agent counts as its parent's account. The comparison can fail to recognise one account, never join two: only the recovery key can sign a statement that ties another account key to it.
+
+The verdict is a function of the control state and the header, which every member holds alike, so every member that holds the same control changes parks the same operations. It is computed again whenever a control change of the space arrives, as the membership verdict is ([RFC 0008, "Sealed changes"](0008-membership.md#sealed-changes)). An operation that moves from folded to parked comes out of the document as [Un-folding a rejected change](#un-folding-a-rejected-change) says; one that moves from parked to folded is folded as if it had just arrived.
+
+**When the rule is lifted.** A later core, with the dependency update, drops step 1. It folds every operation parked with this reason in the total order of [RFC 0004](0004-merge-rules-basic-types.md#tie-break), as if it had just arrived, as RFC 0004 folds a parked operation after an upgrade, through steps 2 to 4 and the rules of this section: client ids, the same id twice, outcomes and un-folding. Yjs updates commute (C1), so every member that has lifted the rule ends in the same state, the one it would hold had it folded those operations on arrival. Text that a parked operation typed into a block that a member of the creating account deleted meanwhile is `lost`, and stays readable through `space.inspect`, as for any concurrent deletion. Lifting changes no format and no rule version: the type stays `ncdb/richText` rule 1. While some members have lifted the rule and others have not, the two show different values for that field, as RFC 0004 says of an operation an old client parks and a newer one applies; every member on the same core ends in the same state.
+
+**What a member of another account sees.** The field reads as it is folded: as Markdown, plain text, tree and mentions, without the parked operations. Its writes are refused before they are written ([A member of another account](#a-member-of-another-account)).
+
+**Options not taken.**
+
+- **Rejecting the operation, or dropping it.** Simpler, but rejected is for RFC 0002's checks of the whole change, and a dropped operation could not fold once the rule is lifted. Principle 3 rules it out.
+- **Refusing the write in the SDK alone.** No fold rule, but a client that does not go through the SDK would write an update that every member folds. The rule has to hold in the fold.
+- **The accounts of the space's admins instead of the creating account.** It follows the space's membership, but admins change, and a change's verdict would move with every grant and removal. The genesis is fixed and every member holds it.
+- **The author's certificate in the final state.** One certificate per member, but an author re-added under a linked account would move its earlier changes with it. The entry that admitted the author under the change's generation holds the account it wrote under.
+- **Lifting the rule as a new rule version.** It would mark the change in the lock, but [RFC 0005](0005-schema-and-model-lock.md#the-additive-change-rule) refuses to move an existing field to a new rule version until migrations exist, so the fields written meanwhile would keep the rule for good.
 
 ## Reading
 
@@ -285,7 +313,7 @@ await body.close();
 
 `space.richText(collection, id, field)` opens a binding: a `Y.Doc` the SDK keeps in step with the field's document in the core, which runs in a worker ([RFC 0009, "Open and close"](0009-sdk-api.md#open-and-close)).
 
-- **Without rich text in the core,** `space.richText` answers `notSupported`: no release carries rich text until its guard is complete (NOC-468), and an app can be written against the call meanwhile.
+- **Without rich text in the core,** `space.richText` answers `notSupported`: no release carries rich text until its hardening is complete (NOC-468, NOC-603), and an app can be written against the call meanwhile.
 - **Its status.** The binding reports in `body.status` whether the editor shows the whole field and may change it: `"shown"`; `"notFullyShown"`, with a `reason`, when the document holds names the vocabulary does not declare or the guard refused an edit; or `"readOnly"`, when the member may only read the field or the binding writes nothing more. A reader's binding is `"readOnly"` from the start, also when its document is not fully shown. Its `onStatus` calls a listener with each new status.
 - **On open,** the SDK leases a client id ([Client ids name their author](#client-ids-name-their-author)), creates the `Y.Doc` with it and loads the field's state into it. The object must exist; a binding on an object the copy does not hold is refused with `notFound`.
 - **The vocabulary, at start.** The binding reads the field's vocabulary from the lock, and `ncEditor` checks the editor's extensions against it before it builds the editor. Leaving out `doc` and `text`, an editor whose nodes or marks differ from the vocabulary, in either direction, is refused with an error of its own, apart from the error for a missing content check, that names the names on each side. A developer who adds an extension to the editor without adding its names to the schema, or the other way round, finds out at once, at development time, and not when a document drifts. A document that holds a node or a mark the vocabulary does not declare, written by a newer version of the app, is reported as not fully shown, with the reason that the content uses names this version of the app does not declare, so the app can ask for an update; the three measures below keep the field editable.
@@ -373,6 +401,22 @@ Prior art points the same way. Tiptap's AI Toolkit edits whole nodes by a hash a
 
 The Rust SDK reads a rich-text field with `object.get::<RichText>("body")`: `markdown()`, `plain_text()`, `tree()` as `Data`, and `mentions()` as `Reference`s. It reads a field with its version through `read_rich_text`, edits it with `RichTextEdit::at(version)` and its `replace`, `insert_after` and `append`, and writes a first document with `RichText::from_markdown`. It has no editor binding in rule 1; a native app that wants one asks for it in a follow-up ticket. `space.inspect` gives the lost operations, as in TypeScript.
 
+### A member of another account
+
+Until a dependency update, the fold parks a rich-text update by a member of another account than the space's creating account ([Authors of another account, until a dependency update](#authors-of-another-account-until-a-dependency-update)). So the SDK does not write one: both SDKs compare the member's own certificate in the space with the genesis's, by the fold's rule, and refuse every rich-text write of such a member before it is written, with an error of its own, named in the API review.
+
+- **The binding** opens, loads the field and shows what other members write, with `writable` false and `body.status` `"readOnly"` from the start, as a reader's binding does. `ncEditor` makes the editor read-only. If an edit reaches the binding anyway, the write is refused with that error, and the SDK reloads the `Y.Doc` from the core's state.
+- **An anchored edit and a first document**, `nc.richText.edit` and `nc.richText.fromMarkdown` in TypeScript, `RichTextEdit` and `RichText::from_markdown` in Rust, are refused with that error. A `space.write` that touches no rich-text field is not.
+- **A move or a copy** of an object whose rich-text field holds content, into a space whose creating account is not the mover's, re-creates the document there ([Moving and copying the object](#moving-and-copying-the-object)), so it is refused with the same error.
+- **Reads** are not limited: `space.get`, queries, `readRichText` and the Rust reads return the field as the member's copy folded it.
+
+The member of another account learns this from the error, not from a parked change of its own. Once the rule is lifted, the SDK writes again, and nothing the member could have written was lost meanwhile, since nothing was written.
+
+**Options not taken.**
+
+- **Writing the update and letting every member park it.** No check in the SDK, but the author's own copy folds its own writes too and would park them, so the person's text would disappear as they type, without a word. Refusing before the write tells the developer at once.
+- **Refusing with `notAllowed`, as for a reader.** One error fewer, but an app could not tell a role, which an admin can change, from a temporary rule, which only the update lifts.
+
 ## Moving and copying the object
 
 When an object moves to another space ([RFC 0016](0016-moving-an-object.md#its-rich-text-fields)), or a parent copies it into an ad-hoc space ([RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space)), the field's document cannot be carried as it is: its items name their writers by client ids, which the other space's members accept only from the members they derive from ([Client ids name their author](#client-ids-name-their-author)).
@@ -423,7 +467,7 @@ The versions of Yrs and Yjs are pinned exactly, and an upgrade of either has to 
 - `nc.richText({ vocabulary: { nodes, marks } })` builds, and a rich-text field reads as Markdown in `space.get` and queries. `ncdb model build` accepts names added to a vocabulary and refuses a name removed from it.
 - `space.richText(collection, id, field)` opens a binding for an editor, which refuses an editor whose nodes or marks differ from the field's vocabulary; `@nocentraldb/tiptap` gives `NcMention`.
 - `readRichText(...)` reads a field's Markdown with its version; `nc.richText.edit(version, [...])` edits it by quotes; `nc.richText.fromMarkdown(...)` writes a first document. The Rust SDK has the same calls.
-- New errors: `anchorNotFound`, `anchorAmbiguous`, `richTextNotEmpty`, and one for a version the core no longer holds, named in the API review.
+- New errors: `anchorNotFound`, `anchorAmbiguous`, `richTextNotEmpty`, one for a version the core no longer holds, and, until a dependency update, one for a rich-text write by a member of another account than the space's creating account, both named in the API review. `space.status` counts the operations parked for that rule under a reason of their own.
 - `space.inspect` lists a rich-text field's lost operations, and `$conflicts` names the field while it has any.
 
 ## Changes to the other RFCs
@@ -435,12 +479,13 @@ Step 7c of the build plan writes these into the decided texts ([How a decided RF
 - **RFC 0004**, "Operation numbers": number 5 is "rich-text update", for `ncdb/richText`.
 - **RFC 0005**, "Field types": `nc.richText()` maps to `ncdb/richText` rule 1; "Personal data in free text" points to this RFC's mentions; "Public names" gains the new names.
 - **RFC 0006**, "Where the view lives": the device-local table of client ids.
-- **RFC 0009**: the binding, the read with a version and the anchored edits, the errors and the public names.
+- **RFC 0009**: the binding, the read with a version and the anchored edits, the errors, the park reason of the temporary rule for authors of another account, and the public names.
 
 ## What this does not do
 
 - **No presence or cursors.** Cursors need messages that are not changes: not signed into the log, not kept, encrypted for the space, and relayed at once. That is a relay feature of its own, with metadata of its own, for a later RFC; designing it here would hold back the rest.
 - **No erasure of rich text**, and deleted text stays in the log ([What erasure reaches](#deleted-text-stays-in-the-log)).
+- **Until a dependency update, no rich-text writes by members of another account** than the space's creating account. Their SDK refuses them, and every member parks what a client outside the SDK writes; it folds once the rule is lifted. A shared space with members of several accounts has rich text that only the creating account's members write. A per-database account that was linked counts as another account wherever its old certificate admitted the member, as RFC 0010 says of the fold ([Authors of another account, until a dependency update](#authors-of-another-account-until-a-dependency-update)).
 - **No protection against a writer.** A member that may write can delete a whole document, as it can clear any field; the deletion is a change in the log, and an app can bring the text back from history.
 - **Typing in the last 2 s can be lost** if the tab dies before the pause ([An editor: the binding](#an-editor-the-binding)).
 - **An app that leaves out the binding's measures**, or converts the document with a ProseMirror schema of its own, deletes what that schema does not know; the guard catches it in the binding, not in an app's own code ([An editor that cannot show a node](#an-editor-that-cannot-show-a-node)).
@@ -494,8 +539,8 @@ No code changes with this RFC. The spikes back its findings. The design is teste
 | [GENESIS.md](../../factory/GENESIS.md#principles-in-priority-order) says | This RFC |
 | --- | --- |
 | Principle 1, "The relay never reads content." | Updates, client ids and nonces sit inside the sealed payload. Writing at pauses shows the relay sessions, not keystrokes. |
-| Principle 2, "Every copy converges." | Yrs folds everywhere; client ids are bound to their author; the same id twice, outcomes and un-folding are settled by the changes alone. |
-| Principle 3, "Nothing is lost silently." | Text lost to a concurrent deletion and attributes lost to a concurrent write are `lost` and readable; an editor that cannot show a node does not delete it. |
+| Principle 2, "Every copy converges." | Yrs folds everywhere; client ids are bound to their author; the same id twice, outcomes and un-folding are settled by the changes alone; the temporary rule for authors of another account reads only the control state and the header. |
+| Principle 3, "Nothing is lost silently." | Text lost to a concurrent deletion and attributes lost to a concurrent write are `lost` and readable; an editor that cannot show a node does not delete it; an update by a member of another account is parked, counted and folded once the temporary rule is lifted, never dropped. |
 | Principle 4, "Say plainly what it does not do." | [What this does not do](#what-this-does-not-do), and erasure stated plainly. |
 | Principle 6, "The apps only read from a result that is computed." | The binding's `Y.Doc` is loaded from the core's folded state and fed by its folds. |
 | Principle 7, "One core lets you build apps for almost any environment." | The fold and the reads are core code, the same natively and in wasm. Only the binding is TypeScript, since the editor is. |
@@ -543,6 +588,7 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 - **2026-11-27 · A rich-text field declares its vocabulary in the schema and the lock, which may only grow, and the binding refuses an editor that differs from it.** ([decision](../../factory/decisions/2026-11-27-NOC-553-a-rich-text-field-declares-its-vocabulary-in-the-schema-and-the-lock-which-may-only-grow.md))
 - **2026-11-27 · A move or an ad-hoc copy re-creates the document from its tree under a client id of the member that moves or copies it; carrying it as it is comes later, as an option per move.** ([decision](../../factory/decisions/2026-11-27-NOC-543-a-move-or-ad-hoc-copy-re-creates-a-rich-text-document-under-a-client-id-of-the-mover.md))
 - **2026-11-27 · A move back of a written document is refused until a move back writes only the difference (NOC-581).** ([decision](../../factory/decisions/2026-11-27-NOC-560-a-move-back-of-a-written-rich-text-document-is-refused-until-it-writes-only-the-difference.md))
+- **2026-11-28 · Until a dependency update, the fold parks a rich-text update by a member of another account than the space's creating account, and the SDKs refuse that member's rich-text writes; lifting the rule folds the parked updates.** ([decision](../../factory/decisions/2026-11-28-NOC-603-until-a-dependency-update-the-rich-text-fold-parks-an-update-by-a-member-of-another-account-than-the-spaces-creating-account.md))
 
 ## History
 
@@ -555,3 +601,4 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 - 2026-11-27 · The binding reports its status through `body.status` and `body.onStatus`, and `space.richText` answers `notSupported` without rich text in the core (NOC-538, NOC-461)
 - 2026-11-27 · `ncEditor` builds and rebuilds the editor and hands each one to `onEditor`, instead of `body.rebuild(editor)`; it tells the guard its placeholders through `body.known` (NOC-538, NOC-575, NOC-461)
 - 2026-11-27 · A move and an ad-hoc copy re-create the document under the mover's client id, and a move back of a written one is refused for now (NOC-539, NOC-543, NOC-560, #520)
+- 2026-11-28 · Until a dependency update, the fold parks a rich-text update by a member of another account than the space's creating account, and the SDKs refuse that member's rich-text writes (NOC-603, NOC-605)
