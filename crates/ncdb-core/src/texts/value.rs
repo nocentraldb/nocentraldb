@@ -53,12 +53,12 @@ pub(crate) const ANCHOR_LEASE_BEHIND: &str =
     "the version is behind the lease";
 
 /// `anchorInvalidValue`: When edit {edit}'s Markdown holds an ncdb: link that
-/// is no mention's form [@](ncdb:<space id>/<object id>), which a first
+/// is not a mention's form [@](ncdb:<space id>/<object id>), which a first
 /// document from Markdown refuses too (NOC-536). An agent's anchored rich-text
 /// edit (RFC 0013, step 5), behind the cfg ncdb_rich_text; not shown to a
 /// developer today, the SDK returns it as invalidValue (NOC-565).
 pub(crate) fn anchor_invalid_value(edit: impl std::fmt::Display) -> String {
-    format!("edit {edit}: an ncdb: link is no mention")
+    format!("edit {edit}: an ncdb: link is not a mention")
 }
 
 /// `anchorAmbiguous`: When edit {edit}'s quote occurs more than once in the
