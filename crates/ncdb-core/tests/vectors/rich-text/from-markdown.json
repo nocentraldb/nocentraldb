@@ -1,5 +1,5 @@
 {
-  "about": "Markdown read into a first rich-text document (RFC 0013, \"The first content\" and \"The Rust SDK\"; NOC-463), shared by the core, the Rust SDK's RichText::from_markdown and the TypeScript SDK's nc.richText.fromMarkdown (NOC-578), so that every SDK writes the same document for the same Markdown. Each case gives the document as its tree, the ProseMirror JSON the core reads (RFC 0013, \"Reading\"), and the Markdown the field then reads as. Each refused case is Markdown the core does not write a document from: the write is refused and nothing is written.",
+  "about": "Markdown read into a first rich-text document (RFC 0013, \"The first content\" and \"The Rust SDK\"; NOC-463), shared by the core, the Rust SDK's RichText::from_markdown and the TypeScript SDK's nc.richText.fromMarkdown (NOC-578), so that every SDK writes the same document for the same Markdown. Each case gives the document as its tree, the ProseMirror JSON the core reads (RFC 0013, \"Reading\"), and the Markdown the field then reads as; a case with mentions also gives the references they hold, in document order (NOC-536). Each refused case is Markdown the core does not write a document from: the write is refused and nothing is written.",
   "cases": [
     {
       "name": "no Markdown writes an empty document",
@@ -457,11 +457,153 @@
         ]
       },
       "reads": "Größe 😀 **fett**"
+    },
+    {
+      "name": "a mention's link form reads as a mention",
+      "markdown": "Ask [@](ncdb:0123456789abcdef0123456789abcdef/fedcba9876543210fedcba9876543210) about it.",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              { "type": "text", "text": "Ask " },
+              {
+                "type": "mention",
+                "attrs": {
+                  "space": "0123456789abcdef0123456789abcdef",
+                  "id": "fedcba9876543210fedcba9876543210"
+                }
+              },
+              { "type": "text", "text": " about it." }
+            ]
+          }
+        ]
+      },
+      "reads": "Ask [@](ncdb:0123456789abcdef0123456789abcdef/fedcba9876543210fedcba9876543210) about it.",
+      "mentions": [
+        {
+          "space": "0123456789abcdef0123456789abcdef",
+          "id": "fedcba9876543210fedcba9876543210"
+        }
+      ]
+    },
+    {
+      "name": "a mention's scheme in capitals reads as ncdb:",
+      "markdown": "[@](NCDB:0123456789abcdef0123456789abcdef/fedcba9876543210fedcba9876543210)",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "mention",
+                "attrs": {
+                  "space": "0123456789abcdef0123456789abcdef",
+                  "id": "fedcba9876543210fedcba9876543210"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "reads": "[@](ncdb:0123456789abcdef0123456789abcdef/fedcba9876543210fedcba9876543210)",
+      "mentions": [
+        {
+          "space": "0123456789abcdef0123456789abcdef",
+          "id": "fedcba9876543210fedcba9876543210"
+        }
+      ]
+    },
+    {
+      "name": "a mention's scheme in mixed case reads as ncdb:",
+      "markdown": "[@](Ncdb:0123456789abcdef0123456789abcdef/fedcba9876543210fedcba9876543210)",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "mention",
+                "attrs": {
+                  "space": "0123456789abcdef0123456789abcdef",
+                  "id": "fedcba9876543210fedcba9876543210"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "reads": "[@](ncdb:0123456789abcdef0123456789abcdef/fedcba9876543210fedcba9876543210)",
+      "mentions": [
+        {
+          "space": "0123456789abcdef0123456789abcdef",
+          "id": "fedcba9876543210fedcba9876543210"
+        }
+      ]
+    },
+    {
+      "name": "a link to another scheme stays a link",
+      "markdown": "[@](https://example.com/fedcba9876543210fedcba9876543210)",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "@",
+                "marks": [
+                  {
+                    "type": "link",
+                    "attrs": {
+                      "href": "https://example.com/fedcba9876543210fedcba9876543210"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "reads": "[@](https://example.com/fedcba9876543210fedcba9876543210)",
+      "mentions": []
     }
   ],
   "refused": [
     { "name": "an HTML block", "markdown": "<div>x</div>" },
     { "name": "inline HTML", "markdown": "a <b>x</b>" },
-    { "name": "an image", "markdown": "![alt](https://example.com/a.png)" }
+    { "name": "an image", "markdown": "![alt](https://example.com/a.png)" },
+    {
+      "name": "an ncdb link without an object id",
+      "markdown": "[@](ncdb:0123456789abcdef0123456789abcdef/)"
+    },
+    {
+      "name": "an ncdb link without a space id",
+      "markdown": "[@](ncdb:fedcba9876543210fedcba9876543210)"
+    },
+    {
+      "name": "an ncdb link with an id in capitals",
+      "markdown": "[@](ncdb:0123456789ABCDEF0123456789ABCDEF/fedcba9876543210fedcba9876543210)"
+    },
+    {
+      "name": "an ncdb link with an id too short",
+      "markdown": "[@](ncdb:0123456789abcdef0123456789abcdef/fedcba)"
+    },
+    {
+      "name": "an ncdb link with a part after the object id",
+      "markdown": "[@](ncdb:0123456789abcdef0123456789abcdef/fedcba9876543210fedcba9876543210/x)"
+    },
+    {
+      "name": "an ncdb link in capitals without an object id",
+      "markdown": "[@](NCDB:0123456789abcdef0123456789abcdef/)"
+    },
+    {
+      "name": "an ncdb link with a name as its text",
+      "markdown": "[Ada](ncdb:0123456789abcdef0123456789abcdef/fedcba9876543210fedcba9876543210)"
+    }
   ]
 }

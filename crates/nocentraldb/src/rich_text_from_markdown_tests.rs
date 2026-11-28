@@ -68,6 +68,24 @@ fn every_case_of_the_table_is_written_on_create_and_reads_as_its_document() {
             case["reads"].as_str().expect("reads"),
             "{name}"
         );
+        if let Some(listed) = case.get("mentions") {
+            let listed = listed.as_array().expect("a list of mentions");
+            let expected: Vec<(String, String)> = listed
+                .iter()
+                .map(|m| {
+                    (
+                        m["space"].as_str().unwrap().into(),
+                        m["id"].as_str().unwrap().into(),
+                    )
+                })
+                .collect();
+            let read: Vec<(String, String)> = read
+                .mentions()
+                .iter()
+                .map(|r| (r.space.to_string(), r.id.to_string()))
+                .collect();
+            assert_eq!(read, expected, "{name}");
+        }
     }
 }
 

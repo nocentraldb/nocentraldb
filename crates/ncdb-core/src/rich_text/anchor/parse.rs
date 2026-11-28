@@ -2,7 +2,8 @@
 //! step 3): CommonMark with GitHub's tables, strikethrough and task lists,
 //! into TipTap's standard vocabulary, the names the core's rendering
 //! writes. A mention's link form `[@](ncdb:<space id>/<object id>)` reads
-//! as a mention. HTML, images and anything else the rendering never writes
+//! as a mention, its scheme in any case; for a first document, any other
+//! `ncdb:` link is refused (NOC-536, NOC-612). HTML, images and anything else the rendering never writes
 //! read as nothing: the edit is refused.
 
 use std::collections::BTreeMap;
@@ -19,11 +20,24 @@ pub(super) fn options() -> Options {
 /// The blocks `markdown` reads as, or `None` when it holds something the
 /// core does not write from Markdown.
 pub(super) fn parse(markdown: &str) -> Option<Vec<Block>> {
+    read(markdown, false)
+}
+
+/// The blocks of a first document `markdown` reads as: as [`parse`], and
+/// `None` too when it holds an `ncdb:` link that is no mention's form, such
+/// as one without both ids, so that a malformed mention is refused instead
+/// of written as a plain link.
+pub(super) fn parse_first(markdown: &str) -> Option<Vec<Block>> {
+    read(markdown, true)
+}
+
+fn read(markdown: &str, refuse_ncdb_links: bool) -> Option<Vec<Block>> {
     let mut reader = Reader {
         frames: vec![Frame::blocks("doc", BTreeMap::new())],
         marks: Vec::new(),
         links: Vec::new(),
         header: false,
+        refuse_ncdb_links,
     };
     for event in Parser::new_ext(markdown, options()) {
         reader.event(event)?;
@@ -98,6 +112,9 @@ struct Reader {
     /// For each open link, its destination and where its text starts.
     links: Vec<(String, usize)>,
     header: bool,
+    /// Whether an `ncdb:` link that reads as no mention refuses the
+    /// Markdown.
+    refuse_ncdb_links: bool,
 }
 
 impl Reader {
@@ -202,7 +219,9 @@ impl Reader {
             TagEnd::Link => {
                 self.marks.pop()?;
                 let (href, at) = self.links.pop()?;
-                self.mention(&href, at);
+                if !self.mention(&href, at) && self.refuse_ncdb_links && is_ncdb(&href) {
+                    return None;
+                }
             }
             TagEnd::Paragraph | TagEnd::Heading(_) | TagEnd::CodeBlock => {
                 let frame = self.frames.pop()?;
@@ -234,26 +253,29 @@ impl Reader {
     }
 
     /// A link whose text is `@` alone and whose destination is
-    /// `ncdb:<space id>/<object id>` reads as a mention.
-    fn mention(&mut self, href: &str, at: usize) {
-        let Some((space, id)) = href
-            .strip_prefix("ncdb:")
+    /// `ncdb:<space id>/<object id>`, its scheme in any case, reads as a
+    /// mention; whether it did.
+    fn mention(&mut self, href: &str, at: usize) -> bool {
+        let Some((space, id)) = is_ncdb(href)
+            .then(|| &href[5..])
             .and_then(|ids| ids.split_once('/'))
         else {
-            return;
+            return false;
         };
         if !(is_id(space) && is_id(id)) {
-            return;
+            return false;
         }
         let Kind::Inline { atoms, .. } = &mut self.frames.last_mut().expect("the root").kind else {
-            return;
+            return false;
         };
         if atoms.len() == at + 1 && matches!(atoms[at], Atom::Char('@', _)) {
             atoms[at] = Atom::Node(leaf(
                 "mention",
                 BTreeMap::from([("space", space.to_owned()), ("id", id.to_owned())]),
             ));
+            return true;
         }
+        false
     }
 
     fn top(&self) -> &Frame {
@@ -313,6 +335,13 @@ impl Reader {
             atoms.push(atom);
         }
     }
+}
+
+/// Whether `href` is of the scheme `ncdb`, in any case, as URL schemes are
+/// (NOC-612).
+fn is_ncdb(href: &str) -> bool {
+    href.get(..5)
+        .is_some_and(|scheme| scheme.eq_ignore_ascii_case("ncdb:"))
 }
 
 fn leaf(name: &str, attrs: BTreeMap<&'static str, String>) -> Block {
