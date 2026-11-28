@@ -24,7 +24,7 @@ use crate::{Db, OpenOptions};
 const LOCK: &str = include_str!("../../tests/model/model.lock.json");
 
 /// The relay the harness starts.
-const RELAY: &str = match option_env!("NCDB_TEST_RELAY") {
+pub(super) const RELAY: &str = match option_env!("NCDB_TEST_RELAY") {
     Some(url) => url,
     None => "ws://127.0.0.1:7711",
 };

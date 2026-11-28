@@ -136,9 +136,10 @@ async fn run(
 }
 
 /// One attempt to sync: the URL to connect with, then a session with the
-/// relay there. When the app's relay function fails or gives no relay URL,
-/// the attempt ends as a lost connection with `relay_url_failed`, and the
-/// loop calls the function again after the backoff (NOC-496).
+/// relay there. When the app's relay function fails, gives no relay URL or
+/// gives none within 30 s (`Relay::url`), the attempt ends as a lost
+/// connection with `relay_url_failed`, and the loop calls the function
+/// again after the backoff (NOC-496, NOC-572).
 async fn attempt(db: &Weak<Mutex<Inner>>, relay: &Relay, wake: &mut watch::Receiver<()>) -> End {
     let Some(url) = relay.url().await else {
         let Some(inner) = db.upgrade() else {

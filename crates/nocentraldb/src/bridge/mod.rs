@@ -445,7 +445,7 @@ impl Bridge {
         match get(args, "relay") {
             Some(Value::Text(relay)) => options = options.relay(relay),
             Some(Value::Bool(true)) => {
-                options.relay = Some(crate::relay::Relay::Given(asks.relay()));
+                options.relay = Some(crate::relay::Relay::given(asks.relay()));
             }
             _ => {}
         }

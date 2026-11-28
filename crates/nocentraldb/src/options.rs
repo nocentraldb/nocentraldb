@@ -238,10 +238,11 @@ impl OpenOptions {
     /// the SDK calls it before each connect, so a short-lived token in the
     /// URL, which the relay's authorizer checks on `$connect`, is renewed
     /// when the SDK reconnects. The URL is `wss://` or `ws://`, as for
-    /// [`relay`](OpenOptions::relay). While the function fails, or gives
-    /// any other URL, the sync status reports `relay_url_failed` and the
-    /// SDK calls it again after a backoff; what it failed with is never
-    /// shown or logged. A connect the relay refuses with HTTP 401 or 403
+    /// [`relay`](OpenOptions::relay). While the function fails, gives any
+    /// other URL, or gives none within 30 s, the sync status reports
+    /// `relay_url_failed` and the SDK calls it again after a backoff; the
+    /// SDK drops a call's future once the 30 s are up, so its late answer
+    /// is ignored. What the function failed with is never shown or logged. A connect the relay refuses with HTTP 401 or 403
     /// shows as `connect_refused`, and the next connect calls the function
     /// again.
     pub fn relay_with<F, Fut, E>(mut self, url: F) -> OpenOptions
@@ -249,7 +250,7 @@ impl OpenOptions {
         F: Fn() -> Fut + Send + Sync + 'static,
         Fut: std::future::Future<Output = Result<String, E>> + 'static,
     {
-        self.relay = Some(crate::relay::Relay::Given(crate::relay::boxed(url)));
+        self.relay = Some(crate::relay::Relay::given(crate::relay::boxed(url)));
         self
     }
 

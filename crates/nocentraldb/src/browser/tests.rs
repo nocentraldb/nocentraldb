@@ -278,3 +278,8 @@ async fn opfs_a_database_opened_at_a_name_keeps_its_data_and_its_member_across_o
 /// `browser::tests::` runs it.
 #[path = "sync_tests.rs"]
 mod sync;
+
+/// A relay function that gives no URL in time, on the browser's event
+/// loop (NOC-585).
+#[path = "relay_bound_tests.rs"]
+mod relay_bound;

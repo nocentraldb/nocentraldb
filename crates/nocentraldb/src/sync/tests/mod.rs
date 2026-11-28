@@ -50,6 +50,7 @@ mod push_again;
 mod push_pages;
 mod reconnect;
 mod refusals;
+mod relay_bound;
 mod relay_token;
 mod relay_url;
 mod remove_member;

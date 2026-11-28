@@ -2,7 +2,9 @@
 // URL with `{"event": "relay", "request": n}` before each connect; the SDK
 // calls the app's function and answers `relay.answer`, with null when the
 // function throws or answers no text, which the core reports as
-// `relay_url_failed` and asks again after a backoff. Neither the URL nor
+// `relay_url_failed` and asks again after a backoff. The core waits 30 s
+// for an answer; an answer after that is ignored, so the SDK needs no
+// bound of its own (NOC-572). Neither the URL nor
 // an error is logged. Internal: the package's entry does not reach it.
 
 import type { Cbor } from "./cbor.ts";
