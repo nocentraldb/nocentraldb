@@ -489,6 +489,62 @@
       ]
     },
     {
+      "name": "a mention's scheme in capitals reads as ncdb:",
+      "markdown": "[@](NCDB:0123456789abcdef0123456789abcdef/fedcba9876543210fedcba9876543210)",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "mention",
+                "attrs": {
+                  "space": "0123456789abcdef0123456789abcdef",
+                  "id": "fedcba9876543210fedcba9876543210"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "reads": "[@](ncdb:0123456789abcdef0123456789abcdef/fedcba9876543210fedcba9876543210)",
+      "mentions": [
+        {
+          "space": "0123456789abcdef0123456789abcdef",
+          "id": "fedcba9876543210fedcba9876543210"
+        }
+      ]
+    },
+    {
+      "name": "a mention's scheme in mixed case reads as ncdb:",
+      "markdown": "[@](Ncdb:0123456789abcdef0123456789abcdef/fedcba9876543210fedcba9876543210)",
+      "tree": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "mention",
+                "attrs": {
+                  "space": "0123456789abcdef0123456789abcdef",
+                  "id": "fedcba9876543210fedcba9876543210"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "reads": "[@](ncdb:0123456789abcdef0123456789abcdef/fedcba9876543210fedcba9876543210)",
+      "mentions": [
+        {
+          "space": "0123456789abcdef0123456789abcdef",
+          "id": "fedcba9876543210fedcba9876543210"
+        }
+      ]
+    },
+    {
       "name": "a link to another scheme stays a link",
       "markdown": "[@](https://example.com/fedcba9876543210fedcba9876543210)",
       "tree": {
@@ -542,8 +598,8 @@
       "markdown": "[@](ncdb:0123456789abcdef0123456789abcdef/fedcba9876543210fedcba9876543210/x)"
     },
     {
-      "name": "an ncdb link whose scheme is in capitals",
-      "markdown": "[@](NCDB:0123456789abcdef0123456789abcdef/fedcba9876543210fedcba9876543210)"
+      "name": "an ncdb link in capitals without an object id",
+      "markdown": "[@](NCDB:0123456789abcdef0123456789abcdef/)"
     },
     {
       "name": "an ncdb link with a name as its text",
