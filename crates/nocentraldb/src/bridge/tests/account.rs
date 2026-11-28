@@ -390,3 +390,67 @@ fn a_member_id_or_words_that_are_not_one_are_refused_without_naming_the_words() 
     assert!(!message.contains("zebrafish"), "{message}");
     assert!(message.contains("recovery code"), "{message}");
 }
+
+// The fingerprint a person compares before pairing (RFC 0010, "Adding a
+// device or an agent to an account", step 2; Carsten, 2026-11-27, NOC-583).
+
+const VECTORS: &str = "../../docs/rfc/vectors/0003";
+
+/// The shared vector's text of `name`, and the fingerprint
+/// `fingerprints.txt` gives for it.
+fn vector(name: &str) -> (Value, Value) {
+    let read = |file: &str| {
+        std::fs::read_to_string(format!("{}/{VECTORS}/{file}", env!("CARGO_MANIFEST_DIR")))
+            .unwrap_or_else(|error| panic!("{file}: {error}"))
+    };
+    let digits = read("fingerprints.txt")
+        .lines()
+        .find_map(|line| line.strip_prefix(&format!("{name}: ")).map(str::to_owned))
+        .unwrap_or_else(|| panic!("no fingerprint for {name}"));
+    (text(read(&format!("{name}.txt")).trim()), text(&digits))
+}
+
+/// `account.pairingFingerprint` of `invitation` on `bridge`'s database.
+fn pairing_fingerprint(bridge: &mut Bridge, invitation: Value) -> Value {
+    ok(
+        bridge,
+        "account.pairingFingerprint",
+        map(&[("invitation", invitation)]),
+    )
+}
+
+#[test]
+fn the_pairing_fingerprint_of_the_shared_vectors_is_the_one_they_give() {
+    let mut laptop = opened();
+    for name in ["invitation-pairing", "invitation", "invitation-statement"] {
+        let (invitation, digits) = vector(name);
+        assert_eq!(
+            pairing_fingerprint(&mut laptop, invitation),
+            digits,
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn a_waiting_database_shows_the_digits_the_device_that_pairs_it_reads() {
+    let mut laptop = opened();
+    let (mut phone, _) = open_with(&[("pairing", Value::Bool(true))]);
+    let shown = fingerprint(&mut phone);
+    let read = pairing_fingerprint(&mut laptop, invitation(&mut phone));
+    assert_eq!(read, shown);
+    assert_ne!(read, fingerprint(&mut laptop), "not the laptop's account");
+}
+
+#[test]
+fn a_text_that_is_no_invitation_has_no_pairing_fingerprint() {
+    let mut laptop = opened();
+    assert_eq!(
+        super::code(
+            &mut laptop,
+            "account.pairingFingerprint",
+            map(&[("invitation", text("ncdb-invite-1:AAAA"))])
+        ),
+        "invalidValue"
+    );
+}

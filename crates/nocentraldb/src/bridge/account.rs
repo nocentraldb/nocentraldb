@@ -105,6 +105,18 @@ pub(super) async fn pair(db: &Db, args: &Value) -> Result<Value, Failed> {
     ]))
 }
 
+/// `account.pairingFingerprint` `{"invitation": text}`, on the device that
+/// pairs: the invitation's fingerprint as twelve blocks of five digits, for a
+/// person to compare with the one the new device shows (RFC 0010, "Adding a
+/// device or an agent to an account", step 2; Carsten, 2026-11-27, NOC-583).
+/// It is [`Invitation::fingerprint`]: the member's own for a member waiting
+/// to be paired, the account's for a certified one. A text that is no
+/// invitation is `invalidValue`.
+pub(super) fn pairing_fingerprint(args: &Value) -> Result<Value, Failed> {
+    let invitation = Invitation::from_str(text(args, "invitation")?)?;
+    Ok(Value::Text(invitation.fingerprint().to_string()))
+}
+
 /// `account.completePairing` `{"answer": text}`, on the new database:
 /// `{"notices": [notice]}` (NOC-321 point 5). A text that is no answer is
 /// `invalidValue`, naming what is wrong, never a byte.
