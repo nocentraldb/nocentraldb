@@ -456,8 +456,11 @@ The options not taken are RFC 0016's: a new id in the new space, later edits tha
 // On the new device or agent, a database opened for pairing shows its invitation:
 const db = await nc.open({ model, lock, pairing: "request" });
 const invitation = await db.invitation();
+// The new device shows invitation.fingerprint next to it.
 
-// On a device of the account, after the person confirmed:
+// On a device of the account, the digits for the person to compare, then,
+// after the person confirmed:
+const digits = await db.account.pairingFingerprint(invitation);
 const answer = await db.account.pair({ kind: "device", invitation });
 
 // Back on the new device:
@@ -468,6 +471,7 @@ const recovered = await nc.open({ model, lock, recover: words });
 ```
 
 - **`nc.open({ model, lock, pairing: "request" })`** opens a database for pairing; its invitation carries no certificate yet ([RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account)).
+- **`db.account.pairingFingerprint(invitation)`**, on a device of the account, returns the invitation's fingerprint as twelve blocks of five digits, which a person compares with the `fingerprint` the new device shows under its own invitation before the app pairs it ([RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account), step 2). For a member waiting to be paired it is the member's own fingerprint, for a certified invitation its account's: the core's `Invitation::fingerprint()`, so both SDKs show the same digits. A text the core does not read as an invitation fails with `invalidValue`. `nc.invitation(text)` stays synchronous and leaves `fingerprint` unset, since only the core computes it (2026-11-13, NOC-305); asking the open database costs the app one `await` (2026-11-27, NOC-583). Two options were not taken: computing the digits in TypeScript, which would make an SHA-256 library the SDK's first runtime dependency, and pairing by scanned code only, which leaves out a device without a camera.
 - **`db.account.pair({ kind, invitation })`**, on a device of the account, returns the answer: the certificate, and for a device the sealed account key. `kind` is `"device"` or `"agent"`.
 - **`db.account.completePairing(answer)`**, on the new device, takes the answer. Linking a database that already has data uses the same calls, so there is no `db.account.link`.
 - **`nc.open({ model, lock, recover })`** recovers an account on a new device from its recovery code ([RFC 0010, "The recovery code"](0010-accounts.md#the-recovery-code)).
@@ -768,7 +772,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 | `memberAdded`, `memberRemoved`, `roleSet`, `spaceLeft`, `adHocSpaceCreated`, `erased`, `takenBack` | Notice codes, each named by the call that returns it (`takenBack`: 2026-11-15, NOC-326) | [RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys) |
 | `erasurePending` | The notice of a provisional erasure, which the space status gives on every device of the account, not a call (2026-11-11, NOC-230), with the text "Personal fields were erased on a device of this account. The erasure becomes final after 7 days; until then an admin of this account can take it back." (pm, 2026-11-12, NOC-234) | [RFC 0008, "A provisional erasure in a space with one account"](0008-membership.md#a-provisional-erasure-in-a-space-with-one-account) |
 | `db.account.identity` | The account's identity, which the app's backend signs an admission for (2026-11-23, NOC-493) | [RFC 0015, "In the SDK"](0015-relay-admission.md#in-the-sdk) |
-| `db.account.pair`, `db.account.completePairing`, `db.account.removeMember` | Pairing a device or an agent, and removing a lost one | [RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account) |
+| `db.account.pair`, `db.account.pairingFingerprint`, `db.account.completePairing`, `db.account.removeMember` | Pairing a device or an agent, the fingerprint a person compares first, and removing a lost one | [RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account) |
 | `challenge` | The two positions of the recovery code whose words the person types back | [RFC 0010, "The recovery code"](0010-accounts.md#the-recovery-code) |
 | `confirm` | Confirms that the person stored the recovery code, with two of its words typed back | [RFC 0010, "The recovery code"](0010-accounts.md#the-recovery-code) |
 | `db.account().recovered()` | `AccountRecovered` on the open that recovered the account, else `None`; the open returns a `Db`, so a method gives the notice (2026-11-13, NOC-289) | [RFC 0010, "The recovery code"](0010-accounts.md#the-recovery-code) |
@@ -919,6 +923,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - **2026-11-27 · `space.richText` answers `notSupported` until a release carries rich text.** ([decision](../../factory/decisions/2026-11-27-NOC-538-space-richtext-is-notsupported-until-a-release-carries-rich-text.md))
 - **2026-11-27 · An editor without the content check is `contentCheckMissing`, one that differs from the field's vocabulary `vocabularyMismatch`.** ([decision](../../factory/decisions/2026-11-27-NOC-538-an-editor-without-the-content-check-is-contentcheckmissing-and-one-that-differs-from-the-vocabulary-is-vocabularymismatch.md))
 - **2026-11-27 · `nc.ref` is the one function for a reference, and a reference into its own space resolves as a link does.** ([decision](../../factory/decisions/2026-11-27-NOC-552-nc-ref-is-the-one-function-for-a-reference-and-a-reference-into-its-own-space-resolves-as-a-link-does.md))
+- **2026-11-27 · The device that pairs reads an invitation's fingerprint with `db.account.pairingFingerprint(invitation)`.** ([decision](../../factory/decisions/2026-11-27-NOC-583-the-device-that-pairs-reads-an-invitations-fingerprint-with-db-account-pairingfingerprint.md))
 
 ## History
 
@@ -983,3 +988,4 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - 2026-11-27 · `.where(...)` and `Query::where_eq`, the same call as `.equal(...)`; `null` and `Value::clear()` fix a field to unset (NOC-563, #516)
 - 2026-11-27 · The errors `notSupported`, `contentCheckMissing` and `vocabularyMismatch` of rich text (NOC-538, NOC-461)
 - 2026-11-27 · A reference field takes `{ space, id }`, a read object or a bare object id; an in-space reference has a link's statuses; a field written `nc.ref` over `ncdb/link` takes and reads `{ space, id }` in its own space (NOC-568)
+- 2026-11-27 · `db.account.pairingFingerprint(invitation)` gives the fingerprint a person compares before pairing (NOC-582, NOC-583)

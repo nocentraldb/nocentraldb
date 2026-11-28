@@ -90,6 +90,10 @@ export const accountOf = (ask: Ask, opened: Cbor) => {
         askAdmins: paired.askAdmins ?? [],
       };
     },
+    pairingFingerprint: async (invitation: Invitation): Promise<string> =>
+      (await ask("account.pairingFingerprint", {
+        invitation: String(invitation),
+      })) as string,
     completePairing: async (answer: PairingAnswer) => {
       const completed = (await ask("account.completePairing", {
         answer: String(answer),

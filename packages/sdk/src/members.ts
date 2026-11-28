@@ -14,7 +14,7 @@ import * as texts from "./texts.ts";
  * is secret. `toString()` gives its text form, `ncdb-invite-1:…`.
  */
 export interface Invitation {
-  /** The fingerprint of its account, as twelve blocks of five digits: known for this member's own invitation, from `db.invitation()`; unset for one read with `nc.invitation`, whose fingerprint `members.add` gives with `unknownAccount`. */
+  /** The fingerprint of its account, as twelve blocks of five digits: known for this member's own invitation, from `db.invitation()`; unset for one read with `nc.invitation`, whose fingerprint `db.account.pairingFingerprint` gives before pairing and `members.add` gives with `unknownAccount`. */
   readonly fingerprint?: string;
   /** The invitation's text, `ncdb-invite-1:` and base64url. */
   toString(): string;
