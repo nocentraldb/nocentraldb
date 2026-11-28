@@ -2,8 +2,8 @@
 //! step 3): CommonMark with GitHub's tables, strikethrough and task lists,
 //! into TipTap's standard vocabulary, the names the core's rendering
 //! writes. A mention's link form `[@](ncdb:<space id>/<object id>)` reads
-//! as a mention; for a first document, any other `ncdb:` link is refused
-//! (NOC-536). A tag the edit keeps reads as the sentinel of
+//! as a mention; any other `ncdb:` link is refused, in a first document
+//! (NOC-536) and where an edit writes it (NOC-574). A tag the edit keeps reads as the sentinel of
 //! [`super::kept`], and as that tag's atoms or block; any other HTML,
 //! images and anything else the rendering never writes read as nothing:
 //! the edit is refused.
@@ -20,34 +20,32 @@ pub(super) fn options() -> Options {
     Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS
 }
 
-/// The blocks `markdown` reads as, or `None` when it holds something the
-/// core does not write from Markdown.
-pub(super) fn parse(markdown: &str) -> Option<Vec<Block>> {
-    read(markdown, &[], false)
-}
-
-/// The blocks of a first document `markdown` reads as: as [`parse`], and
-/// `None` too when it holds an `ncdb:` link that is no mention's form, such
-/// as one without both ids, so that a malformed mention is refused instead
-/// of written as a plain link.
+/// The blocks of a first document `markdown` reads as, or `None` when it
+/// holds something the core does not write from Markdown or an `ncdb:`
+/// link that is no mention's form, such as one without both ids, so that
+/// a malformed mention is refused instead of written as a plain link.
 pub(super) fn parse_first(markdown: &str) -> Option<Vec<Block>> {
-    read(markdown, &[], true)
+    read(markdown, &[]).and_then(|read| read.ncdb.is_empty().then_some(read.blocks))
 }
 
-/// The blocks `markdown` reads as, each sentinel in it the next of the
-/// kept tags `units`, or `None` when it holds something the core does not
-/// write from Markdown, or not one sentinel for each tag.
-pub(super) fn parse_kept(markdown: &str, units: &[Unit]) -> Option<Vec<Block>> {
-    read(markdown, units, false)
+/// What Markdown reads as: its blocks, and the destination of each
+/// `ncdb:` link in it that is no mention's form, which an edit refuses
+/// where the quote does not hold it.
+pub(super) struct Read {
+    pub(super) blocks: Vec<Block>,
+    pub(super) ncdb: Vec<String>,
 }
 
-fn read(markdown: &str, units: &[Unit], refuse_ncdb_links: bool) -> Option<Vec<Block>> {
+/// What `markdown` reads as, each sentinel in it the next of the kept tags
+/// `units`, or `None` when it holds something the core does not write from
+/// Markdown, or not one sentinel for each tag.
+pub(super) fn read(markdown: &str, units: &[Unit]) -> Option<Read> {
     let mut reader = Reader {
         frames: vec![Frame::blocks("doc", BTreeMap::new())],
         marks: Vec::new(),
         links: Vec::new(),
         header: false,
-        refuse_ncdb_links,
+        ncdb: Vec::new(),
         units: units.to_vec(),
         next: 0,
     };
@@ -60,7 +58,10 @@ fn read(markdown: &str, units: &[Unit], refuse_ncdb_links: bool) -> Option<Vec<B
     }
     let root = reader.frames.pop()?;
     match (reader.frames.is_empty(), root.kind) {
-        (true, Kind::Blocks(blocks)) => Some(blocks),
+        (true, Kind::Blocks(blocks)) => Some(Read {
+            blocks,
+            ncdb: reader.ncdb,
+        }),
         _ => None,
     }
 }
@@ -127,9 +128,8 @@ struct Reader {
     /// For each open link, its destination and where its text starts.
     links: Vec<(String, usize)>,
     header: bool,
-    /// Whether an `ncdb:` link that reads as no mention refuses the
-    /// Markdown.
-    refuse_ncdb_links: bool,
+    /// The destinations of the `ncdb:` links that read as no mention.
+    ncdb: Vec<String>,
     /// The kept tags, and how many of them the sentinels read so far.
     units: Vec<Unit>,
     next: usize,
@@ -244,8 +244,8 @@ impl Reader {
             TagEnd::Link => {
                 self.marks.pop()?;
                 let (href, at) = self.links.pop()?;
-                if !self.mention(&href, at) && self.refuse_ncdb_links && is_ncdb(&href) {
-                    return None;
+                if !self.mention(&href, at) && is_ncdb(&href) {
+                    self.ncdb.push(href);
                 }
             }
             TagEnd::Paragraph | TagEnd::Heading(_) | TagEnd::CodeBlock => {

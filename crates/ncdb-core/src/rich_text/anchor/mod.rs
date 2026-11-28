@@ -152,6 +152,10 @@ pub enum Error {
     /// Edit `edit` touches a part of the document, or writes a part, that
     /// the core does not edit from Markdown yet.
     Unsupported { edit: usize },
+    /// Edit `edit` writes an `ncdb:` link that is no mention's form
+    /// `[@](ncdb:<space id>/<object id>)`, which the core refuses as a
+    /// first document from Markdown does (NOC-536).
+    InvalidValue { edit: usize },
 }
 
 impl fmt::Display for Error {
@@ -165,6 +169,7 @@ impl fmt::Display for Error {
             Error::LeaseMismatch => f.write_str(texts::ANCHOR_LEASE_MISMATCH),
             Error::LeaseBehind => f.write_str(texts::ANCHOR_LEASE_BEHIND),
             Error::Unsupported { edit } => f.write_str(&texts::anchor_unsupported(edit)),
+            Error::InvalidValue { edit } => f.write_str(&texts::anchor_invalid_value(edit)),
         }
     }
 }

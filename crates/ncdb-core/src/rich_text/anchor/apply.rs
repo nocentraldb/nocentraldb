@@ -18,7 +18,7 @@ use super::super::read;
 use super::diff::{self, write_blocks};
 use super::kept;
 use super::lookup::{self, Match, Parts};
-use super::parse::{parse, parse_kept};
+use super::parse::{Read, read};
 use super::view::{self, Block, Old, blocks_eq};
 use super::{Anchored, Error};
 
@@ -61,27 +61,46 @@ pub(super) fn one(
             if !kept::same(markdown, &old_tags, &replaced, &new_tags) {
                 return Err(unsupported);
             }
-            let read_back =
-                parse_kept(&kept::mask(markdown, &old_tags), &units).ok_or(unsupported)?;
-            if !blocks_eq(&held, &read_back) {
+            let read_back = read(&kept::mask(markdown, &old_tags), &units).ok_or(unsupported)?;
+            if !blocks_eq(&held, &read_back.blocks) {
                 return Err(unsupported);
             }
-            let new = parse_kept(&kept::mask(&replaced, &new_tags), &units).ok_or(unsupported)?;
+            let new = read(&kept::mask(&replaced, &new_tags), &units).ok_or(unsupported)?;
+            let new = links(new, &read_back.ncdb, k)?;
             diff::blocks(&mut txn, root, &touched, &new, old[found.first].index)
                 .map_err(|_| unsupported)?;
         }
         Anchored::InsertAfter { quote, markdown } => {
             let found = found(&parts, quote, k)?;
-            let new = parse(markdown).ok_or(unsupported)?;
+            let new = read(markdown, &[]).ok_or(unsupported)?;
+            let new = links(new, &[], k)?;
             write_blocks(&mut txn, root, found.last as u32 + 1, &new).map_err(|_| unsupported)?;
         }
         Anchored::Append { markdown } => {
-            let new = parse(markdown).ok_or(unsupported)?;
+            let new = read(markdown, &[]).ok_or(unsupported)?;
+            let new = links(new, &[], k)?;
             let end = root.len(&txn);
             write_blocks(&mut txn, root, end, &new).map_err(|_| unsupported)?;
         }
     }
     Ok(txn.encode_update_v1())
+}
+
+/// The blocks of `new`, unless it writes an `ncdb:` link that is no
+/// mention's form and that `held`, the links of the Markdown it replaces,
+/// does not hold: a link the document holds already does not stop an
+/// edit, but the agent never writes a malformed mention as a link.
+fn links(new: Read, held: &[String], edit: usize) -> Result<Vec<Block>, Error> {
+    let mut held = held.to_vec();
+    for href in &new.ncdb {
+        match held.iter().position(|h| h == href) {
+            Some(k) => {
+                held.swap_remove(k);
+            }
+            None => return Err(Error::InvalidValue { edit }),
+        }
+    }
+    Ok(new.blocks)
 }
 
 /// The one occurrence of `quote`, or why there is not one.

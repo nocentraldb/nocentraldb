@@ -31,7 +31,10 @@ fn a_replacement_with_a_malformed_ncdb_link_is_refused() {
     for link in malformed() {
         let mut field = Field::new(vec![p(vec![t("Ask about it.")])]);
         assert_eq!(
-            edited(&mut field, &[replace("about it.", &format!("about it. {link}"))]),
+            edited(
+                &mut field,
+                &[replace("about it.", &format!("about it. {link}"))]
+            ),
             Err(Error::InvalidValue { edit: 0 }),
             "{link}"
         );
@@ -48,7 +51,7 @@ fn added_blocks_with_a_malformed_ncdb_link_are_refused_and_name_their_edit() {
             &mut field,
             &[
                 replace("Intro.", "Start."),
-                after("Intro.", &format!("Ask {link}.")),
+                after("Start.", &format!("Ask {link}.")),
             ]
         ),
         Err(Error::InvalidValue { edit: 1 })
