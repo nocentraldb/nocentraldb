@@ -21,6 +21,7 @@ NoCentralDB is designed in the open. Each RFC here describes one part of the des
 | [0016](0016-moving-an-object.md) | Moving an object to another space, so a single note can be shared |
 | [0017](0017-mcp-server.md) | The ncdb MCP server: an agent's own member, serving the tools an app declares |
 | [0018](0018-model-api-for-placement.md) | The model API for an app that decides placement: named indexes, one reference type, edges, indexes through a reference |
+| [0019](0019-pairing-through-the-relay.md) | Pairing a device through the relay: an account's pairing mailbox, and the fingerprint as words |
 
 ## Giving feedback
 
