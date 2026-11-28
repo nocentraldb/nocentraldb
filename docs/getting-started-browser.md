@@ -599,6 +599,99 @@ if (confirm("Pair this device with your account?")) {
 
 The laptop adds the new device to every space where it is an admin, each with its notice in `paired.added`. `paired.askAdmins` lists the spaces whose admins your app asks to add it.
 
+### Show the invitation as a QR code
+
+A scanned code is the shortcut where the device that pairs has a camera: it proves the two devices are side by side. The invitation is plain text, so any QR library carries it. The SDK depends on none; the examples use [`qrcode`](https://www.npmjs.com/package/qrcode) to draw the code and [`jsqr`](https://www.npmjs.com/package/jsqr) to read it, which your app adds itself.
+
+The new device draws its invitation where step 15 printed it:
+
+```ts
+import { nc } from "@nocentraldb/sdk";
+import QRCode from "qrcode";
+import { model } from "../model.ts";
+
+const lock: unknown = await (await fetch("/model.lock.json")).json();
+const db = await nc.open({
+  model,
+  lock,
+  name: "tablet",
+  pairing: "request",
+  relay: "ws://localhost:7700",
+});
+const canvas = document.querySelector("canvas");
+if (canvas !== null) {
+  await QRCode.toCanvas(canvas, String(await db.invitation()), {
+    errorCorrectionLevel: "M",
+  });
+}
+```
+
+The device that pairs reads it from its camera, and hands the text to `nc.invitation`:
+
+```ts
+import { type Invitation, nc } from "@nocentraldb/sdk";
+import jsQR from "jsqr";
+import { model } from "../model.ts";
+
+const lock: unknown = await (await fetch("/model.lock.json")).json();
+const db = await nc.open({
+  model,
+  lock,
+  name: "laptop",
+  relay: "ws://localhost:7700",
+});
+const video = document.createElement("video");
+video.srcObject = await navigator.mediaDevices.getUserMedia({
+  video: { facingMode: "environment" },
+});
+await video.play();
+
+/** The text of the first QR code the camera sees. */
+const scan = (): Promise<string> =>
+  new Promise((found) => {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    const look = () => {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context?.drawImage(video, 0, 0);
+      const frame = context?.getImageData(0, 0, canvas.width, canvas.height);
+      const code = frame && jsQR(frame.data, frame.width, frame.height);
+      if (code) found(code.data);
+      else requestAnimationFrame(look);
+    };
+    look();
+  });
+
+/** The first invitation the camera sees; any other QR code is skipped. */
+const scanInvitation = async (): Promise<Invitation> => {
+  for (;;) {
+    try {
+      return nc.invitation(await scan());
+    } catch (error) {
+      if (!(error instanceof nc.Error) || error.code !== "invalidValue") {
+        throw error;
+      }
+    }
+  }
+};
+
+const invitation = await scanInvitation();
+if (confirm("Pair this device with your account?")) {
+  const paired = await db.account.pair({ kind: "device", invitation });
+  console.log(String(paired.answer));
+}
+```
+
+`nc.invitation` checks only the text's form and fails with `invalidValue` for any other code the camera sees; `pair` checks the rest. The table gives the QR code each invitation needs in byte mode, which carries the text as it is; a test of the Rust SDK pins the sizes:
+
+| Invitation | Bytes | Characters as text | Level L | Level M | Level Q | Level H |
+| --- | --- | --- | --- | --- | --- | --- |
+| Waiting to be paired (version 2), which pairing reads | 66 | 102 | version 5 | version 6, 41 × 41 modules | version 8 | version 10 |
+| Of a member with an account (version 1 with its statement), which `members.add` reads | 267 | 370 | version 13 | version 15, 77 × 77 modules | version 18 | version 20 |
+
+Level M, which survives about 15 % of the code being unreadable, suits a code on a screen. A camera reads a module of about half a millimetre, so the pairing code, with its quiet zone of four modules on each side, reads at about 2.5 cm across and the larger one at about 4.5 cm: both fit a phone's screen at its normal size. The half millimetre is a rule of thumb, not a test with a camera. The sizes are those of the layouts in [RFC 0003, "Invitation"](rfc/0003-keys-and-cryptography.md#invitation).
+
 ## 16. Remove a lost device
 
 The first open of an account creates its recovery code: twelve words, which `db.account.recoveryCode()` gives your app until the person proves they stored them by typing two of them back. `challenge()` names the two positions, which the SDK picked at random, and `confirm()` takes the words typed there:
