@@ -337,6 +337,7 @@ tasks:
     inputs:
       - "/scripts/sdk-browser/**/*"
       - "/packages/sdk/**/*"
+      - "/packages/tiptap/**/*"
       - "/crates/nocentraldb/**/*"
       - "/crates/nocentraldb-wasm/**/*"
       - "/crates/ncdb-relay/**/*"

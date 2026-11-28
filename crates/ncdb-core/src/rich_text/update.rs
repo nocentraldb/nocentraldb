@@ -21,12 +21,13 @@
 //!   client lies below its own clock.
 //!
 //! Each run of clocks an update adds carries a digest of what it adds,
-//! however its items are cut into pieces, so that two updates can be told
-//! apart when they give one id different content (RFC 0013, "The same id
-//! twice").
+//! however its items are cut into pieces and whatever order it writes a
+//! map in, so that two updates can be told apart when they give one id
+//! different content (RFC 0013, "The same id twice").
 //!
-//! [`canonical`] writes an update Yrs encoded with every map in key order,
-//! since Yrs keeps a value's maps in hash maps.
+//! [`canonical`] writes an update with every map in key order: the core
+//! keeps a state's document so, since Yrs keeps a value's maps in hash
+//! maps, and the digests are taken of an update so written.
 
 mod canonical;
 
@@ -64,8 +65,8 @@ impl Range {
 pub struct Run {
     /// The ids.
     pub range: Range,
-    /// SHA-256, cut to 16 bytes, of the run's content, the same however the
-    /// update cuts it into items.
+    /// SHA-256, cut to 16 bytes, of the run's content with every map in key
+    /// order, the same however the update cuts it into items.
     pub digest: [u8; 16],
 }
 
@@ -85,7 +86,11 @@ pub struct Malformed;
 
 /// Reads `bytes`, a Yjs update in encoding v1.
 pub fn read(bytes: &[u8]) -> Result<Shape, Malformed> {
-    read_with_structs(bytes).map(|(shape, _)| shape)
+    // The digests are taken of the content with every map in key order,
+    // so the same content gives the same digest whatever order its writer
+    // wrote a map in.
+    let canonical = canonical(bytes)?;
+    read_with_structs(&canonical).map(|(shape, _)| shape)
 }
 
 /// The structs of `bytes`, a well-formed update, without its delete set:
