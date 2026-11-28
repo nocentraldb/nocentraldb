@@ -20,4 +20,5 @@ mod blocks;
 mod edit;
 mod lease;
 mod lookup;
+mod tags;
 mod version;
