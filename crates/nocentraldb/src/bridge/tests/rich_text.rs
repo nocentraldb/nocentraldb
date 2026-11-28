@@ -15,7 +15,7 @@ use super::fields::{op, opened_with, write};
 use super::{Bridge, LOCK, code, field, map, ok, text};
 
 /// The bridge tests' lock, with a rich-text `body` on tasks.
-fn lock() -> String {
+pub(super) fn lock() -> String {
     let title = r#""title": { "rule": 1, "since": 1, "type": "ncdb/string" },"#;
     assert!(LOCK.contains(title));
     LOCK.replacen(
@@ -26,7 +26,7 @@ fn lock() -> String {
 }
 
 /// A bridge with a space and one task in it: the space and the task's id.
-fn with_task() -> (Bridge, Value, Value) {
+pub(super) fn with_task() -> (Bridge, Value, Value) {
     let mut bridge = opened_with(&lock());
     let space = ok(&mut bridge, "spaces.create", map(&[]));
     let ids = write(
@@ -37,7 +37,7 @@ fn with_task() -> (Bridge, Value, Value) {
     (bridge, space, ids[0].clone())
 }
 
-fn open(bridge: &mut Bridge, space: &Value, id: &Value, field_name: &str) -> Value {
+pub(super) fn open(bridge: &mut Bridge, space: &Value, id: &Value, field_name: &str) -> Value {
     ok(bridge, "richText.open", target(space, id, field_name))
 }
 
@@ -50,7 +50,7 @@ fn target(space: &Value, id: &Value, field_name: &str) -> Value {
     ])
 }
 
-fn unsigned(value: &Value, name: &str) -> u64 {
+pub(super) fn unsigned(value: &Value, name: &str) -> u64 {
     match field(value, name) {
         Some(Value::Unsigned(n)) => *n,
         other => panic!("{name}: {other:?}"),
@@ -65,7 +65,7 @@ fn bytes(value: &Value, name: &str) -> Vec<u8> {
 }
 
 /// A Yjs document as an editor's binding holds it, under `client`.
-fn doc(client: u64) -> Doc {
+pub(super) fn doc(client: u64) -> Doc {
     Doc::with_options(Options {
         client_id: ClientID::new(client),
         ..Options::default()
@@ -86,7 +86,7 @@ fn xml(doc: &Doc) -> String {
 
 /// Inserts a paragraph of `words` at the end of `doc`'s root fragment;
 /// the update that carries it.
-fn type_paragraph(doc: &Doc, words: &str) -> Vec<u8> {
+pub(super) fn type_paragraph(doc: &Doc, words: &str) -> Vec<u8> {
     let root = doc.get_or_insert_xml_fragment("default");
     let before = doc.transact().state_vector();
     {
@@ -97,7 +97,7 @@ fn type_paragraph(doc: &Doc, words: &str) -> Vec<u8> {
     doc.transact().encode_state_as_update_v1(&before)
 }
 
-fn write_update(bridge: &mut Bridge, lease: u64, update: Vec<u8>) -> Value {
+pub(super) fn write_update(bridge: &mut Bridge, lease: u64, update: Vec<u8>) -> Value {
     let args = map(&[
         ("lease", Value::Unsigned(lease)),
         ("update", Value::Bytes(update)),
