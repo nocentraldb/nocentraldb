@@ -32,7 +32,7 @@ tasks:
       RUSTFLAGS: "--cfg ncdb_rich_text"
       CARGO_TARGET_DIR: "$workspaceRoot/target/rich-text"
   test-wasm-rich-text:
-    command: "cargo test --locked -p $project --target wasm32-unknown-unknown --test rich_text_agreement --test rich_text_anchor --test rich_text_client_id --test rich_text_contract --test rich_text_contract_unfold --test rich_text_fold --test rich_text_lease --test rich_text_move --test rich_text_read --test rich_text_unfold --test rich_text_update_format --test rich_text_view --test rich_text_view_unfold"
+    command: "cargo test --locked -p $project --target wasm32-unknown-unknown --test rich_text_agreement --test rich_text_anchor --test rich_text_client_id --test rich_text_contract --test rich_text_contract_unfold --test rich_text_fold --test rich_text_from_markdown --test rich_text_lease --test rich_text_move --test rich_text_read --test rich_text_unfold --test rich_text_update_format --test rich_text_view --test rich_text_view_unfold"
     deps: ["repo:wasm-runner"]
     env:
       RUSTFLAGS: "--cfg ncdb_rich_text"

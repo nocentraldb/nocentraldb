@@ -4,6 +4,7 @@
 //! `default` is opened before any transaction, and documents count
 //! offsets in UTF-16, as Yjs does (NOC-456).
 
+use yrs::types::xml::XmlFragment;
 use yrs::updates::decoder::Decode;
 use yrs::{
     ClientID, Doc, OffsetKind, Options, ReadTxn, StateVector, Transact, Update, XmlFragmentRef,
@@ -53,4 +54,13 @@ pub(super) fn apply(state: &[u8], update: &[u8]) -> Result<Vec<u8>, Refused> {
 fn encode(doc: &Doc) -> Vec<u8> {
     doc.transact()
         .encode_state_as_update_v1(&StateVector::default())
+}
+
+/// Whether the root fragment of `state` holds a node; `true` for a state
+/// Yrs cannot load, which only the core's own bytes are.
+pub(super) fn holds_content(state: &[u8]) -> bool {
+    match load(state) {
+        Ok((doc, root)) => root.len(&doc.transact()) > 0,
+        Err(Refused) => true,
+    }
 }

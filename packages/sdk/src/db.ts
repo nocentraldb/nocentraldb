@@ -12,6 +12,7 @@ import type { RecoveryCode } from "./account.ts";
 import { connectWorker } from "./connect.ts";
 import type { Durability, ViewStatus } from "./durability.ts";
 import { SetElements } from "./elements.ts";
+import type { FirstDocument } from "./markdown.ts";
 import type { Invitation, Members } from "./members.ts";
 import type { Infer, model } from "./nc.ts";
 import type { SpaceStatus } from "./status.ts";
@@ -38,9 +39,20 @@ type Write<T> = [T] extends [readonly (infer E)[] | undefined]
     ? Exclude<T, undefined> | ReferenceForms | null
     : Exclude<T, undefined> | null;
 
-/** The values a create or an update writes, by field name; `undefined` writes nothing. */
+/** The fields of the collection `C`, as its brand carries them. */
+type FieldsOf<C> = C extends { readonly "nc.collection": infer F } ? F : never;
+
+/** The values a create or an update writes, by field name; `undefined` writes nothing. A rich-text field takes a first document, `nc.richText.fromMarkdown` (RFC 0013, "Writing"), any other field `Write` of what it reads as. */
 type Values<C> = C extends AnyCollection
-  ? { [K in keyof Infer<C>]?: Write<Infer<C>[K]> | undefined }
+  ? {
+      [K in keyof Infer<C>]?:
+        | ([FieldsOf<C>[K & keyof FieldsOf<C>]] extends [
+            { readonly "nc.richText": true },
+          ]
+            ? FirstDocument
+            : Write<Infer<C>[K]>)
+        | undefined;
+    }
   : never;
 
 /** An object as `space.get` reads it (RFC 0009, "Get by id"). */
