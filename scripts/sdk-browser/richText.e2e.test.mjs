@@ -11,8 +11,9 @@
 // `repo:sdk-browser`, not by `pnpm gates`.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { build, DIST, LOCK, prebuilt } from "./build.mjs";
+import { build, DIST, LOCK, prebuilt, ROOT } from "./build.mjs";
 import { launch } from "./engine.mjs";
 import { routeModules, yjsModules } from "./importMap.mjs";
 import {
