@@ -19,6 +19,7 @@ mod support;
 mod blocks;
 mod edit;
 mod lease;
+mod links;
 mod lookup;
 mod tags;
 mod version;
