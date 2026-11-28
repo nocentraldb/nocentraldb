@@ -7,15 +7,16 @@ use yrs::{ClientID, Doc, OffsetKind, Options, Transact};
 
 use super::super::document::ROOT;
 use super::diff::write_blocks;
-use super::parse::parse;
+use super::parse::parse_first;
 
 /// The document `markdown` reads as, written into an empty document under
 /// the client id `client`, as one Yjs update in encoding v1; `None` when
 /// the Markdown holds something the core does not write from Markdown,
-/// such as HTML or an image. The caller writes it as an operation 5 into
+/// such as HTML, an image or an `ncdb:` link that is no mention's form
+/// `[@](ncdb:<space id>/<object id>)`. The caller writes it as an operation 5 into
 /// a field that holds no content.
 pub fn from_markdown(markdown: &str, client: u64) -> Option<Vec<u8>> {
-    let blocks = parse(markdown)?;
+    let blocks = parse_first(markdown)?;
     let doc = Doc::with_options(Options {
         client_id: ClientID::new(client),
         offset_kind: OffsetKind::Utf16,
