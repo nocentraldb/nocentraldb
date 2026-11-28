@@ -1,6 +1,6 @@
 // Accounts in the browser through the local relay (NOC-316, slice 3; RFC
 // 0009, "Accounts and devices"; RFC 0010, "Losing a device"): a laptop
-// pairs a phone into its account, both sync, and the laptop removes the
+// reads the phone's fingerprint and pairs the phone into its account, both sync, and the laptop removes the
 // lost phone with the recovery code. Removing needs the phone's records
 // in the account space, which the phone writes and the laptop learns by
 // syncing, so this test, and not the bridge's, shows a removal that
@@ -106,24 +106,31 @@ test("a device removes a lost one from its spaces with the recovery code, which 
           pairing: "request",
           relay: url,
         });
-        return String(await window.db.invitation());
+        const invitation = await window.db.invitation();
+        return { asked: String(invitation), shown: invitation.fingerprint };
       },
       { lock, url: relay.url },
     );
-    const paired = await laptop.evaluate(
+    // The laptop reads the digits a person compares with the ones the
+    // phone shows, then pairs it (RFC 0010, step 2; NOC-583).
+    const { paired, read } = await laptop.evaluate(
       async ({ lock, url, asked }) => {
         const { nc, model } = window;
         window.db = await nc.open({ model, lock, name: "laptop", relay: url });
         const project = await window.db.spaces.create();
         window.project = project.id;
+        const invitation = nc.invitation(asked);
+        const read = await window.db.account.pairingFingerprint(invitation);
         const { answer } = await window.db.account.pair({
           kind: "device",
-          invitation: nc.invitation(asked),
+          invitation,
         });
-        return String(answer);
+        return { paired: String(answer), read };
       },
-      { lock, url: relay.url, asked },
+      { lock, url: relay.url, asked: asked.asked },
     );
+    assert.match(asked.shown, /^\d{5}( \d{5}){11}$/);
+    assert.equal(read, asked.shown, "the laptop reads the phone's digits");
     // The phone completes the pairing while it syncs (NOC-337). It writes
     // its records into the account space as it completes the pairing and
     // as it takes the project. Once the relay has confirmed them, it

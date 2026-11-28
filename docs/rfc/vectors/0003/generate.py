@@ -17,7 +17,13 @@ whose parent signs its certificate when it adds it: no certificate and no
 kind (Carsten, 2026-11-15, NOC-320 Q1).
 
 Each vector is two files: `<name>.txt`, the invitation's text form, and
-`<name>.hex`, its bytes. `fields.txt` lists the fields of both by name. The
+`<name>.hex`, its bytes. `fields.txt` lists the fields of both by name.
+`fingerprints.txt` gives each invitation's fingerprint, as a person compares
+it (RFC 0010, "The fingerprint"): the account's, over the statement's
+recovery key or, without a statement, over the account key; and for the
+member waiting to be paired and the sub-agent, the member's own, over its
+member id under `"nocentraldb/member-fingerprint"` (Carsten, 2026-11-13,
+NOC-288). Both SDKs check theirs against it (NOC-582). The
 gates do not run this script; the Rust SDK and scripts/rfc-0003-invitation.test.mjs
 check the committed files.
 
@@ -141,4 +147,25 @@ fields = {
 }
 (HERE / "fields.txt").write_text(
     "".join(f"{name}: {value.hex()}\n" for name, value in fields.items())
+)
+
+
+def fingerprint(context, key):
+    """RFC 0010, "The fingerprint": SHA-256 over the context string and the
+    key, read as one big-endian number mod 10^60, in twelve blocks of five."""
+    number = int.from_bytes(sha256(context + key), "big") % 10**60
+    digits = f"{number:060d}"
+    return " ".join(digits[i : i + 5] for i in range(0, 60, 5))
+
+
+ACCOUNT_CONTEXT = b"nocentraldb/account-fingerprint"
+MEMBER_CONTEXT = b"nocentraldb/member-fingerprint"
+fingerprints = {
+    "invitation": fingerprint(ACCOUNT_CONTEXT, ACCOUNT_PUBLIC),
+    "invitation-statement": fingerprint(ACCOUNT_CONTEXT, RECOVERY_PUBLIC),
+    "invitation-pairing": fingerprint(MEMBER_CONTEXT, MEMBER_ID),
+    "invitation-sub-agent": fingerprint(MEMBER_CONTEXT, MEMBER_ID),
+}
+(HERE / "fingerprints.txt").write_text(
+    "".join(f"{name}: {digits}\n" for name, digits in fingerprints.items())
 )
