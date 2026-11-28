@@ -2,8 +2,8 @@
 //! step 3): CommonMark with GitHub's tables, strikethrough and task lists,
 //! into TipTap's standard vocabulary, the names the core's rendering
 //! writes. A mention's link form `[@](ncdb:<space id>/<object id>)` reads
-//! as a mention; for a first document, any other `ncdb:` link is refused
-//! (NOC-536). HTML, images and anything else the rendering never writes
+//! as a mention, its scheme in any case; for a first document, any other
+//! `ncdb:` link is refused (NOC-536, NOC-612). HTML, images and anything else the rendering never writes
 //! read as nothing: the edit is refused.
 
 use std::collections::BTreeMap;
@@ -253,10 +253,11 @@ impl Reader {
     }
 
     /// A link whose text is `@` alone and whose destination is
-    /// `ncdb:<space id>/<object id>` reads as a mention; whether it did.
+    /// `ncdb:<space id>/<object id>`, its scheme in any case, reads as a
+    /// mention; whether it did.
     fn mention(&mut self, href: &str, at: usize) -> bool {
-        let Some((space, id)) = href
-            .strip_prefix("ncdb:")
+        let Some((space, id)) = is_ncdb(href)
+            .then(|| &href[5..])
             .and_then(|ids| ids.split_once('/'))
         else {
             return false;
@@ -336,7 +337,8 @@ impl Reader {
     }
 }
 
-/// Whether `href` is of the scheme `ncdb`, in any case, as URL schemes are.
+/// Whether `href` is of the scheme `ncdb`, in any case, as URL schemes are
+/// (NOC-612).
 fn is_ncdb(href: &str) -> bool {
     href.get(..5)
         .is_some_and(|scheme| scheme.eq_ignore_ascii_case("ncdb:"))
