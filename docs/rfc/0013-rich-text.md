@@ -601,4 +601,4 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 - 2026-11-27 · The binding reports its status through `body.status` and `body.onStatus`, and `space.richText` answers `notSupported` without rich text in the core (NOC-538, NOC-461)
 - 2026-11-27 · `ncEditor` builds and rebuilds the editor and hands each one to `onEditor`, instead of `body.rebuild(editor)`; it tells the guard its placeholders through `body.known` (NOC-538, NOC-575, NOC-461)
 - 2026-11-27 · A move and an ad-hoc copy re-create the document under the mover's client id, and a move back of a written one is refused for now (NOC-539, NOC-543, NOC-560, #520)
-- 2026-11-28 · Until a dependency update, the fold parks a rich-text update by a member of another account than the space's creating account, and the SDKs refuse that member's rich-text writes (NOC-603, NOC-605)
+- 2026-11-28 · Until a dependency update, the fold parks a rich-text update by a member of another account than the space's creating account, and the SDKs refuse that member's rich-text writes (NOC-603, NOC-605, #537)
