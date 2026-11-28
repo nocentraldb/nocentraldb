@@ -382,6 +382,8 @@ pub(crate) fn control_heads(view: &View, space: SpaceId) -> BTreeSet<ChangeId> {
 #[cfg(test)]
 mod batch_tests;
 #[cfg(test)]
+mod invitation_size_tests;
+#[cfg(test)]
 mod invitation_tests;
 #[cfg(test)]
 mod known_tests;

@@ -59,6 +59,31 @@ export const snippets = (markdown) => {
 };
 
 /**
+ * The libraries the guide's examples use that an app adds itself, never the
+ * SDK (NOC-594): the type check installs no package, so they are declared
+ * here, as far as the examples use them and with the signatures their own
+ * types give.
+ */
+const LIBRARIES = `
+declare module "qrcode" {
+  interface Options {
+    errorCorrectionLevel?: "L" | "M" | "Q" | "H";
+  }
+  const QRCode: {
+    toCanvas(canvas: HTMLCanvasElement, text: string, options?: Options): Promise<void>;
+  };
+  export default QRCode;
+}
+declare module "jsqr" {
+  export default function jsQR(
+    data: Uint8ClampedArray,
+    width: number,
+    height: number,
+  ): { data: string } | null;
+}
+`;
+
+/**
  * Type-checks `files` ({ path: code }) as one app against the SDK's source:
  * { ok, output }, each error's `file(line,column)` handed to `place`, which
  * answers where it is in the page, or undefined to keep it.
@@ -81,6 +106,7 @@ export const typeCheck = (files, place) => {
         include: ["**/*.ts"],
       }),
     );
+    writeFileSync(join(dir, "libraries.d.ts"), LIBRARIES);
     for (const [file, code] of Object.entries(files)) {
       mkdirSync(dirname(join(dir, file)), { recursive: true });
       writeFileSync(join(dir, file), `${code}\n`);

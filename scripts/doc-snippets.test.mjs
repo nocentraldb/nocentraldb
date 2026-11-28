@@ -128,6 +128,30 @@ test("a query on an index the model does not declare fails", () => {
   assert.equal(result.ok, false);
 });
 
+test("a snippet that draws and reads a QR code with the libraries the guide names type-checks (NOC-594)", () => {
+  const result = checked(
+    guide(
+      [
+        'import QRCode from "qrcode";',
+        'import jsQR from "jsqr";',
+        'const canvas = document.createElement("canvas");',
+        'await QRCode.toCanvas(canvas, "text", { errorCorrectionLevel: "M" });',
+        "const code = jsQR(new Uint8ClampedArray(4), 1, 1);",
+        "if (code !== null) nc.invitation(code.data);",
+      ].join("\n"),
+    ),
+  );
+  assert.equal(result.ok, true, result.output);
+});
+
+test("a snippet that uses a QR library beyond what the guide's examples use fails", () => {
+  const result = checked(
+    guide('import QRCode from "qrcode";\nQRCode.toNoSuchThing();'),
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.output, /toNoSuchThing/);
+});
+
 test("a guide without a ts snippet fails", () => {
   const result = checked("# A guide\n\n```sh\npnpm install\n```\n");
   assert.equal(result.ok, false);
