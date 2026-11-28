@@ -11,6 +11,7 @@ export declare const pairingAnswer: (text: string) => PairingAnswer;
 // file: db.d.ts
 import type { RecoveryCode } from "./account.ts";
 import type { Durability, ViewStatus } from "./durability.ts";
+import type { FirstDocument } from "./markdown.ts";
 import type { Invitation, Members } from "./members.ts";
 import type { Infer, model } from "./nc.ts";
 import type { SpaceStatus } from "./status.ts";
@@ -28,8 +29,15 @@ type Write<T> = [T] extends [readonly (infer E)[] | undefined] ? Elements<E> : [
     space: Id;
     id: Id;
 } | undefined] ? Exclude<T, undefined> | ReferenceForms | null : Exclude<T, undefined> | null;
+type FieldsOf<C> = C extends {
+    readonly "nc.collection": infer F;
+} ? F : never;
 type Values<C> = C extends AnyCollection ? {
-    [K in keyof Infer<C>]?: Write<Infer<C>[K]> | undefined;
+    [K in keyof Infer<C>]?: ([FieldsOf<C>[K & keyof FieldsOf<C>]] extends [
+        {
+            readonly "nc.richText": true;
+        }
+    ] ? FirstDocument : Write<Infer<C>[K]>) | undefined;
 } : never;
 type Read<C> = C extends AnyCollection ? Infer<C> & {
     readonly $id: Id;
@@ -230,6 +238,7 @@ export interface ViewStatus {
 }
 // file: editor.d.ts
 import type * as Y from "yjs";
+import type { KnownNames } from "./known.ts";
 export interface Vocabulary {
     readonly nodes: readonly string[];
     readonly marks: readonly string[];
@@ -251,6 +260,7 @@ export interface RichTextBinding {
     readonly writable: boolean;
     readonly vocabulary: Vocabulary;
     composing(open: boolean): void;
+    known(names: KnownNames): void;
     close(): Promise<void>;
 }
 // file: erase.d.ts
@@ -291,11 +301,27 @@ export type { Db, Page, Query, Space, Tx } from "./db.ts";
 export type { Durability } from "./durability.ts";
 export type { RichTextBinding, RichTextStatus, Vocabulary, } from "./editor.ts";
 export type { Erased, ErasureRequest, SignOffs } from "./erase.ts";
+export type { KnownNames } from "./known.ts";
 export type { Invitation, Notice } from "./members.ts";
 export * as nc from "./nc.ts";
 export type { SpaceStatus } from "./status.ts";
 export type { SyncStatus } from "./sync.ts";
 export type PairingAnswer = import("./account.ts").PairingAnswer;
+// file: known.d.ts
+export interface KnownNames {
+    readonly nodes: readonly string[];
+    readonly marks: readonly string[];
+    readonly attributes?: Readonly<Record<string, readonly string[]>>;
+}
+// file: markdown.d.ts
+export interface FirstDocument {
+    readonly "nc.firstDocument": true;
+}
+export declare class Markdown {
+    readonly markdown: string;
+    constructor(markdown: string);
+}
+export declare const fromMarkdown: (markdown: string) => FirstDocument;
 // file: members.d.ts
 export interface Invitation {
     readonly fingerprint?: string;
@@ -333,6 +359,7 @@ export declare const invitation: (text: string) => Invitation;
 export {};
 // file: nc.d.ts
 import type { Query } from "./db.ts";
+import { fromMarkdown } from "./markdown.ts";
 interface Value<T = unknown, D extends boolean = false> {
     readonly "nc.reads": T;
     readonly "nc.deprecated": D;
@@ -349,6 +376,7 @@ interface Ref<D extends boolean = false> extends Value<Target, D> {
     deprecated(reason: string): Ref<true>;
 }
 interface RichText<D extends boolean = false> extends Value<string, D> {
+    readonly "nc.richText": true;
     describe(text: string): RichText<D>;
     deprecated(reason: string): RichText<true>;
 }
@@ -425,12 +453,14 @@ export declare const set: <T>(element: Field<T>) => Field<T[]>;
 export declare const link: (target: string | readonly string[]) => Field<ObjectId>;
 export declare const links: (target: string | readonly string[]) => Field<ObjectId[]>;
 export declare const ref: (target: string | readonly string[]) => Ref;
-export declare const richText: (options?: {
+export declare const richText: ((options?: {
     vocabulary?: {
         nodes?: readonly string[];
         marks?: readonly string[];
     };
-}) => RichText;
+}) => RichText) & {
+    fromMarkdown: typeof fromMarkdown;
+};
 export declare const stream: () => Field<never>;
 export declare const reach: (..._args: unknown[]) => Named;
 export declare const view: (..._args: unknown[]) => Named;

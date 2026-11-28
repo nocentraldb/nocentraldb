@@ -259,29 +259,27 @@ There are three ways to write a rich-text field, and none of them overwrites the
 ### An editor: the binding
 
 ```ts
-import { Editor } from "@tiptap/core";
+import type { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
-import Collaboration from "@tiptap/extension-collaboration";
-import { NcMention, NcKeepUnknown } from "@nocentraldb/tiptap";
+import { NcMention, ncEditor } from "@nocentraldb/tiptap";
 
 const body = await notes.richText(model.notes, noteId, "body");
 
-const editor = new Editor({
-  enableContentCheck: true,
-  onContentError: () => body.rebuild(editor),
-  editable: body.writable,
+let editor: Editor;
+const mounted = ncEditor(body, {
+  element: document.querySelector("#body")!,
   extensions: [
     StarterKit.configure({ undoRedo: false }),
-    Collaboration.configure({
-      document: body.doc,
-      yUndoOptions: { undoManager: body.undoManager },
-    }),
     NcMention.configure({ db }),
-    NcKeepUnknown.configure({ document: body.doc }),
   ],
+  // Called with the first editor and with each one a rebuild makes.
+  onEditor: (next) => {
+    editor = next;
+  },
 });
 
 // later
+mounted.destroy();
 await body.close();
 ```
 
@@ -290,7 +288,7 @@ await body.close();
 - **Without rich text in the core,** `space.richText` answers `notSupported`: no release carries rich text until its guard is complete (NOC-468), and an app can be written against the call meanwhile.
 - **Its status.** The binding reports in `body.status` whether the editor shows the whole field and may change it: `"shown"`; `"notFullyShown"`, with a `reason`, when the document holds names the vocabulary does not declare or the guard refused an edit; or `"readOnly"`, when the member may only read the field or the binding writes nothing more. A reader's binding is `"readOnly"` from the start, also when its document is not fully shown. Its `onStatus` calls a listener with each new status.
 - **On open,** the SDK leases a client id ([Client ids name their author](#client-ids-name-their-author)), creates the `Y.Doc` with it and loads the field's state into it. The object must exist; a binding on an object the copy does not hold is refused with `notFound`.
-- **The vocabulary, at start.** The binding reads the field's vocabulary from the lock, and `NcKeepUnknown` checks the editor's schema against it as the editor is created. Leaving out `doc` and `text`, an editor whose nodes or marks differ from the vocabulary, in either direction, is refused with an error of its own, apart from the error for a missing content check, that names the names on each side. A developer who adds an extension to the editor without adding its names to the schema, or the other way round, finds out at once, at development time, and not when a document drifts. A document that holds a node or a mark the vocabulary does not declare, written by a newer version of the app, is reported as not fully shown, with the reason that the content uses names this version of the app does not declare, so the app can ask for an update; the three measures below keep the field editable.
+- **The vocabulary, at start.** The binding reads the field's vocabulary from the lock, and `ncEditor` checks the editor's extensions against it before it builds the editor. Leaving out `doc` and `text`, an editor whose nodes or marks differ from the vocabulary, in either direction, is refused with an error of its own, apart from the error for a missing content check, that names the names on each side. A developer who adds an extension to the editor without adding its names to the schema, or the other way round, finds out at once, at development time, and not when a document drifts. A document that holds a node or a mark the vocabulary does not declare, written by a newer version of the app, is reported as not fully shown, with the reason that the content uses names this version of the app does not declare, so the app can ask for an update; the three measures below keep the field editable.
 - **What the editor writes,** the SDK collects. It merges the editor's updates and writes them as one change at each pause in typing: after 500 ms without an edit, after at most 2 s of continuous typing, and when the binding closes or the page is hidden. Each such change is a `space.write` like any other, folded before it is sent. Collaborators see text within about half a second of a pause, and the relay and the log see writing sessions, not keystrokes. If the tab is killed before a pause, up to 2 s of typing is lost, which the SDK's guide says. A pause does not end inside an IME composition: while one is open, the binding holds the write and writes at `compositionend`, or after 2 s if the composition is still open, so collaborators and the log never see characters the person has not committed, and the person never waits longer than for typing.
 - **What other members write,** the core folds, and the SDK passes the binding the part of the document it does not hold yet, which Yjs computes from the binding's state vector. It applies that with an origin of its own, so the editor's undo leaves it alone and the SDK does not write it back.
 - **A reader** gets a binding with `writable` false, and the editor is made read-only. If an edit reaches the binding anyway, the write is refused with `notAllowed`, and the SDK reloads the `Y.Doc` from the core's state, so the editor never shows text that no change holds.
@@ -298,7 +296,7 @@ await body.close();
 
 **Options not taken for when the editor writes.** One change per keystroke batch of the editor: collaborators would see every keystroke at once, but each keystroke would cost at least a 256-byte payload, a header and a signature, and the relay would see the typing rhythm. A window each app chooses: more to explain, for a choice most apps never change.
 
-**The package.** `@nocentraldb/tiptap` holds `NcMention`, `NcKeepUnknown` and nothing that TipTap's own collaboration extension already does. The binding itself is in `@nocentraldb/sdk` and works with any editor that edits a `Y.Doc`, though the Markdown rendering and the vocabulary follow TipTap's names.
+**The package.** `@nocentraldb/tiptap` holds `ncEditor`, `NcMention`, `NcKeepUnknown` and nothing that TipTap's own collaboration extension already does. `ncEditor(body, { element, extensions, editorOptions, onEditor })` builds the TipTap editor on the binding: it sets `enableContentCheck` itself, binds TipTap's collaboration extension to `body.doc` and `body.undoManager`, applies the three measures below, makes the editor read-only with the binding's status, and hands the app each editor it builds through `onEditor`, so the app's reference never goes stale after a rebuild. An app that builds its own editor adds `NcKeepUnknown` and does the rest itself. The binding itself is in `@nocentraldb/sdk` and works with any editor that edits a `Y.Doc`, though the Markdown rendering and the vocabulary follow TipTap's names.
 
 #### An editor that cannot show a node
 
@@ -306,11 +304,11 @@ Every client must keep editing a document even where it cannot interpret parts o
 
 So the binding requires three measures, which together kept every client editing and lost nothing (F19):
 
-1. **A schema widened from the document.** Before the editor opens, the binding scans the field's document and gives each unknown node, mark and attribute a placeholder type: a node of that name, inline or block as it sits, with its attributes declared without a default value of their own; a mark with its attributes; an extra attribute on a known node. The editor shows a placeholder, such as a box with the node's name, and keeps the rest editable. `@nocentraldb/tiptap` ships this as `NcKeepUnknown`. A person can still delete a placeholder on purpose, as any block.
-2. **The content check, with a rebuild.** The binding requires `enableContentCheck: true`, with `@tiptap/extension-collaboration` 3.33.0 and `@tiptap/y-tiptap` 3.2.0 or later. When a kind of node arrives that the open editor does not know, TipTap reports `contentError` and pauses editing instead of deleting; `body.rebuild(editor)` builds the editor again with a schema widened anew. The rebuild goes in the editor's `onContentError` option, not in a listener on the editor's events: TipTap's default for that option throws before any such listener runs, and the editor would stay paused (F20). While an IME composition is open, the binding defers its pull of what the core folded, until `compositionend` and for at most 2 s, so the editor never meets a new kind of node in the middle of a composition and the person's text is never cut off (F22). After it, the binding restores the focus and the selection, kept as a Yjs relative position. The binding keeps one UndoManager for its `Y.Doc`, `body.undoManager`, which each editor it builds uses, so a rebuild keeps the undo history (F23).
+1. **A schema widened from the document.** Before the editor opens, the binding scans the field's document and gives each unknown node, mark and attribute a placeholder type: a node of that name, inline or block as it sits, with its attributes declared without a default value of their own; a mark with its attributes; an extra attribute on a known node. The editor shows a placeholder, such as a box with the node's name, and keeps the rest editable. `ncEditor` widens the schema itself, and tells the binding the placeholders' names through `body.known`, so the guard counts them as known; `@nocentraldb/tiptap` also ships the widening as `NcKeepUnknown`. A person can still delete a placeholder on purpose, as any block.
+2. **The content check, with a rebuild.** The binding requires `enableContentCheck: true`, with `@tiptap/extension-collaboration` 3.33.0 and `@tiptap/y-tiptap` 3.2.0 or later. When a kind of node arrives that the open editor does not know, TipTap reports `contentError` and pauses editing instead of deleting; `ncEditor` builds the editor again with a schema widened anew and hands it to `onEditor`. It does so too when the binding reloads its `Y.Doc` (`body.onReload`). The rebuild goes in the editor's `onContentError` option, not in a listener on the editor's events: TipTap's default for that option throws before any such listener runs, and the editor would stay paused (F20). While an IME composition is open, the binding defers its pull of what the core folded, until `compositionend` and for at most 2 s, so the editor never meets a new kind of node in the middle of a composition and the person's text is never cut off (F22). After it, the binding restores the focus and the selection, kept as a Yjs relative position. The binding keeps one UndoManager for its `Y.Doc`, `body.undoManager`, which each editor it builds uses, so a rebuild keeps the undo history (F23).
 3. **A guard on what the binding writes.** Before the binding writes an editor's update as a change, it checks which parts the update deletes. An update that deletes an element, a format or an attribute the editor's schema does not know is not written, and the binding reloads once: it loads its `Y.Doc` again from the core's state and reports the field as not fully shown. If the guard refuses again, the binding makes the field read-only: it writes nothing more from that editor, makes the editor read-only and keeps reporting the field as not fully shown, until the app rebuilds the editor with a schema widened anew. It never reloads in a loop, which would refuse the person's typing at every pause (F24). Placeholders count as known, so a deliberate deletion passes. The guard works with any editor that edits a `Y.Doc`.
 
-An editor without `enableContentCheck` is refused: `NcKeepUnknown` throws, as the editor is created, an error that names the missing option, so an app that leaves out the content check finds out at once and not when a newer app writes a node it does not know.
+An editor without `enableContentCheck` is refused: `ncEditor` always sets it, and `NcKeepUnknown`, in an editor an app builds itself, throws `contentCheckMissing` as the editor is created, an error that names the missing option, so an app that leaves out the content check finds out at once and not when a newer app writes a node it does not know.
 
 Nothing else in the SDK, an app or an agent's tool may turn the document into ProseMirror nodes with a schema of its own: that conversion deletes what the schema lacks, with no editor (F16). The core never does: it applies updates with Yrs and reads the tree from Yrs.
 
@@ -540,6 +538,8 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 - **2026-11-22 · One UndoManager per binding outlives the rebuilds, so a rebuild keeps the undo history.** ([decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-binding-keeps-one-undomanager-across-editor-rebuilds.md))
 - **2026-11-22 · The guard reloads once, then makes the field read-only; an editor without `enableContentCheck` is refused.** ([decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-guard-reloads-once-then-the-field-is-read-only-and-an-editor-without-the-content-check-is-refused.md))
 - **2026-11-27 · The binding reports `"shown"`, `"notFullyShown"` with a reason, or `"readOnly"`, through `body.status` and `body.onStatus`.** ([decision](../../factory/decisions/2026-11-27-NOC-538-a-rich-text-binding-reports-shown-notfullyshown-or-readonly-through-status-and-onstatus.md))
+- **2026-11-27 · The SDK returns an editor-agnostic binding, and `@nocentraldb/tiptap`'s `ncEditor` builds and rebuilds the editor and hands each one to `onEditor`.** ([decision](../../factory/decisions/2026-11-27-NOC-461-the-sdk-returns-an-editor-agnostic-rich-text-binding-and-nocentraldb-tiptap-builds-and-rebuilds-the-editor.md))
+- **2026-11-27 · The codes are `vocabularyMismatch` and `contentCheckMissing`, and the binding's members `composing`, `onReload`, `vocabulary` and `known`.** ([decision](../../factory/decisions/2026-11-27-NOC-575-the-rich-text-api-names-its-codes-vocabularymismatch-and-contentcheckmissing-and-the-binding-s-composing-onreload-vocabulary-and-known.md))
 - **2026-11-27 · A rich-text field declares its vocabulary in the schema and the lock, which may only grow, and the binding refuses an editor that differs from it.** ([decision](../../factory/decisions/2026-11-27-NOC-553-a-rich-text-field-declares-its-vocabulary-in-the-schema-and-the-lock-which-may-only-grow.md))
 - **2026-11-27 · A move or an ad-hoc copy re-creates the document from its tree under a client id of the member that moves or copies it; carrying it as it is comes later, as an option per move.** ([decision](../../factory/decisions/2026-11-27-NOC-543-a-move-or-ad-hoc-copy-re-creates-a-rich-text-document-under-a-client-id-of-the-mover.md))
 - **2026-11-27 · A move back of a written document is refused until a move back writes only the difference (NOC-581).** ([decision](../../factory/decisions/2026-11-27-NOC-560-a-move-back-of-a-written-rich-text-document-is-refused-until-it-writes-only-the-difference.md))
@@ -553,4 +553,5 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 - 2026-11-27 · A rich-text field declares its vocabulary in the schema and the lock, which may only grow (NOC-553, NOC-558, NOC-554, #509)
 - 2026-11-27 · The binding defers its pull while a composition is open instead of a rebuild waiting for `compositionend`, as the owner decided after the spike on NOC-555 (NOC-556, NOC-461)
 - 2026-11-27 · The binding reports its status through `body.status` and `body.onStatus`, and `space.richText` answers `notSupported` without rich text in the core (NOC-538, NOC-461)
+- 2026-11-27 · `ncEditor` builds and rebuilds the editor and hands each one to `onEditor`, instead of `body.rebuild(editor)`; it tells the guard its placeholders through `body.known` (NOC-538, NOC-575, NOC-461)
 - 2026-11-27 · A move and an ad-hoc copy re-create the document under the mover's client id, and a move back of a written one is refused for now (NOC-539, NOC-543, NOC-560, #520)

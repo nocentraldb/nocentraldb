@@ -63,10 +63,21 @@ pub(super) fn equal(
 /// `{ space, id }` (RFC 0018). A reference arrives as `{ space, id }`, as a
 /// read gives it (NOC-354). A day arrives as its
 /// `"YYYY-MM-DD"` text, a point in time as its milliseconds (RFC 0005,
-/// "Days and points in time").
+/// "Days and points in time"). A rich-text field takes
+/// `{"$markdown": text}`, a first document from that Markdown (RFC 0013,
+/// "The first content"), which the core reads into a document as it does
+/// for `RichText::from_markdown`.
 fn typed(model: &Model, collection: &str, name: &str, value: &Value) -> Result<Field, Failed> {
     let kind = model.field(collection, name);
     match (kind, value) {
+        #[cfg(ncdb_rich_text)]
+        (Some(ModelField::RichText(_)), Value::Map(map)) => {
+            if let (1, Some(Value::Text(markdown))) =
+                (map.len(), map.get(&Key::Text("$markdown".into())))
+            {
+                return Ok(crate::RichText::from_markdown(markdown.as_str()));
+            }
+        }
         (Some(ModelField::Ref(_)), _) => return as_reference(value),
         // A field written nc.ref that the lock keeps as a link (RFC 0018,
         // "Existing link fields read as references"); the SDK refuses a
@@ -231,10 +242,10 @@ fn value_of(field: &Field) -> Value {
         // Nor a rich-text update, which only a binding writes.
         #[cfg(ncdb_rich_text)]
         Repr::RichText(_) => Value::Null,
-        // A rich-text field's document, which the TypeScript SDK does not
-        // read through the bridge yet.
+        // A rich-text field's document reads as its Markdown (RFC 0013,
+        // "Reading"); one nothing was written to reads unset, as above.
         #[cfg(ncdb_rich_text)]
-        Repr::RichTextRead(_) => Value::Null,
+        Repr::RichTextRead(read) => Value::Text(read.markdown().to_owned()),
         // Nor a first document from Markdown, which only a write holds.
         #[cfg(ncdb_rich_text)]
         Repr::Markdown(_) => Value::Null,
