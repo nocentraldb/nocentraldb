@@ -27,7 +27,7 @@ It builds on the pairing of [RFC 0010](0010-accounts.md) and the relay protocol 
 | How long does a request live? | 10 minutes by the relay's clock, then the relay deletes it. |
 | What does the person compare? | The full member fingerprint of the new device, on both screens: 60 digits or 32 words. A request someone else posted looks the same until the two do not match. |
 | What does the relay see? | That an account receives a pairing request, from which member and address, when, and whether it was answered, declined or lapsed. Not the request, not the answer, no key. |
-| What are the words? | The 32 bytes of the fingerprint's SHA-256 digest, one word per byte from the PGP word list, shown in eight groups of four. |
+| What are the words? | The 32 bytes of the fingerprint's SHA-256 digest, one word per byte from the PGP word list, shown in eight blocks of four. |
 
 ## The problem
 
@@ -250,14 +250,14 @@ A fingerprint is a SHA-256 digest, 32 bytes ([RFC 0010, "The fingerprint"](0010-
 
 ```text
 fingerprint words: byte 0 from the two-syllable list, byte 1 from the three-syllable list, and so on,
-                   32 words in the order of the digest's bytes, shown in eight groups of four
+                   32 words in the order of the digest's bytes, shown in eight blocks of four
 for example:       the bytes E5 82 94 F2 E9 A2 27 48 ... read
                    topmost Istanbul Pluto vagabond   treadmill Pacific brackish dictator   ...
 ```
 
 The words are a second way to show the same digest, not a shorter one: they carry all 256 bits, where the 60 digits carry about 199. Every fingerprint, the account's and a member's, has both forms, the same on every platform and in both SDKs; the person compares one of them, the same form on both screens. The words keep RFC 0010's rule that a person compares the whole fingerprint. The list is committed beside the RFC's vectors with its SHA-256, so that both SDKs read the same 512 words.
 
-**Not the recovery code's list.** RFC 0010 shows the recovery code as twelve words of the BIP-39 English list, and chose digits for the fingerprint so that people would not confuse the two. The PGP word list is another list. 59 of its 512 words are also BIP-39 words, 42 of the two-syllable ones and 17 of the three-syllable ones, so a fingerprint holds about four of them on average. A fingerprint is always 32 words in eight groups, written with the list's own capitals, and never asked for back; the recovery code is twelve words, shown once and asked back two at a time. An app shows the two in different places, and the texts of the SDK call one the recovery code and the other the fingerprint.
+**Not the recovery code's list.** RFC 0010 shows the recovery code as twelve words of the BIP-39 English list, and chose digits for the fingerprint so that people would not confuse the two. The PGP word list is another list. 59 of its 512 words are also BIP-39 words, 42 of the two-syllable ones and 17 of the three-syllable ones, so a fingerprint holds about four of them on average. A fingerprint is always 32 words in eight blocks, written with the list's own capitals, and never asked for back; the recovery code is twelve words, shown once and asked back two at a time. An app shows the two in different places, and the texts of the SDK call one the recovery code and the other the fingerprint.
 
 ### Where it shows
 
